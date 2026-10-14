@@ -73,6 +73,7 @@ import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
 import { readTools } from "./custom-tools"
 import { lookAtGrok } from "./grok"
+import { lookAtOpencode } from "./opencode"
 import {
   arrange,
   bringIn,
@@ -194,7 +195,7 @@ let versions: Versions
 /** the conversation the window shows of each project, by project */
 const showing = new Map<string, string>()
 let settings: SettingsStore
-/** the agents on this machine: Claude Code, Codex, Grok */
+/** the agents on this machine: Claude Code, Codex, Grok, opencode */
 let providers: Providers
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
@@ -1940,7 +1941,12 @@ if (!app.requestSingleInstanceLock()) {
     })
     providers = new Providers({
       settings,
-      look: { claude: lookAtClaude, codex: lookAtCodex, grok: lookAtGrok },
+      look: {
+        claude: lookAtClaude,
+        codex: lookAtCodex,
+        grok: lookAtGrok,
+        opencode: lookAtOpencode,
+      },
       onChange: () => {
         send(CHANNEL.providersChanged, providers.list())
         // with an agent found, a model can be looked over and what the cards say summed up

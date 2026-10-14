@@ -323,8 +323,13 @@ export type ThreadItem =
  * Whose agent answers. Each is its maker's own command-line agent, installed on this
  * machine and signed in there: the app runs it, and has no login of its own for any.
  */
-export type ProviderId = "claude" | "codex" | "grok"
-export const PROVIDERS: readonly ProviderId[] = ["claude", "codex", "grok"]
+export type ProviderId = "claude" | "codex" | "grok" | "opencode"
+export const PROVIDERS: readonly ProviderId[] = [
+  "claude",
+  "codex",
+  "grok",
+  "opencode",
+]
 
 /**
  * What an agent may do without asking. supervised: nothing that changes a file or runs a

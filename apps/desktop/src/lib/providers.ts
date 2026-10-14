@@ -22,6 +22,8 @@ export const PROVIDER_WORDS: Record<
     signIn: string
     install: string
     docs: string
+    /** what to say where it needs no account at all, in place of who is signed in */
+    noAccount?: string
   }
 > = {
   claude: {
@@ -47,6 +49,16 @@ export const PROVIDER_WORDS: Record<
     signIn: "grok login",
     install: "curl -fsSL https://x.ai/cli/install.sh | bash",
     docs: "https://x.ai/cli",
+  },
+  opencode: {
+    name: "opencode",
+    cli: "opencode",
+    command: "opencode",
+    signIn: "opencode auth login",
+    install: "curl -fsSL https://opencode.ai/install | bash",
+    docs: "https://opencode.ai/docs",
+    noAccount:
+      "opencode answers with or without an account: nothing to sign in to.",
   },
 }
 
@@ -148,7 +160,7 @@ function using(account: string | null): string {
 }
 
 export function standing(provider: Provider): Standing {
-  const { cli, signIn } = PROVIDER_WORDS[provider.id]
+  const { cli, signIn, noAccount } = PROVIDER_WORDS[provider.id]
   const { status, settings } = provider
   if (!status) return { tone: "wait", headline: "Checking…", detail: null }
   if (!status.path)
@@ -184,7 +196,7 @@ export function standing(provider: Provider): Standing {
   return {
     tone: "ok",
     headline: "Ready",
-    detail: `Enclose uses the account signed in to ${cli}.`,
+    detail: noAccount ?? `Enclose uses the account signed in to ${cli}.`,
   }
 }
 

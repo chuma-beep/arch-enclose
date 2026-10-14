@@ -59,7 +59,8 @@ export function providerSettings(
 
 /**
  * An agent as it is until something is chosen about it. Claude Code is what the app was
- * made around, and is on; the others are for whoever switches them on.
+ * made around, and is on; the others, opencode among them, are for whoever switches
+ * them on.
  */
 export const providerDefaults = (id: ProviderId): ProviderSettings => ({
   enabled: id === "claude",

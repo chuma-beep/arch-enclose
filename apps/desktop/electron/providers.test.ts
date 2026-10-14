@@ -107,6 +107,7 @@ describe("Providers", () => {
           asked.push(`grok ${launch.args.join("|")} ${launch.env.XAI_API_KEY}`)
           throw new Error("Grok did not answer.")
         },
+        opencode: async () => (asked.push("opencode"), looked(0)),
       },
       onChange: () => changes++,
     })
@@ -210,6 +211,12 @@ echo "${version} (Claude Code)"
         }),
         grok: async () => ({
           signedIn: null,
+          account: null,
+          trouble: null,
+          models: [],
+        }),
+        opencode: async () => ({
+          signedIn: true,
           account: null,
           trouble: null,
           models: [],

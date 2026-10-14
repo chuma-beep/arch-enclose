@@ -1,6 +1,7 @@
-// The agents the app can put a message to: Claude Code, Codex, Grok. Each is its maker's
-// command-line agent, already installed on this machine and signed in there. This finds
-// them, keeps what the user has chosen about each, and says what each is started with.
+// The agents the app can put a message to: Claude Code, Codex, Grok, opencode. Each is
+// its maker's command-line agent, already installed on this machine and signed in
+// there. This finds them, keeps what the user has chosen about each, and says what
+// each is started with.
 import { execFile } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
@@ -51,6 +52,7 @@ const CLI: Record<ProviderId, { command: string; home: string | null }> = {
   claude: { command: "claude", home: "CLAUDE_CONFIG_DIR" },
   codex: { command: "codex", home: "CODEX_HOME" },
   grok: { command: "grok", home: null },
+  opencode: { command: "opencode", home: null },
 }
 
 // What a Claude Code session sets for the processes it starts. If this app is launched
