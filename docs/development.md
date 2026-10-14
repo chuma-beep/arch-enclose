@@ -5,7 +5,7 @@ request needs.
 
 ## Running it
 
-You need Node 22 or newer. macOS is the only system it has been tried on. The app is in
+You need Node 22 or newer. It is tried on macOS and on Arch Linux. The app is in
 [`apps/desktop`](../apps/desktop), and every command here is run from there.
 
 ```
@@ -82,7 +82,7 @@ examples: those it fetches.
 | `npm run icons` | The icon's other sizes, from `icons/icon.png`, the icon of the app as it is run from a checkout, and the picture behind the installer's window |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
-| `npm run dist` | The app to install, a disk image for each kind of Mac, and what an installed app updates itself from, in `release/` |
+| `npm run dist` | The app to install: disk images for each kind of Mac, or AppImage, deb, pacman package and rpm on Linux, and what an installed app updates itself from, in `release/` |
 
 ### The icon
 
@@ -128,7 +128,8 @@ your own machine say.
 
 ### The installer
 
-`npm run dist` builds the app, makes `Enclose (Alpha).app` of it with
+`npm run dist` builds the app and makes what goes up with a release, in `release/`.
+On a Mac that is `Enclose (Alpha).app`, made with
 [electron-builder](https://www.electron.build), and of that a disk image for Apple
 silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. Beside
 them it writes what an installed app [updates itself](#updates) from: the app again as a
@@ -142,6 +143,14 @@ follow from it:
   dependency, or the installed app does not start.
 - The kit goes in as files, beside the app's own archive
   (`Enclose (Alpha).app/Contents/Resources/kit`), where Python and an agent can read it.
+
+On Linux it is an AppImage, a deb, a pacman package and an rpm instead, for the
+machine's own kind: `release/Enclose-<version>-x86_64.AppImage` and its kin, with
+`latest-linux.yml` beside them. One kind at a time can be made
+(`npm run dist -- --appimage`, and `--deb`, `--pacman`, `--rpm` likewise). A deb takes
+`dpkg-deb` and an rpm takes `rpmbuild`, from the system (`sudo pacman -S dpkg
+rpm-tools` on Arch); an AppImage and a pacman package need nothing but what npm
+installs.
 
 A Mac opens an app that was downloaded only if it is signed by a developer Apple knows
 and has been notarized, which is Apple looking it over. The script signs with the
@@ -161,7 +170,8 @@ try the installed app out.
 Every command is run from `apps/desktop`. One of them does all of it:
 
 ```
-APPLE_KEYCHAIN_PROFILE=<profile> npm run release
+APPLE_KEYCHAIN_PROFILE=<profile> npm run release     # on a Mac
+npm run release                                       # on Linux
 ```
 
 [`scripts/release.mjs`](../apps/desktop/scripts/release.mjs) makes the next version
@@ -169,7 +179,7 @@ APPLE_KEYCHAIN_PROFILE=<profile> npm run release
 one can be made: nothing uncommitted, on main with all the remote has, the tests
 passing, and a project's tool shut in (`npm run sandbox`, under [Checks](#checks)). It
 asks before it goes on (`-- --yes` has it not ask), and publishes nothing
-until the app is built and a Mac has been seen to take it. `-- --dry` only sees that
+until the app is built and, on a Mac, a Mac has been seen to take it. `-- --dry` only sees that
 everything is ready. If it stops after the version was committed, run it again with that
 version and it goes on from there.
 
@@ -186,12 +196,13 @@ What it does, a step at a time, which can also be done by hand:
    git commit -am "chore: <version>"
    ```
 
-3. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist`
-4. See that a Mac will take it.
+3. `APPLE_KEYCHAIN_PROFILE=<profile> npm run dist` on a Mac, `npm run dist` on Linux.
+4. On a Mac, see that a Mac will take it.
    `spctl -a -t exec -vv "release/mac-arm64/Enclose (Alpha).app"` answers `accepted`,
-   from `Notarized Developer ID`.
-5. Tag the commit, push it with its tag, and publish the two disk images, with what an
-   installed app updates itself from:
+   from `Notarized Developer ID`. On Linux there is no signing: what is checked is that
+   every installer was made.
+5. Tag the commit, push it with its tag, and publish the installers, with what an
+   installed app updates itself from. On a Mac:
 
    ```
    git tag v<version> && git push origin main v<version>
@@ -201,6 +212,13 @@ What it does, a step at a time, which can also be done by hand:
    What the release says has changed is the commits since the version before, a line to
    each, without the one that only gave the app its version. (The script puts a link
    under them to where the two versions are set side by side.)
+
+   On Linux (for x86_64; the middle names follow the machine on arm64):
+
+   ```
+   git tag v<version> && git push origin main v<version>
+   gh release create v<version> release/Enclose-<version>-x86_64.AppImage release/Enclose-<version>-amd64.deb release/Enclose-<version>-x64.pacman release/Enclose-<version>-x86_64.rpm release/latest-linux.yml --title "Enclose <version>" --notes "$(git log --reverse --format='- %s (%h)' v<the version before>..v<version>^)"
+   ```
 
 The disk images are named for the kind of Mac and not for the version
 (`Enclose-arm64.dmg`, `Enclose-x64.dmg`), so that the newest is always at one address:
@@ -215,12 +233,13 @@ the examples' release is made with `--latest=false`.
 
 An installed app looks at the same latest release for a newer version of itself, as it
 starts and every four hours after, with
-[electron-updater](https://www.electron.build/auto-update). It reads the release's
+[electron-updater](https://www.electron.build/auto-update). On a Mac it reads the release's
 `latest-mac.yml`, and fetches the zip archive that file names for its kind of Mac once
 the user asks for it. So a release without that file is one nobody is offered, and it
 has to be the one made by a `npm run dist` for both kinds of Mac: made for one, it names
 no archive for the other. The app has to be signed, or a Mac will not put the new
-version in. Run from a checkout, the app looks for nothing.
+version in. On Linux it reads `latest-linux.yml` instead, and fetches the AppImage it
+names. Run from a checkout, the app looks for nothing.
 
 To try an update before there is a release of it, serve what `npm run dist` wrote and
 start an installed app that has an earlier version, telling it to look there:
@@ -228,6 +247,13 @@ start an installed app that has an earlier version, telling it to look there:
 ```
 python3 -m http.server 8123 --bind 127.0.0.1 --directory release
 ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ "/Applications/Enclose (Alpha).app/Contents/MacOS/Enclose (Alpha)"
+```
+
+and on Linux, with the AppImage in place of the app:
+
+```
+python3 -m http.server 8123 --bind 127.0.0.1 --directory release
+ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ ./release/Enclose-<version>-x86_64.AppImage --no-sandbox
 ```
 
 [`electron/update.ts`](../apps/desktop/electron/update.ts) keeps where an update is, for

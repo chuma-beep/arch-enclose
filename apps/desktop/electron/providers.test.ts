@@ -5,7 +5,13 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import type { Provider } from "../shared/api"
-import { expandHome, Providers, splitArgs, type Looked } from "./providers"
+import {
+  expandHome,
+  loginShells,
+  Providers,
+  splitArgs,
+  type Looked,
+} from "./providers"
 import { SettingsStore } from "./settings"
 
 describe("splitArgs", () => {
@@ -37,15 +43,45 @@ describe("expandHome", () => {
   })
 })
 
+describe("loginShells", () => {
+  let shell: string | undefined
+  beforeEach(() => {
+    shell = process.env.SHELL
+  })
+  afterEach(() => {
+    process.env.SHELL = shell
+  })
+
+  it("prefers the user's shell, then what is always there instead of zsh alone", () => {
+    process.env.SHELL = "/usr/bin/fish"
+    expect(loginShells()).toEqual([
+      "/usr/bin/fish",
+      "/bin/bash",
+      "/bin/sh",
+      "/bin/zsh",
+    ])
+  })
+
+  it("falls back past a shell that is not there, without repeating itself", () => {
+    process.env.SHELL = "/bin/bash"
+    expect(loginShells()).toEqual(["/bin/bash", "/bin/sh", "/bin/zsh"])
+    delete process.env.SHELL
+    expect(loginShells()).toEqual(["/bin/bash", "/bin/sh", "/bin/zsh"])
+  })
+})
+
 describe("Providers", () => {
   let dir: string
   let was: string | undefined
+  let shellWas: string | undefined
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-providers-"))
     was = process.env.PATH
+    shellWas = process.env.SHELL
   })
   afterEach(() => {
     process.env.PATH = was
+    process.env.SHELL = shellWas
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -69,9 +105,17 @@ describe("Providers", () => {
   it("finds each where it is, asks the ones in use about themselves, and says how to start them", async () => {
     command("claude", "2.1.0")
     const grok = command("grok-nightly", "1.0.50")
-    // (a PATH with nothing else on it: what is installed on this machine is not found)
+    // (a PATH with nothing else on it: what is installed on this machine is not found.
+    // The stand-in shell answers with that same PATH, so the login-shell fallback
+    // cannot leak the machine's real one in.)
+    const standIn = path.join(dir, "stand-in-sh")
+    fs.writeFileSync(
+      standIn,
+      `#!/bin/sh\nprintf "__PATH__%s__PATH__" "$PATH"\n`,
+      { mode: 0o755 }
+    )
     process.env.PATH = dir
-    process.env.SHELL = "/nonexistent"
+    process.env.SHELL = standIn
     const settings = new SettingsStore(path.join(dir, "settings.json"), {
       projectsFolder: dir,
       lookOver: true,

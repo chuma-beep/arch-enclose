@@ -1,9 +1,12 @@
 // A release, start to finish: what docs/development.md sets out under "A release", as
 // one command. It gives the app its new version and commits that, builds, signs and
-// notarizes the app for both kinds of Mac, sees that a Mac will take it, tags the commit,
-// pushes it, and publishes the release with what an installed app updates itself from.
-// What the release says has changed is the commits since the version before, a line to
-// each. It needs a Mac, and what notarizes the app: see scripts/dist.mjs.
+// notarizes the app for both kinds of Mac where a Mac is what it is made on (and sees
+// that a Mac will take it), or builds the Linux installers where Linux is, tags the
+// commit, pushes it, and publishes the release with what an installed app updates
+// itself from. What the release says has changed is the commits since the version
+// before, a line to each. On a Mac it needs what notarizes the app: see scripts/dist.mjs.
+// On Linux a deb takes dpkg-deb and an rpm takes rpmbuild (`sudo pacman -S dpkg
+// rpm-tools` on Arch).
 //   npm run release                the next version: 0.0.4 after 0.0.3
 //   npm run release -- 0.1.0       that version
 //   npm run release -- --dry       see that everything is ready, and change nothing
@@ -13,8 +16,9 @@
 // uncommitted, that this is main and has all that the remote has, that the version is
 // one nobody has, that the tests pass, and that a project's tool is shut in, in the app
 // as it is built (scripts/sandbox.mjs). Nothing is published until the app has been
-// built and a Mac has been seen to take it. If it stops after the version was committed,
-// a build that failed say, run it again with that version and it goes on from there.
+// built and, on a Mac, a Mac has been seen to take it. If it stops after the version was
+// committed, a build that failed say, run it again with that version and it goes on
+// from there.
 import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
@@ -93,13 +97,22 @@ step(
   `Enclose ${next}${resumed ? ", going on from where it stopped" : ` (now ${current})`}`
 )
 const wrong = []
-if (process.platform !== "darwin") wrong.push("This is not a Mac.")
+const mac = process.platform === "darwin"
+const linux = process.platform === "linux"
+if (!mac && !linux) wrong.push("This is neither a Mac nor Linux.")
+// The names the Linux installers go up under, by the kind of machine they are made
+// on (scripts/dist.mjs names them so).
+const linuxArch = process.arch === "arm64" ? "arm64" : "x64"
+const LINUX_NAMES = {
+  arm64: ["aarch64", "arm64", "arm", "aarch64"],
+  x64: ["x86_64", "amd64", "x64", "x86_64"],
+}[linuxArch]
 const notarized =
   process.env.APPLE_KEYCHAIN_PROFILE ||
   (process.env.APPLE_API_KEY &&
     process.env.APPLE_API_KEY_ID &&
     process.env.APPLE_API_ISSUER)
-if (!notarized)
+if (mac && !notarized)
   wrong.push(
     "Nothing to notarize the app with: set APPLE_KEYCHAIN_PROFILE to a profile kept by `xcrun notarytool store-credentials`."
   )
@@ -129,7 +142,7 @@ console.log(
 )
 if (dry) {
   console.log(
-    `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish, listing the commits since ${before}`
+    `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build${mac ? " and notarize" : ""}, tag ${tag}, push, and publish, listing the commits since ${before}`
   )
   process.exit(0)
 }
@@ -165,49 +178,73 @@ if (!resumed) {
 }
 const again = `Run it again to go on from here: npm run release -- ${next}`
 
-step("the app, signed and notarized: this takes a few minutes")
+step(
+  mac ? "the app, signed and notarized: this takes a few minutes" : "the app: this takes a few minutes"
+)
 if (!run("npm", ["run", "dist"]).ok)
   stop("The app was not made. Nothing has been pushed or published.", again)
 
-step("that a Mac will take it")
-for (const folder of ["mac-arm64", "mac"]) {
-  const app = path.join(RELEASE, folder, `${productName}.app`)
-  const { said } = run("spctl", ["-a", "-t", "exec", "-vv", app], {
-    quiet: true,
-  })
-  console.log(said)
-  if (!/: accepted/.test(said) || !/Notarized Developer ID/.test(said))
+let files
+if (mac) {
+  step("that a Mac will take it")
+  for (const folder of ["mac-arm64", "mac"]) {
+    const app = path.join(RELEASE, folder, `${productName}.app`)
+    const { said } = run("spctl", ["-a", "-t", "exec", "-vv", app], {
+      quiet: true,
+    })
+    console.log(said)
+    if (!/: accepted/.test(said) || !/Notarized Developer ID/.test(said))
+      stop(
+        `A Mac would not take ${folder}. Nothing has been pushed or published.`,
+        again
+      )
+  }
+
+  // what goes up: the disk images, under the names the site's download goes to, and what
+  // an installed app updates itself from
+  const archives = fs
+    .readdirSync(RELEASE)
+    .filter(
+      (file) =>
+        file.startsWith(`Enclose-${next}-`) && /\.zip(\.blockmap)?$/.test(file)
+    )
+  files = [
+    "Enclose-arm64.dmg",
+    "Enclose-x64.dmg",
+    ...archives,
+    "latest-mac.yml",
+  ]
+  const missing = [
+    ...files.filter((file) => !fs.existsSync(path.join(RELEASE, file))),
+    ...(archives.length === 4
+      ? []
+      : ["the four archives an installed app updates from"]),
+  ]
+  if (missing.length > 0)
     stop(
-      `A Mac would not take ${folder}. Nothing has been pushed or published.`,
+      `Not everything was made: ${missing.join(", ")}. Nothing has been pushed or published.`,
+      again
+    )
+} else {
+  // what goes up: one installer of each kind, under versioned names, and what an
+  // installed app updates itself from
+  const [appimage, deb, pacman, rpm] = LINUX_NAMES
+  files = [
+    `Enclose-${next}-${appimage}.AppImage`,
+    `Enclose-${next}-${deb}.deb`,
+    `Enclose-${next}-${pacman}.pacman`,
+    `Enclose-${next}-${rpm}.rpm`,
+    "latest-linux.yml",
+  ]
+  const missing = files.filter(
+    (file) => !fs.existsSync(path.join(RELEASE, file))
+  )
+  if (missing.length > 0)
+    stop(
+      `Not everything was made: ${missing.join(", ")}. A deb takes dpkg-deb and an rpm takes rpmbuild. Nothing has been pushed or published.`,
       again
     )
 }
-
-// what goes up: the disk images, under the names the site's download goes to, and what
-// an installed app updates itself from
-const archives = fs
-  .readdirSync(RELEASE)
-  .filter(
-    (file) =>
-      file.startsWith(`Enclose-${next}-`) && /\.zip(\.blockmap)?$/.test(file)
-  )
-const files = [
-  "Enclose-arm64.dmg",
-  "Enclose-x64.dmg",
-  ...archives,
-  "latest-mac.yml",
-]
-const missing = [
-  ...files.filter((file) => !fs.existsSync(path.join(RELEASE, file))),
-  ...(archives.length === 4
-    ? []
-    : ["the four archives an installed app updates from"]),
-]
-if (missing.length > 0)
-  stop(
-    `Not everything was made: ${missing.join(", ")}. Nothing has been pushed or published.`,
-    again
-  )
 
 // What the release says has changed: the commits since the version before, a line to
 // each with what it is known by, the oldest first. The one that only gave the app its

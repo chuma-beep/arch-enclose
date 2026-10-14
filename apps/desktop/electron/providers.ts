@@ -139,9 +139,10 @@ function onPath(name: string): string | null {
 }
 
 /**
- * An app opened from the Dock or Finder gets a bare PATH, without the directories a
- * terminal adds - which is where `claude`, `python3` and the rest live. Ask the login
- * shell what PATH it would use, and adopt it. Once is enough, once it has answered, until
+ * An app opened from the desktop (the Dock or Finder on a Mac, a .desktop file
+ * on Linux) gets a bare PATH, without the directories a terminal adds - which
+ * is where `claude`, `python3` and the rest live. Ask the login shell what
+ * PATH it would use, and adopt it. Once is enough, once it has answered, until
  * the agents are looked at again on purpose. A
  * shell with a lot in its profile can take many seconds over it, the first time after
  * the machine was started above all: it is given that long, and one that was given up
@@ -149,22 +150,44 @@ function onPath(name: string): string | null {
  * finding no agent until it was opened again.
  */
 let adopted: Promise<void> | null = null
+/**
+ * The shells to ask for the login PATH, in order. The user's own first, then
+ * what is always there: a Mac leans on zsh, which an Arch box often lacks
+ * entirely, so a single default would leave provider discovery with no shell.
+ */
+export function loginShells(): string[] {
+  return [
+    ...new Set(
+      [process.env.SHELL, "/bin/bash", "/bin/sh", "/bin/zsh"].filter(
+        (one): one is string => !!one
+      )
+    ),
+  ]
+}
 function adoptShellPath(): Promise<void> {
   adopted ??= (async () => {
     if (process.platform === "win32") return
-    const shell = process.env.SHELL ?? "/bin/zsh"
-    try {
-      const { stdout } = await run(
-        shell,
-        ["-ilc", 'printf "__PATH__%s__PATH__" "$PATH"'],
-        { timeout: 20_000 }
-      )
-      const found = /__PATH__(.*)__PATH__/s.exec(stdout)?.[1]
-      if (found) process.env.PATH = found
-    } catch {
-      // keep the PATH we were started with, for now
-      adopted = null
+    for (const shell of loginShells()) {
+      // a shell that is not there is skipped, not failed on: the next is tried
+      if (shell.includes("/") && !executable(shell)) continue
+      try {
+        const { stdout } = await run(
+          shell,
+          ["-ilc", 'printf "__PATH__%s__PATH__" "$PATH"'],
+          { timeout: 20_000 }
+        )
+        const found = /__PATH__(.*)__PATH__/s.exec(stdout)?.[1]
+        if (found) {
+          process.env.PATH = found
+          return
+        }
+      } catch {
+        continue
+      }
     }
+    // no shell answered: keep the PATH we were started with, and ask again
+    // the next time something is looked for
+    adopted = null
   })()
   return adopted
 }

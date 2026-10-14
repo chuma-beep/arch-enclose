@@ -4,15 +4,16 @@ A desktop workbench for CAD projects that are built from code
 ([enclose.dev](https://enclose.dev)). You look at the model in 3D, click the part you
 mean, say what should change, and Claude edits the project and rebuilds it.
 
-Early days: for macOS only, and of CAD files it opens only STEP.
+Early days: for macOS and Linux, and of CAD files it opens only STEP.
 
 ## Install
 
 Download the latest version from
 [GitHub Releases](https://github.com/enclosedev/enclose/releases/latest): the disk image
-that ends in `arm64` for Apple silicon, `x64` for Intel. It needs macOS 13 or newer,
+that ends in `arm64` for Apple silicon, `x64` for Intel, or on Linux the AppImage, deb,
+pacman package or rpm. It needs macOS 13 or newer, or Linux on x86_64,
 [Claude Code](https://code.claude.com/docs/en/overview) installed and signed in, and
-Python 3.
+Python 3. [docs/install.md](docs/install.md) says how on each system.
 
 ## Documentation
 

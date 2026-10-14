@@ -1,6 +1,6 @@
 # Installing Enclose
 
-Enclose is for macOS, 13 (Ventura) or newer.
+Enclose is for macOS, 13 (Ventura) or newer, and for Linux (x86_64).
 
 ## What it needs
 
@@ -12,7 +12,7 @@ Enclose is for macOS, 13 (Ventura) or newer.
   [build123d](https://build123d.readthedocs.io); where build123d is missing, Claude makes
   a virtual environment for it in the project's folder.
 
-## Download
+## On macOS
 
 Take the disk image for your Mac from
 [GitHub Releases](https://github.com/enclosedev/enclose/releases/latest):
@@ -26,7 +26,28 @@ About This Mac, in the Apple menu, says which yours is: it names a chip that is 
 or a processor that is Intel's. Open the disk image and drag the app into Applications,
 where it is called Enclose (Alpha).
 
+## On Linux
+
+Take the file for your distribution from
+[GitHub Releases](https://github.com/enclosedev/enclose/releases/latest):
+
+| The file | How it goes in |
+|---|---|
+| `Enclose-<version>-x86_64.AppImage` | Make it executable (`chmod +x`) and run it: nothing is installed |
+| `Enclose-<version>-amd64.deb` | `sudo apt install ./Enclose-<version>-amd64.deb` (Debian, Ubuntu) |
+| `Enclose-<version>-x64.pacman` | `sudo pacman -U Enclose-<version>-x64.pacman` (Arch) |
+| `Enclose-<version>-x86_64.rpm` | `sudo dnf install ./Enclose-<version>-x86_64.rpm` (Fedora) |
+
+Run from a terminal the first time with `--no-sandbox` where the sandbox refuses
+to start: `./Enclose-<version>-x86_64.AppImage --no-sandbox`.
+
+The app is called Enclose (Alpha), and keeps its state in
+`~/.config/Enclose`. New projects go in `~/Documents/Enclose`, unless the
+[settings](settings.md) say elsewhere.
+
 ## The first time it is opened
+
+On a Mac:
 
 - macOS says that Enclose was downloaded from the internet and asks whether to open it.
   The app is signed and has been checked by Apple, so Open is all there is to it.
@@ -58,7 +79,10 @@ to the Trash.)
 
 ## Removing it
 
-Drag Enclose (Alpha) from Applications to the Trash. What it kept of your projects (the
+On a Mac, drag Enclose (Alpha) from Applications to the Trash. What it kept of your projects (the
 list of them, the conversations and the settings) is in
 `~/Library/Application Support/Enclose`. The projects themselves are folders of yours,
 and are left where they are.
+
+On Linux, remove the package (`sudo pacman -R enclose`, or the like for yours), or
+throw away the AppImage. What it kept is in `~/.config/Enclose`.

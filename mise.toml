@@ -1,0 +1,67 @@
+# Runtimes and shortcuts for working on Enclose.
+#
+#   mise trust      # once, to allow these tasks to run
+#   mise install    # fetch the pinned runtimes (Node 22+; Python comes from the system)
+#   mise run dev    # open the app
+#
+# Every task runs from apps/desktop, where the app lives and CONTRIBUTING.md says
+# its commands are run from. System needs Python 3 (models build with build123d)
+# and a signed-in Claude Code / Codex / Grok on the PATH; see docs/install.md.
+
+[tools]
+node = "22"
+
+[tasks.dev]
+description = "Open the app (Vite dev loop with hot reload)"
+dir = "apps/desktop"
+run = "npm run dev"
+
+[tasks.build]
+description = "Typecheck and build the production bundle"
+dir = "apps/desktop"
+run = "npm run build"
+
+[tasks.start]
+description = "Run the production build"
+dir = "apps/desktop"
+run = "npm start"
+
+[tasks.typecheck]
+description = "Typecheck the app"
+dir = "apps/desktop"
+run = "npm run typecheck"
+
+[tasks.lint]
+description = "Lint the app"
+dir = "apps/desktop"
+run = "npm run lint"
+
+[tasks.test]
+description = "Run the unit tests"
+dir = "apps/desktop"
+run = "npm test"
+
+[tasks.sandbox]
+description = "Check a project's tool is shut in (built app)"
+dir = "apps/desktop"
+run = "npm run build && npm run sandbox"
+
+[tasks.dist]
+description = "Build the installable app (disk images on a Mac; AppImage/deb/pacman/rpm on Linux)"
+dir = "apps/desktop"
+run = "npm run dist"
+
+[tasks.icons]
+description = "Rebuild the app icons (the .icns files and installer background still need a Mac)"
+dir = "apps/desktop"
+run = "npm run icons"
+
+[tasks.scenes]
+description = "Rebuild the reference scenes (needs a Python with build123d)"
+dir = "apps/desktop"
+run = "npm run scenes"
+
+[tasks.examples]
+description = "Repack the example archives"
+dir = "apps/desktop"
+run = "npm run examples"
