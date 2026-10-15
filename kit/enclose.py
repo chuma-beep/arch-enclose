@@ -178,6 +178,8 @@ _as_compound, _as_edge, _as_face, _as_shell, _as_solid, _as_vertex = (
 __all__ = ["Model", "Reference", "read_board", "read_files", "read_step"]
 
 MANIFEST = "enclose.model.json"
+# set by the app where it builds a model as it is being written: the folder to write it to
+DRAFT = "ENCLOSE_DRAFT"
 REFERENCE = "enclose.reference.json"
 
 
@@ -894,9 +896,14 @@ class Model:
         self.title = title
         self.fine = fine
         self.reference = reference
-        self.downloads = downloads
         here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
         self.out = out if os.path.isabs(out) else os.path.join(here, out)
+        # the app builds the model by itself as an agent writes its script, to show it on
+        # the way: into a folder of its own, out of the way of the build, and quickly
+        draft = os.environ.get(DRAFT)
+        if draft:
+            self.out = draft
+        self.downloads = downloads and not draft
         self._groups: list[dict] = []
         self._parts: list[dict] = []
         self._shapes: dict[str, object] = {}
@@ -1191,6 +1198,9 @@ class Reference:
         the scene again. Returns the path of the manifest."""
         if not self._things:
             raise ValueError("a reference scene needs at least one part")
+        # the app building the model as it is written has no use for the scene
+        if os.environ.get(DRAFT):
+            return os.path.join(self.out, REFERENCE)
         os.makedirs(self.out, exist_ok=True)
         parts = []
         for id, thing in self._things.items():

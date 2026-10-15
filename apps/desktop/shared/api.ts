@@ -1100,9 +1100,11 @@ export const CHANNEL = {
  * The files of a reference scene come the same way, from a host that says whose it is:
  * <project id>.reference for a project's own, and <name>.scene for one of the app's.
  * And so do the pictures put with a project's messages: <project id>.picture; and its
- * circuit boards, from the folder they are in: <project id>.pcb.
+ * circuit boards, from the folder they are in: <project id>.pcb. A project's model as
+ * the app builds it while an agent writes it (electron/drafts.ts) is <project id>.draft.
  */
 export const MODEL_SCHEME = "cad-model"
 export const SCENE_HOST = { own: "reference", app: "scene" } as const
 export const PICTURE_HOST = "picture"
 export const BOARD_HOST = "pcb"
+export const DRAFT_HOST = "draft"

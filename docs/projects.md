@@ -171,7 +171,10 @@ The app looks in the folder for a model manifest: a JSON file listing the parts,
 mesh file of each, and the groups they are listed under. A part is any separate
 component: a thing made, bought or fitted on its own. The manifest and its files are
 build output; the project's own script writes them. When the manifest is rewritten, the
-view reloads and keeps your camera where it was.
+view reloads and keeps your camera where it was. While Claude is at work the view can
+show a draft of it as well, which the app builds by itself as Claude writes the script
+(see [Working with Claude](working-with-claude.md#what-claude-has-just-made)). `enclose.py`
+writes that to the folder the app names in `ENCLOSE_DRAFT`, in place of `build/`.
 
 The manifest format is in
 [`manifest-format.ts`](../apps/desktop/shared/manifest-format.ts). A `enclose.json` at

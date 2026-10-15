@@ -18,6 +18,7 @@ import electronUpdater from "electron-updater"
 import {
   ACCESSES,
   BOARD_HOST,
+  DRAFT_HOST,
   CHANNEL,
   EFFORTS,
   FEATURES,
@@ -57,6 +58,7 @@ import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { boardsIn } from "./boards"
+import { Drafts } from "./drafts"
 import { Previews } from "./previews"
 import { changeLog } from "./gist"
 import { Changes } from "./changes"
@@ -186,6 +188,7 @@ let win: BrowserWindow | null = null
 let projects: Projects
 let pictures: Pictures
 let threads: Threads
+let drafts: Drafts
 let changes: Changes
 let versions: Versions
 /** the conversation the window shows of each project, by project */
@@ -237,12 +240,16 @@ const previews = new Previews({
 /**
  * The folder a file asked for is in, by the host it is asked of: a project's model, the
  * reference scene the project has of its own, one of the app's, the pictures put with
- * the project's messages, or its circuit boards.
+ * the project's messages, its circuit boards, or its model as an agent writes it.
  */
 function servedFrom(host: string): string | null {
   const [name, kind] = host.split(".")
   if (kind === SCENE_HOST.app)
     return SCENES.find((scene) => scene.id === name)?.dir ?? null
+  if (kind === DRAFT_HOST) {
+    const draft = drafts.shown(name)
+    return draft && path.dirname(draft)
+  }
   const project = projects.get(name)
   if (kind === PICTURE_HOST) return project ? pictures.folder(project.id) : null
   if (kind === BOARD_HOST)
@@ -290,6 +297,8 @@ const list = (): Project[] =>
       const { undo, redo } = changes.last(project.id, whose(project.id))
       return {
         ...project,
+        // (the model as an agent writes it is loaded as one built again is)
+        revision: project.revision + drafts.stamp(project.id),
         assembling: threads.assembling(project.id),
         undo: undo && { what: undo.what, at: undo.at },
         redo: redo && { what: redo.what, at: redo.undoneAt ?? redo.at },
@@ -1082,11 +1091,16 @@ function wire() {
   })
 
   ipcMain.handle(CHANNEL.modelRead, (_, id: string): ModelSource | null => {
-    const manifest = projects.get(id)?.manifest
+    // while an agent is at work, the model as it has it written so far, where that is
+    // newer than what it last built
+    const draft = drafts.shown(id)
+    const manifest = draft ?? projects.get(id)?.manifest
     if (!manifest) return null
     return {
       manifest: JSON.parse(fs.readFileSync(manifest, "utf8")),
-      baseUrl: `${MODEL_SCHEME}://${id}/`,
+      baseUrl: draft
+        ? `${MODEL_SCHEME}://${id}.${DRAFT_HOST}/`
+        : `${MODEL_SCHEME}://${id}/`,
     }
   })
   ipcMain.handle(
@@ -1909,10 +1923,20 @@ if (!app.requestSingleInstanceLock()) {
         analytics?.record("version begun", mannerSaid(manner))
       },
       onSummary: () => {
+        // a turn may have begun, or be over: the model is built as it is written meanwhile
+        drafts.sync()
         broadcast()
         // a turn may be over: the folder it was had in is free to be another's
         follow()
       },
+    })
+    drafts = new Drafts({
+      folder: path.join(data, "drafts"),
+      ids: () => projects.list(() => []).map((project) => project.id),
+      project: (id) => projects.get(id),
+      working: (id) => threads.working(id),
+      env: cleanEnv,
+      onChange: broadcast,
     })
     providers = new Providers({
       settings,
@@ -2011,6 +2035,7 @@ if (!app.requestSingleInstanceLock()) {
     guideServer.close()
     projects?.close()
     previews.close()
+    drafts?.close()
     updates?.close()
     analytics?.close()
   })
