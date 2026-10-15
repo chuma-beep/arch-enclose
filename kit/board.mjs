@@ -46,6 +46,18 @@ import { pathToFileURL } from "node:url"
 /** The tscircuit it builds with: the one the app is known to work with. */
 const TSCIRCUIT = "tscircuit@0.0.2892"
 
+/**
+ * What tscircuit is run with. npm 12 fetches nothing from git unless it is let:
+ * tscircuit has a part that is (as an environment variable, which an older npm passes
+ * over). And tscircuit counts how its command line is used unless it is told not to:
+ * it is told, as the privacy policy says.
+ */
+const TSCI_ENV = {
+  ...process.env,
+  npm_config_allow_git: "all",
+  TSCI_TELEMETRY_DISABLED: "1",
+}
+
 /** What a board's file is called: its name, as the app knows the board by it, and this. */
 const ENDING = ".circuit.tsx"
 /** What the app takes for a board's name: lower case, and nothing an address cannot hold. */
@@ -157,9 +169,7 @@ function tsci(args, each = () => {}) {
     const child = spawn("npx", ["--yes", "-p", TSCIRCUIT, "tsci", ...args], {
       cwd: work,
       stdio: ["ignore", "pipe", "pipe"],
-      // npm 12 fetches nothing from git unless it is let: tscircuit has a part that is
-      // (as an environment variable, which an older npm passes over)
-      env: { ...process.env, npm_config_allow_git: "all" },
+      env: TSCI_ENV,
       shell: process.platform === "win32",
     })
     for (const [stream, to] of [
@@ -333,7 +343,7 @@ async function sharper(board, glb) {
         cwd: work,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
-        env: { ...process.env, npm_config_allow_git: "all" },
+        env: TSCI_ENV,
         shell: process.platform === "win32",
       }
     )

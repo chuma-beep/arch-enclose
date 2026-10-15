@@ -151,7 +151,9 @@ export const SWITCHES = [
   { id: 'section', label: 'Section', key: 'S' },
   { id: 'explode', label: 'Explode', key: 'E' },
   { id: 'reference', label: 'Reference', key: '⌘/' },
+  { id: 'pcb', label: 'PCB', key: '⇧P' },
   { id: 'blueprint', label: 'Blueprint', key: 'B' },
+  { id: 'assembly', label: 'Assembly', key: 'A' },
   { id: 'search', label: 'Search', key: '⌘F' },
   { id: 'tools', label: 'Tools', key: 'T' },
 ] as const

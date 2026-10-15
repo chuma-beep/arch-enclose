@@ -1,5 +1,6 @@
 import {
   ArrowUpIcon,
+  BookOpenIcon,
   BoxIcon,
   BoxesIcon,
   ChevronDownIcon,
@@ -35,7 +36,7 @@ import {
   type Project,
   type SwitchId,
 } from './data'
-import { ClaudeIcon, ReferenceIcon, SectionIcon } from './icons'
+import { BoardIcon, ClaudeIcon, ReferenceIcon, SectionIcon } from './icons'
 import './app.scss'
 
 // The app's window, rebuilt on the page out of what the app itself is built of,
@@ -50,7 +51,9 @@ const SWITCH_ICON: Record<SwitchId, ReactNode> = {
   section: <SectionIcon />,
   explode: <UnfoldVerticalIcon />,
   reference: <ReferenceIcon />,
+  pcb: <BoardIcon />,
   blueprint: <DraftingCompassIcon />,
+  assembly: <BookOpenIcon />,
   search: <SearchIcon />,
   tools: <HammerIcon />,
 }

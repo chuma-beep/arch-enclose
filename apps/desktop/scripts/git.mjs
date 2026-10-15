@@ -16,6 +16,8 @@ const MANAGERS = (name) =>
   name.startsWith("git-credential-manager") ||
   name === "createdump" ||
   name === "uninstall.sh" ||
+  // the notice of what is in it, which goes with it
+  name === "NOTICE" ||
   /^[a-z]{2}(-[A-Za-z]+)?$/.test(name)
 
 /** Fetch git for `arch` ("arm64" or "x64"), and take out what is not wanted of it. */

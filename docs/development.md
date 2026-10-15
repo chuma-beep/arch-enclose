@@ -192,12 +192,17 @@ What it does, a step at a time, which can also be done by hand:
 4. See that a Mac will take it.
    `spctl -a -t exec -vv "release/mac-arm64/Enclose (Alpha).app"` answers `accepted`,
    from `Notarized Developer ID`.
-5. Tag the commit, push it with its tag, and publish the two disk images, with what an
-   installed app updates itself from:
+5. Fetch the source of the git the app carries into `release/`: each archive
+   `gitSources()` in [`scripts/licenses.mjs`](../apps/desktop/scripts/licenses.mjs) lists,
+   its `url` saved as its `file`. Git is under the GPL, version 2, which has whoever
+   passes it on give its source with it, and the app's third-party licenses say it is in
+   the release.
+6. Tag the commit, push it with its tag, and publish the two disk images, with what an
+   installed app updates itself from and the source of its git:
 
    ```
    git tag v<version> && git push origin main v<version>
-   gh release create v<version> release/Enclose-arm64.dmg release/Enclose-x64.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml --title "Enclose <version>" --notes "$(git log --reverse --format='- %s (%h)' v<the version before>..v<version>^)"
+   gh release create v<version> release/Enclose-arm64.dmg release/Enclose-x64.dmg release/Enclose-<version>-*.zip release/Enclose-<version>-*.zip.blockmap release/latest-mac.yml release/*-source.tar.gz --title "Enclose <version>" --notes "$(git log --reverse --format='- %s (%h)' v<the version before>..v<version>^)"
    ```
 
    What the release says has changed is the commits since the version before, a line to

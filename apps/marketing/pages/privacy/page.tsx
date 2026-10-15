@@ -3,13 +3,14 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Privacy() {
   return (
-    <Legal page="privacy" title="Privacy Policy" updated="11 October 2026">
+    <Legal page="privacy" title="Privacy Policy" updated="15 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. This page says what the
         Enclose app and this website send anywhere, and what they do not. In short: the app
-        needs no account, your projects stay on your Mac, and the installed app counts how
-        it is used, without your name, unless you switch that off. This website counts its
-        visits, without cookies and without knowing whose they are.
+        needs no account, your projects stay on your Mac unless you connect GitHub to back
+        them up, and the installed app counts how it is used, without your name, unless you
+        switch that off. This website counts its visits, without cookies and without knowing
+        whose they are.
       </p>
 
       <h2>Usage data from the app</h2>
@@ -26,15 +27,26 @@ export default function Privacy() {
           or a folder;
         </li>
         <li>
-          that a message was sent: the agent, its model, the effort and the permissions, and
-          how many parts and pictures went with it;
+          that a message was sent: the agent, its model, the effort and the permissions, how
+          many parts and pictures went with it, and whether a circuit board was on screen;
         </li>
-        <li>that a model was looked over, a change turned back, or a model saved;</li>
+        <li>
+          that a model was looked over, a new version of a project begun, a change turned
+          back, or a model or a circuit board saved;
+        </li>
+        <li>
+          that an assembly guide was asked for, written, opened, saved or removed, and how
+          many steps it has;
+        </li>
         <li>
           which features the view was put into (a section, the exploded view, the blueprint,
-          a reference scene, a project’s own tools), once for a run of the app;
+          the assembly guides, a reference scene, a project’s own tools, a circuit board),
+          once for a run of the app;
         </li>
-        <li>that an agent was switched on or off, and that an update was fetched.</li>
+        <li>
+          that an agent was switched on or off or updated, that an update was fetched, and
+          that GitHub was connected or disconnected, without which account.
+        </li>
       </ul>
       <p>
         With every event go the app’s version, your macOS version, the kind of processor,
@@ -66,6 +78,15 @@ export default function Privacy() {
         terminal. That is between you and the provider, under its privacy policy and your
         subscription. None of it goes to the Enclose project.
       </p>
+      <p>
+        Where Claude Code is installed, the app also asks its quickest model to do a few
+        small things, whichever agent a conversation is with: to sum up a long message in
+        the few words its card has room for, to name a group of parts you put together, and
+        to write what each turn changed in the project’s history. For that it sends the
+        message, what the parts and groups are called, or what was asked, what was said back
+        and which files changed. That goes to Anthropic, on your Claude Code subscription,
+        as the rest of what Claude Code sends does.
+      </p>
 
       <h2>What the app fetches from GitHub</h2>
       <p>
@@ -78,11 +99,47 @@ export default function Privacy() {
         .
       </p>
 
+      <h2>Backing projects up to GitHub</h2>
+      <p>
+        Only if you connect it, in Settings, Connections. You sign in on GitHub’s own site
+        with a code the app shows you, and install Enclose’s GitHub app on your account.
+        GitHub asks you there which of your repositories it may reach: all of them, or only
+        the ones you pick. In those, it is let make repositories, push to them, and manage
+        them, which GitHub counts as renaming and deleting them too. The app makes and
+        renames its own; it deletes none.
+      </p>
+      <p>
+        Once you have connected, each project the app keeps a history of goes to a private
+        repository of its own on your account, called <code>enclose-</code> and the
+        project’s name, and is pushed to after every change: its files, every version of
+        it, and the history’s messages, which say in a few words what was asked and what
+        changed. Your conversations themselves are not pushed. What signs the app in to
+        GitHub is kept on your Mac, sealed with the macOS keychain. Disconnecting forgets
+        it, and leaves the repositories on GitHub, yours to keep or delete. GitHub keeps
+        them under{' '}
+        <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
+          its own privacy statement
+        </a>
+        .
+      </p>
+
+      <h2>Circuit boards</h2>
+      <p>
+        Boards are built with <a href="https://tscircuit.com">tscircuit</a>’s command line,
+        which the app downloads from npm the first time it builds one. A board is laid out
+        and routed on your Mac. While it is built, tscircuit downloads the footprints and 3D
+        models of the parts on it, from its own servers and from those of the parts’ makers
+        and EasyEDA, and an agent looking for a part may ask tscircuit’s search of JLCPCB’s
+        stock. Those see what is asked for and the address it comes from, not the board.
+        tscircuit’s own usage counting is switched off when the app builds with it.
+      </p>
+
       <h2>What stays on your Mac</h2>
       <p>
-        Your projects, your conversations about them and your settings are kept on your Mac
-        and nowhere else. Removing a project from the app forgets what was said about it,
-        and leaves its folder.
+        Your conversations and your settings are kept on your Mac and nowhere else, and so
+        are your projects, unless you back them up to GitHub. Removing a project from the
+        app forgets what was said about it, and leaves its folder, and its repository on
+        GitHub where there is one.
       </p>
 
       <h2>This website</h2>

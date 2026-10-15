@@ -1,7 +1,8 @@
 // A release, start to finish: what docs/development.md sets out under "A release", as
 // one command. It gives the app its new version and commits that, builds, signs and
 // notarizes the app for both kinds of Mac, sees that a Mac will take it, tags the commit,
-// pushes it, and publishes the release with what an installed app updates itself from.
+// pushes it, and publishes the release with what an installed app updates itself from,
+// and the source of the git it carries.
 // What the release says has changed is the commits since the version before, a line to
 // each. It needs a Mac, and what notarizes the app: see scripts/dist.mjs.
 //   npm run release                the next version: 0.0.4 after 0.0.3
@@ -19,6 +20,8 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import readline from "node:readline/promises"
+
+import { gitSources } from "./licenses.mjs"
 
 const ROOT = path.resolve(import.meta.dirname, "..")
 const RELEASE = path.join(ROOT, "release")
@@ -183,8 +186,29 @@ for (const folder of ["mac-arm64", "mac"]) {
     )
 }
 
-// what goes up: the disk images, under the names the site's download goes to, and what
-// an installed app updates itself from
+// The source of the git the app carries goes up beside it, as the GPL asks of whoever
+// passes git on: Git's own, and how dugite-native built it (see scripts/licenses.mjs,
+// whose third-party licenses say it is there).
+step("the source of the git it carries")
+const sources = gitSources()
+for (const { file, url } of sources) {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`it answered ${response.status}`)
+    fs.writeFileSync(
+      path.join(RELEASE, file),
+      Buffer.from(await response.arrayBuffer())
+    )
+  } catch (error) {
+    stop(
+      `${url} could not be fetched: ${error.message}. Nothing has been pushed or published.`,
+      again
+    )
+  }
+}
+
+// what goes up: the disk images, under the names the site's download goes to, what an
+// installed app updates itself from, and the source of its git
 const archives = fs
   .readdirSync(RELEASE)
   .filter(
@@ -196,6 +220,7 @@ const files = [
   "Enclose-x64.dmg",
   ...archives,
   "latest-mac.yml",
+  ...sources.map((source) => source.file),
 ]
 const missing = [
   ...files.filter((file) => !fs.existsSync(path.join(RELEASE, file))),

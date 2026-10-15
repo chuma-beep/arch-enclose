@@ -3,7 +3,7 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Terms() {
   return (
-    <Legal page="terms" title="Terms of Use" updated="10 October 2026">
+    <Legal page="terms" title="Terms of Use" updated="15 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. These terms cover this
         website and the Enclose app as it is downloaded from the project’s releases. Using
@@ -31,6 +31,12 @@ export default function Terms() {
         are yours and stay there. The project runs no server that receives them, and the app
         needs no account.
       </p>
+      <p>
+        If you connect GitHub, the app backs your projects up to private repositories on your
+        own GitHub account. They are yours there too, kept by GitHub under its own terms.
+        A backup can fall behind or fail, so do not make it the only copy of something that
+        matters.
+      </p>
 
       <h2>Agents and their providers</h2>
       <p>
@@ -51,6 +57,11 @@ export default function Terms() {
         What the app shows is a model. It is no promise that a part fits, holds, or is safe
         to make or to use. Check sizes, tolerances and anything safety depends on yourself
         before you have something made.
+      </p>
+      <p>
+        So is a circuit board. Its drawings, its Gerbers and its STEP file are no promise
+        that the board works, meets a board house’s rules, or is safe to power. Check it
+        before you order one. What you order from a board house is between you and them.
       </p>
 
       <h2>Early software</h2>
@@ -91,8 +102,9 @@ export default function Terms() {
       <p>
         Some of what ships with the project is other people’s and stays under their terms.
         The robot arm in the examples, and on this site, is the SO-101 by TheRobotStudio,
-        under the Apache License 2.0. <a href={`${REPOSITORY}/blob/main/NOTICE.md`}>NOTICE.md</a>{' '}
-        has the rest.
+        under the Apache License 2.0. Circuit boards are built with tscircuit, under the MIT
+        License, which the app downloads when it builds the first one.{' '}
+        <a href={`${REPOSITORY}/blob/main/NOTICE.md`}>NOTICE.md</a> has the rest.
       </p>
 
       <h2>Changes</h2>

@@ -34,3 +34,8 @@ The packages the app is built with, React, three.js and tscircuit's among them, 
 with it under their own licenses. Each build lists them, with their texts, in
 `THIRD-PARTY-LICENSES.txt` ([`scripts/licenses.mjs`](apps/desktop/scripts/licenses.mjs)),
 which the app carries and opens from its settings (Enclose, Third-party licenses).
+The git that keeps a project's history goes out with it too, as
+[dugite](https://github.com/desktop/dugite) brings it: Git, under the GNU GPL, version 2,
+and Git LFS, under the MIT License. That file has their texts, and says where Git's source
+is: in each release, beside the app. [`apps/desktop/licenses`](apps/desktop/licenses)
+keeps the texts it is written from.
