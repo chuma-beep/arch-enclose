@@ -161,8 +161,14 @@ of a stopped board stays in its files.
 When Claude builds a board, PCB mode opens on it, and a detailed board is built in steps:
 its parts placed, then joined, then routed. Each build shows as it comes
 in, and as Claude writes the board the app makes a quick look at it by itself, unrouted,
-so that its parts appear as they are put on it. While it is routed, the line under the
+so that its parts appear as they are put on it: even while what is written breaks
+tscircuit's rules, as a board half written does. While it is routed, the line under the
 board's name says how far that has got.
+
+For as long as a board is still being made, it looks it: a light goes across it, over
+and over, in each of the three views and on its card in the list, and the line under its
+name says it is still being made. A board with nothing of it to show yet turns round
+slowly in its place. When the light stops, the board is done.
 
 The download button in PCB mode saves the board's **Gerbers**, the zip a board house makes
 it from, with its drill files, what goes on it and where each part goes; or the board in

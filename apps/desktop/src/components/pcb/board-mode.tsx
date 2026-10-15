@@ -11,7 +11,7 @@
 import * as React from "react"
 import { cn } from "cn"
 import * as THREE from "three"
-import { Canvas } from "@react-three/fiber"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
@@ -24,13 +24,20 @@ import { useThemeColors } from "@/lib/css-color"
 import { usePreferences } from "@/lib/preferences"
 import { scrollSource } from "@/lib/scroll"
 import { useStore, type BoardAs } from "@/lib/store"
-import { boardUrl, sizeSaid, useCircuit, type Circuit } from "./boards"
+import {
+  boardUrl,
+  sizeSaid,
+  useBeingMade,
+  useCircuit,
+  type Circuit,
+} from "./boards"
 import { DRAWN } from "./ground"
 import { contoursOf } from "@/components/viewport/contours"
 import { EDGE } from "@/components/viewport/paint"
 import { onlyWhereItTurns, Underlight } from "@/components/viewport/scene"
 import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
+import { TurningBoard } from "./turning-board"
 
 /** How much of the view a drawing fills when the whole of it is shown. */
 const FIT = 0.86
@@ -72,6 +79,108 @@ function readDrawing(
   return { svg, width, height }
 }
 
+/** How long a light takes to go across a board that is still being made, s. */
+const SWEEP_S = 2.2
+/** How wide it is, against the board as it is seen. */
+const SWEEP_WIDE = 0.14
+/** How light the light is at its brightest, on the dark ground and on the light. */
+const SWEEP = { dark: 0.3, light: 0.5 }
+
+let sweeps = 0
+
+/** How far the light leans from upright, as the shader's does (see sweepable): tan 12°. */
+const LEAN = 0.21
+
+/**
+ * A light that goes across a board, over and over, while it is still being made: laid
+ * over the board's outline, over everything drawn on it, in the drawing itself, so that
+ * it is moved and zoomed with it. Over the whole of a drawing that has no outline (the
+ * schematic). It is hidden until it is shown, and put where it is by `sweepAt`.
+ */
+function sweptOver(
+  svg: SVGSVGElement,
+  size: { width: number; height: number },
+  dark: boolean
+): { over: SVGGElement; light: SVGLinearGradientElement } {
+  const NS = "http://www.w3.org/2000/svg"
+  const make = <K extends keyof SVGElementTagNameMap>(
+    tag: K,
+    attributes: Record<string, string | number>
+  ) => {
+    const made = document.createElementNS(NS, tag)
+    for (const [name, value] of Object.entries(attributes))
+      made.setAttribute(name, String(value))
+    return made
+  }
+  const id = `sweep-${++sweeps}`
+  const { width, height } = size
+  // a band, leaning a little, across the drawing's own units
+  const light = make("linearGradient", {
+    id,
+    gradientUnits: "userSpaceOnUse",
+    gradientTransform: `skewX(${(-Math.atan(LEAN) * 180) / Math.PI})`,
+    x1: 0,
+    y1: 0,
+    x2: 0,
+    y2: 0,
+  })
+  const peak = dark ? SWEEP.dark : SWEEP.light
+  for (const [offset, opacity] of [
+    [0, 0],
+    [0.5, peak],
+    [1, 0],
+  ])
+    light.append(
+      make("stop", {
+        offset,
+        "stop-color": "#ffffff",
+        "stop-opacity": opacity,
+      })
+    )
+  const defs = make("defs", {})
+  defs.append(light)
+  svg.prepend(defs)
+
+  const over = make("g", { "data-sweep": "" })
+  over.style.display = "none"
+  over.style.pointerEvents = "none"
+  const outlines = [...svg.querySelectorAll('[data-type="pcb_board"]')]
+  if (outlines.length === 0) {
+    over.append(
+      make("rect", { x: 0, y: 0, width, height, fill: `url(#${id})` })
+    )
+    svg.append(over)
+    return { over, light }
+  }
+  for (const outline of outlines) {
+    const filled = outline.cloneNode(false) as SVGElement
+    for (const name of ["class", "data-type", "data-pcb-layer", "stroke-width"])
+      filled.removeAttribute(name)
+    filled.setAttribute("fill", `url(#${id})`)
+    filled.setAttribute("stroke", "none")
+    over.append(filled)
+  }
+  // over all that is drawn, in the frame the outline is drawn in (a board seen from
+  // under is drawn turned over, in a frame of its own)
+  ;(outlines[0].parentElement ?? svg).append(over)
+  return { over, light }
+}
+
+/**
+ * Put the light this share of the way across what it is laid over (`box`, in the
+ * drawing's units): from short of it to past it, eased, as the 3D's goes.
+ */
+function sweepAt(light: SVGLinearGradientElement, box: DOMRect, share: number) {
+  const eased = share * share * (3 - 2 * share)
+  const wide = box.width * SWEEP_WIDE
+  // (leaning, its foot is further back than its head: the band has that much more to go)
+  const from = box.x - wide
+  const to = box.x + box.width + LEAN * (box.y + box.height) + wide
+  const middle = from + (to - from) * eased
+  light.setAttribute("x1", String(middle - wide))
+  light.setAttribute("x2", String(middle + wide))
+}
+
 /** Where a drawing is looked at: the middle of what is shown, and its pixels to the view's one. */
 type Looking = { x: number; y: number; scale: number }
 
@@ -79,9 +188,19 @@ type Looking = { x: number; y: number; scale: number }
  * A drawing of the board, filling the view, moved about and zoomed by the hand. It
  * keeps where it was looked at as long as it is the same board drawn the same way.
  */
-function Drawing({ markup }: { markup: string }) {
+function Drawing({
+  markup,
+  dark,
+  swept,
+}: {
+  markup: string
+  dark: boolean
+  /** the board is still being made: a light goes across it, over and over */
+  swept: boolean
+}) {
   const holder = React.useRef<HTMLDivElement>(null)
   const looking = React.useRef<Looking | null>(null)
+  const sweep = React.useRef<ReturnType<typeof sweptOver> | null>(null)
   /** how big the whole of it is shown: what zooming in and out is counted from */
   const whole = React.useRef(1)
 
@@ -90,6 +209,7 @@ function Drawing({ markup }: { markup: string }) {
     const drawing = readDrawing(markup)
     if (!within || !drawing) return
     const { svg, ...size } = drawing
+    sweep.current = sweptOver(svg, size, dark)
     within.replaceChildren(svg)
 
     const show = () => {
@@ -207,7 +327,29 @@ function Drawing({ markup }: { markup: string }) {
       within.removeEventListener("pointercancel", up)
       within.removeEventListener("dblclick", fit)
     }
-  }, [markup])
+  }, [markup, dark])
+
+  // the light, while the board is being made: as the 3D's, a frame at a time
+  React.useEffect(() => {
+    const laid = sweep.current
+    if (!laid) return
+    const { over, light } = laid
+    over.style.display = swept ? "" : "none"
+    if (!swept) return
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (still) {
+      over.style.display = "none"
+      return
+    }
+    const box = over.getBBox()
+    let frame = 0
+    const go = () => {
+      sweepAt(light, box, (performance.now() / 1000 / SWEEP_S) % 1)
+      frame = requestAnimationFrame(go)
+    }
+    go()
+    return () => cancelAnimationFrame(frame)
+  }, [markup, dark, swept])
 
   return (
     <div
@@ -239,6 +381,63 @@ const lineMaterial = () =>
   })
 
 /**
+ * The light that goes across a board in 3D while it is still being made, as it goes
+ * across the drawings: x, how far across the view its middle is (0 to 1, along a line
+ * that leans as the drawings' does); y, how wide it is; z, how light, which is nothing
+ * while the board is not being made. And how big the view is, in its own pixels.
+ */
+type Sweep = {
+  at: { value: THREE.Vector3 }
+  size: { value: THREE.Vector2 }
+  /**
+   * Put the light where it is now, so wide and so light, on a view so big: false where
+   * it was there already.
+   */
+  set(
+    x: number,
+    wide: number,
+    light: number,
+    size: THREE.Vector2 | null
+  ): boolean
+}
+
+function newSweep(): Sweep {
+  const at = { value: new THREE.Vector3(0, 1, 0) }
+  const size = { value: new THREE.Vector2(1, 1) }
+  return {
+    at,
+    size,
+    set(x, wide, light, view) {
+      if (view) size.value.copy(view)
+      if (at.value.x === x && at.value.z === light && !view) return false
+      at.value.set(x, wide, light)
+      return true
+    },
+  }
+}
+
+/** Give a board's faces the light that goes across it (see Sweep), out until it is lit. */
+function sweepable(material: THREE.Material, sweep: Sweep) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.sweepAt = sweep.at
+    shader.uniforms.sweepSize = sweep.size
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "void main() {",
+        "uniform vec3 sweepAt;\nuniform vec2 sweepSize;\nvoid main() {"
+      )
+      .replace(
+        "#include <dithering_fragment>",
+        `#include <dithering_fragment>
+        float across = (gl_FragCoord.x + gl_FragCoord.y * 0.21) / (sweepSize.x + sweepSize.y * 0.21);
+        float off = (across - sweepAt.x) / sweepAt.y;
+        gl_FragColor.rgb += sweepAt.z * exp(-off * off);`
+      )
+  }
+  material.customProgramCacheKey = () => "board-sweep"
+}
+
+/**
  * A board in 3D as the view shows it: as tscircuit built it, in its own colours, with
  * its lines drawn as the model's parts made of a mesh have theirs: wherever two of its
  * triangles meet at an edge, and the outline of its curved faces, wherever that is
@@ -251,6 +450,7 @@ function standing(board: THREE.Group) {
   holder.rotation.y = Math.PI
   holder.add(board)
   const made: { dispose(): void }[] = []
+  const sweep = newSweep()
   const slight = Math.cos((CREASE * Math.PI) / 180)
   const meshes: THREE.Mesh[] = []
   board.traverse((thing) => {
@@ -268,6 +468,7 @@ function standing(board: THREE.Group) {
       })
       const face = (material as THREE.MeshStandardMaterial).map
       if (face) face.anisotropy = SLANT
+      sweepable(material, sweep)
     }
     const creases = new THREE.EdgesGeometry(mesh.geometry, CREASE)
     const edges = new LineSegmentsGeometry().setPositions(
@@ -314,6 +515,9 @@ function standing(board: THREE.Group) {
   return {
     holder,
     box,
+    sweep,
+    // (and in the view's own frame, for the light to go across no more than the board)
+    seen: new THREE.Box3(min.clone(), max.clone()),
     dispose: () => {
       for (const thing of made) thing.dispose()
       disposeBoard(board)
@@ -321,11 +525,95 @@ function standing(board: THREE.Group) {
   }
 }
 
+/** How light the light across a board in 3D is at its brightest, on either ground. */
+const SWEPT_3D = { dark: 0.42, light: 0.45 }
+
+/**
+ * The light going across a board in 3D, over and over, while it is still being made:
+ * the view, drawn only when something changes, is drawn again for as long as it goes.
+ * It goes as the drawings' does, and is put out where the system is set for less motion.
+ */
+function Sweeping({
+  sweep,
+  seen,
+  swept,
+  dark,
+}: {
+  sweep: Sweep
+  /** the box round the board, in the view's frame: the light goes across that */
+  seen: THREE.Box3
+  swept: boolean
+  dark: boolean
+}) {
+  const invalidate = useThree((state) => state.invalidate)
+  const gl = useThree((state) => state.gl)
+  const camera = useThree((state) => state.camera)
+  const corners = React.useMemo(
+    () =>
+      [seen.min.x, seen.max.x].flatMap((x) =>
+        [seen.min.y, seen.max.y].flatMap((y) =>
+          [seen.min.z, seen.max.z].map((z) => new THREE.Vector3(x, y, z))
+        )
+      ),
+    [seen]
+  )
+  const corner = React.useMemo(() => new THREE.Vector3(), [])
+  const still = React.useMemo(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    []
+  )
+  const lit = swept && !still
+  const view = React.useMemo(() => new THREE.Vector2(), [])
+  useFrame(() => {
+    if (!lit) {
+      if (sweep.set(0, 1, 0, null)) invalidate()
+      return
+    }
+    gl.getDrawingBufferSize(view)
+    // how far across the view the board reaches, the way the light goes (as the
+    // shader counts it: see sweepable)
+    let first = Infinity
+    let last = -Infinity
+    for (const at of corners) {
+      corner.copy(at).project(camera)
+      const across =
+        (((corner.x + 1) / 2) * view.x + ((corner.y + 1) / 2) * view.y * 0.21) /
+        (view.x + view.y * 0.21)
+      first = Math.min(first, across)
+      last = Math.max(last, across)
+    }
+    // eased, as the drawings' is: from short of the board to past it
+    const share = (performance.now() / 1000 / SWEEP_S) % 1
+    const eased = share * share * (3 - 2 * share)
+    const reach = last - first
+    sweep.set(
+      first - reach * 0.15 + reach * 1.3 * eased,
+      reach * SWEEP_WIDE,
+      dark ? SWEPT_3D.dark : SWEPT_3D.light,
+      view
+    )
+    invalidate()
+  })
+  React.useEffect(() => invalidate(), [lit, invalidate])
+  return null
+}
+
 /**
  * The board in 3D, in a view of its own that is looked round as the model's is: the
  * same camera, which the same hand moves, lit as the model is.
  */
-function InThreeD({ url, id }: { url: string; id: string }) {
+function InThreeD({
+  url,
+  id,
+  swept,
+  dark,
+}: {
+  url: string
+  id: string
+  /** the board is still being made: a light goes across it, over and over */
+  swept: boolean
+  dark: boolean
+}) {
   const [shown, setShown] = React.useState<ReturnType<typeof standing> | null>(
     null
   )
@@ -373,6 +661,12 @@ function InThreeD({ url, id }: { url: string; id: string }) {
       {/* the light from under it, as the model has: out while it is looked down on,
           and coming up as the camera goes under it (after the camera has moved) */}
       <Underlight />
+      <Sweeping
+        sweep={shown.sweep}
+        seen={shown.seen}
+        swept={swept}
+        dark={dark}
+      />
     </Canvas>
   )
 }
@@ -420,10 +714,19 @@ function useDrawn(
     : null
 }
 
-/** What PCB mode says where it has nothing of the board to show. */
-function Nothing({ title, detail }: { title: string; detail: string }) {
+/** What PCB mode says where it has nothing of the board to show: under what it shows. */
+function Nothing({
+  title,
+  detail,
+  children,
+}: {
+  title: string
+  detail: string
+  children?: React.ReactNode
+}) {
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center select-none">
+      {children}
       <div className="text-xl/[1.3] font-bold">{title}</div>
       <div className="max-w-md text-xl/[1.3] text-balance text-foreground/45">
         {detail}
@@ -459,6 +762,7 @@ export function BoardMode({
     as === "pcb" ? side : "top"
   )
   const size = sizeSaid(board)
+  const making = useBeingMade(projectId, board)
 
   return (
     // (its ground comes in over the model as the buttons change over)
@@ -467,10 +771,19 @@ export function BoardMode({
       style={{ background: ground }}
     >
       {board.built === null && board.preview === null ? (
-        <Nothing
-          title="Not built yet"
-          detail="There is nothing of this board to show until it is built. Ask Claude to build it."
-        />
+        making ? (
+          <Nothing
+            title="Being made"
+            detail="The board shows here as soon as there is something of it, and changes as it is made."
+          >
+            <TurningBoard className="mb-10 w-40" />
+          </Nothing>
+        ) : (
+          <Nothing
+            title="Not built yet"
+            detail="There is nothing of this board to show until it is built. Ask Claude to build it."
+          />
+        )
       ) : as === "3d" ? (
         board.model ? (
           // (keyed by the board, so that another one is framed afresh)
@@ -478,6 +791,8 @@ export function BoardMode({
             key={board.id}
             id={board.id}
             url={boardUrl(projectId, board, "model")}
+            swept={making}
+            dark={dark}
           />
         ) : (
           <Nothing
@@ -487,7 +802,12 @@ export function BoardMode({
         )
       ) : markup ? (
         // (keyed by the board and the way it is drawn, so that each starts whole)
-        <Drawing key={`${board.id}:${as}:${turned}`} markup={markup} />
+        <Drawing
+          key={`${board.id}:${as}:${turned}`}
+          markup={markup}
+          dark={dark}
+          swept={making}
+        />
       ) : trouble || markup === false ? (
         <Nothing
           title="The board could not be drawn"
@@ -516,7 +836,22 @@ export function BoardMode({
             </Badge>
           )}
         </div>
-        {board.building && <BuildingLine building={board.building} />}
+        {board.building ? (
+          <BuildingLine building={board.building} />
+        ) : (
+          // (and where there is nothing of it yet, the view says so in the middle)
+          making &&
+          (board.built !== null || board.preview !== null) && (
+            <span
+              className={cn(
+                "animate-in text-xs text-foreground/60 duration-200 fade-in",
+                LIVE
+              )}
+            >
+              Still being made
+            </span>
+          )
+        )}
       </div>
     </div>
   )

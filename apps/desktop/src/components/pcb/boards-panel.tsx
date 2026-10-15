@@ -4,8 +4,9 @@ import { cn } from "cn"
 import type { BoardSummary } from "@shared/api"
 import { Badge } from "@/components/ui/badge"
 import { useStore } from "@/lib/store"
-import { sizeSaid } from "./boards"
+import { sizeSaid, useBeingMade } from "./boards"
 import { useBoardPictures } from "./pictures"
+import { TurningBoard } from "./turning-board"
 
 const FOCUS = "focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
@@ -27,7 +28,6 @@ export function BoardsPanel({
   boards: BoardSummary[]
   className?: string
 }) {
-  const setView = useStore((state) => state.setView)
   const setBoardsOpen = useStore((state) => state.setBoardsOpen)
   const pictures = useBoardPictures(projectId, boards)
   const panel = React.useRef<HTMLDivElement>(null)
@@ -66,53 +66,82 @@ export function BoardsPanel({
         </p>
       )}
       <div className="flex min-h-0 [scrollbar-width:none] flex-col gap-5 overflow-y-auto px-5 pb-5 empty:hidden">
-        {boards.map((board) => {
-          const url = pictures[board.id]
-          return (
-            <button
-              key={board.id}
-              type="button"
-              data-board={board.id}
-              onClick={() => setView({ board: board.id })}
-              className={cn(
-                // the square a reference scene is pictured on, lines and all
-                "relative aspect-square w-full shrink-0 cursor-pointer overflow-hidden rounded-xl border bg-foreground/9 text-left outline-none hover:border-foreground/40",
-                FOCUS
-              )}
-            >
-              {/* its picture, in the room over its name: none until it is drawn */}
-              {url && (
-                <img
-                  src={url}
-                  alt=""
-                  draggable={false}
-                  className="absolute top-2 left-1/2 size-50 -translate-x-1/2"
-                />
-              )}
-              {/* a board only roughed out so far, to be made in detail later */}
-              {!board.finished && (
-                <Badge variant="outline" className="absolute top-2.5 left-2.5">
-                  Unfinished
-                </Badge>
-              )}
-              {/* what it is called and, under that in the same letters, its size */}
-              <span className="absolute inset-x-3 bottom-2.25 flex flex-col text-[11px] leading-4">
-                <span className="truncate font-medium">{board.name}</span>
-                <span className="truncate text-foreground/45">
-                  {board.building
-                    ? board.building.stage === "routing" &&
-                      board.building.progress !== null
-                      ? `Routing · ${Math.round(board.building.progress * 100)}%`
-                      : "Building"
-                    : board.built === null
-                      ? "Not built yet"
-                      : (sizeSaid(board) ?? " ")}
-                </span>
-              </span>
-            </button>
-          )
-        })}
+        {boards.map((board) => (
+          <BoardCard
+            key={board.id}
+            projectId={projectId}
+            board={board}
+            picture={pictures[board.id]}
+          />
+        ))}
       </div>
     </div>
+  )
+}
+
+/**
+ * A board in the list: its picture, what it is called and, under that, how big it is or
+ * how its build is going. While it is being made, a light goes across it, over and over;
+ * and where there is no picture of it yet, a board turns round in the room for one.
+ */
+function BoardCard({
+  projectId,
+  board,
+  picture,
+}: {
+  projectId: string
+  board: BoardSummary
+  picture: string | undefined
+}) {
+  const setView = useStore((state) => state.setView)
+  const making = useBeingMade(projectId, board)
+  return (
+    <button
+      type="button"
+      data-board={board.id}
+      onClick={() => setView({ board: board.id })}
+      className={cn(
+        // the square a reference scene is pictured on, lines and all
+        "relative aspect-square w-full shrink-0 cursor-pointer overflow-hidden rounded-xl border bg-foreground/9 text-left outline-none hover:border-foreground/40",
+        making && "being-made",
+        FOCUS
+      )}
+    >
+      {/* its picture, in the room over its name: none until it is drawn */}
+      {picture ? (
+        <img
+          src={picture}
+          alt=""
+          draggable={false}
+          className="absolute top-2 left-1/2 size-50 -translate-x-1/2"
+        />
+      ) : (
+        making && (
+          <TurningBoard className="absolute top-14 left-1/2 w-24 -translate-x-1/2" />
+        )
+      )}
+      {/* a board only roughed out so far, to be made in detail later */}
+      {!board.finished && (
+        <Badge variant="outline" className="absolute top-2.5 left-2.5">
+          Unfinished
+        </Badge>
+      )}
+      {/* what it is called and, under that in the same letters, its size */}
+      <span className="absolute inset-x-3 bottom-2.25 flex flex-col text-[11px] leading-4">
+        <span className="truncate font-medium">{board.name}</span>
+        <span className="truncate text-foreground/45">
+          {board.building
+            ? board.building.stage === "routing" &&
+              board.building.progress !== null
+              ? `Routing · ${Math.round(board.building.progress * 100)}%`
+              : "Building"
+            : making
+              ? "Being made"
+              : board.built === null
+                ? "Not built yet"
+                : (sizeSaid(board) ?? " ")}
+        </span>
+      </span>
+    </button>
   )
 }

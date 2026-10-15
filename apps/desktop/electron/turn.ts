@@ -82,6 +82,40 @@ export type Turn = {
   id(kind: string): string
 }
 
+/**
+ * What is said to an agent while it is at work, taken as it comes (a turn's `more`).
+ * It ends when it is ended, which is to be done as soon as the turn has given its
+ * result: the agent's session is kept open for as long as what it is told by is, and a
+ * session that waits on it to end is never done with.
+ */
+export class Saying implements AsyncIterable<string> {
+  private said: string[] = []
+  private heard: (() => void) | null = null
+  private ended = false
+
+  /** Say something more. False once it has ended: there is nobody to say it to. */
+  say(text: string): boolean {
+    if (this.ended) return false
+    this.said.push(text)
+    this.heard?.()
+    return true
+  }
+
+  end() {
+    this.ended = true
+    this.heard?.()
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<string> {
+    for (;;) {
+      const next = this.said.shift()
+      if (next !== undefined) yield next
+      else if (this.ended) return
+      else await new Promise<void>((resolve) => (this.heard = resolve))
+    }
+  }
+}
+
 type Piece =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string }

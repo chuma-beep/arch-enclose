@@ -76,7 +76,7 @@ import {
   type Serving,
   type ToolServer,
 } from "./tools"
-import type { Content, Turn } from "./turn"
+import { Saying, type Content, type Turn } from "./turn"
 
 type Run = {
   /** the conversation being carried on */
@@ -127,9 +127,8 @@ type Job = {
   abort: AbortController
   finish: () => void
   pending: Map<string, (answer: PermissionAnswer) => void>
-  /** what is to be told it as soon as it can be, and what takes what is told */
-  notes: string[]
-  heard: (() => void) | null
+  /** what the user says to it meanwhile, which it is told as soon as it can be */
+  notes: Saying
   /** it was asked for in a line, for its change and its commit */
   what: string
 }
@@ -1881,8 +1880,10 @@ export class Threads {
                   throw new Error(
                     `${AGENTS[job.conversation.provider]} cannot be told anything while it makes the board: say it again when the board is done.`
                   )
-                job.notes.push(note)
-                job.heard?.()
+                if (!job.notes.say(passedOn(note)))
+                  throw new Error(
+                    "The board is as good as done: say it again once it is."
+                  )
                 return "Passed on to the agent making the board."
               },
               stop: async () => {
@@ -2092,8 +2093,7 @@ export class Threads {
       abort: new AbortController(),
       finish,
       pending: new Map(),
-      notes: [],
-      heard: null,
+      notes: new Saying(),
       what: `Made ${name} in detail`,
     }
     book.job = job
@@ -2111,15 +2111,8 @@ export class Threads {
       else items[index] = inner
       show({ ...job.item, items })
     }
-    // what the user says for it meanwhile, as it comes, until it is over
-    let over = false
-    async function* notes(): AsyncGenerator<string> {
-      while (!over) {
-        const note = job.notes.shift()
-        if (note !== undefined) yield passedOn(note)
-        else await new Promise<void>((resolve) => (job.heard = resolve))
-      }
-    }
+    // what the user says for it meanwhile, as it comes, until it has given its result
+    void finished.then(() => job.notes.end())
 
     const { provider } = conversation
     const told = guide(
@@ -2197,7 +2190,7 @@ export class Threads {
       served: {},
       lookOver: false,
       noQuestions: true,
-      more: provider === "claude" ? notes() : undefined,
+      more: provider === "claude" ? job.notes : undefined,
       describe: (name, input) => describeTool(name, input, project.path),
       id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
     }
@@ -2236,9 +2229,8 @@ export class Threads {
       }
     } finally {
       serving?.stop()
-      over = true
       finish()
-      job.heard?.()
+      job.notes.end()
       for (const settle of [...job.pending.values()]) settle("deny")
       if (pending && this.books.get(projectId) === book)
         await this.deps.changes

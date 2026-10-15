@@ -27,8 +27,8 @@
 // With --preview it builds only a quick look at the board, unrouted and with nothing
 // else made of it, into main.preview.json: the app does that by itself each time the
 // board's file is written while an agent is at work on it, so that the board can be
-// seen coming together. A preview is in a folder of its own, and leaves the board's
-// real build as it is.
+// seen coming together, even while it still breaks tscircuit's rules. A preview is in a
+// folder of its own, and leaves the board's real build as it is.
 //
 // It is built in a folder of its own, out of the project, so that nothing of tscircuit's
 // is left in the project but what it made. Anything after the board's file is handed on
@@ -187,8 +187,21 @@ if (preview) {
     "--ignore-warnings",
     ...rest,
   ])
+  // A board half written breaks rules that tscircuit checks it by (pads too near, a
+  // footprint it cannot read), and the build says it failed: but it has written the
+  // board as far as it could be made, and that is what a preview is for. Only where
+  // there is no board at all is there nothing to show. (The work folder is emptied
+  // before each build: what is in it is this one's.)
   const circuit = path.join(work, "dist", name, "circuit.json")
-  if (ran.status !== 0 || !fs.existsSync(circuit)) process.exit(1)
+  let made = false
+  try {
+    made = JSON.parse(fs.readFileSync(circuit, "utf8")).some(
+      (element) => element?.type === "pcb_board"
+    )
+  } catch {
+    // none written, or not whole
+  }
+  if (!made) process.exit(1)
   writeWhole(path.join(built, `${name}.preview.json`), (to) =>
     fs.copyFileSync(circuit, to)
   )
