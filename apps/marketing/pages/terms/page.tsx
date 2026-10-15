@@ -27,9 +27,9 @@ export default function Terms() {
 
       <h2>Your projects are yours</h2>
       <p>
-        A project is a folder on your Mac. The models, the files and what is said about them
-        are yours and stay there. The project runs no server that receives them, and the app
-        needs no account.
+        A project is a folder on your machine. The models, the files and what is said about
+        them are yours and stay there. The project runs no server that receives them, and the
+        app needs no account.
       </p>
       <p>
         If you connect GitHub, the app backs your projects up to private repositories on your
