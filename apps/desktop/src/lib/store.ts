@@ -238,6 +238,9 @@ const KEPT_MESHES_KEY = "enclose:kept-meshes"
 /** What is asked of the agent when a model made of a mesh is to be built again as code. */
 export const REBUILD = "Rebuild this model as an editable design."
 
+/** What is asked of the agent when a board was changed after its Gerbers were made. */
+export const REBUILD_BOARD = "Build this board again: its Gerbers are outdated."
+
 /** What was saved under a key. */
 const saved = (key: string) => localStorage.getItem(key)
 
@@ -879,6 +882,12 @@ type State = {
    * changed: asked in the conversation the panel shows, the way a message would be.
    */
   rebuild(projectId: string): void
+  /**
+   * Have the agent build one of a project's circuit boards again, changed since it was
+   * last built, for its Gerbers to be of it as it is: asked about that board, in the
+   * conversation the panel shows, the way a message would be.
+   */
+  rebuildBoard(projectId: string, board: string): void
   /** Keep a project's mesh as it is: building it again is not offered for it any more. */
   keepMesh(projectId: string): void
   /**
@@ -1939,32 +1948,11 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   rebuild(projectId) {
-    const { projects, picked } = get()
-    const project = projects.find((p) => p.id === projectId)
-    if (!project) return
-    const { open } = stackOf(
-      project.conversations,
-      picked[project.id],
-      usePreferences.getState().settleDays,
-      Date.now()
-    )
-    set({ threadOpen: true })
-    void window.cad.thread
-      .send(
-        project.id,
-        open?.id ?? null,
-        REBUILD,
-        [],
-        [],
-        mannerIn(get(), open),
-        null,
-        [],
-        []
-      )
-      .then((id) => {
-        if (id)
-          set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
-      })
+    ask(projectId, REBUILD)
+  },
+
+  rebuildBoard(projectId, board) {
+    ask(projectId, REBUILD_BOARD, board)
   },
 
   keepMesh(projectId) {
@@ -2006,6 +1994,43 @@ export const useStore = create<State>()((set, get) => ({
       })
   },
 }))
+
+/**
+ * Ask the agent something in the conversation a project's panel shows, the way a
+ * message would be, apart from what is written in the message box: about one of its
+ * boards, where one is given.
+ */
+function ask(projectId: string, text: string, board: string | null = null) {
+  const { projects, picked } = useStore.getState()
+  const project = projects.find((p) => p.id === projectId)
+  if (!project) return
+  const { open } = stackOf(
+    project.conversations,
+    picked[project.id],
+    usePreferences.getState().settleDays,
+    Date.now()
+  )
+  useStore.setState({ threadOpen: true })
+  void window.cad.thread
+    .send(
+      project.id,
+      open?.id ?? null,
+      text,
+      [],
+      [],
+      mannerIn(useStore.getState(), open),
+      null,
+      [],
+      [],
+      board
+    )
+    .then((id) => {
+      if (id)
+        useStore.setState((state) => ({
+          picked: { ...state.picked, [project.id]: id },
+        }))
+    })
+}
 
 /**
  * How a message said in a conversation will be answered, from what is picked: by the

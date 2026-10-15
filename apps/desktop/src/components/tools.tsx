@@ -10,6 +10,7 @@ import {
   HammerIcon,
   LayersIcon,
   MessageSquareIcon,
+  RefreshCwIcon,
   Rotate3dIcon,
   RotateCcwIcon,
   SearchIcon,
@@ -386,6 +387,7 @@ function BoardDownloads({
 }) {
   const [open, setOpen] = React.useState(false)
   const say = useStore((state) => state.say)
+  const rebuildBoard = useStore((state) => state.rebuildBoard)
   const called = fileNamed(board.name)
   const save = (what: "gerbers" | "step", name: string) =>
     void window.cad.boards
@@ -432,11 +434,25 @@ function BoardDownloads({
             There is nothing of this board to save until it is built.
           </p>
         )}
+        {/* changed since it was built: the agent is asked to build it again, in the
+            conversation, which comes up to show it */}
         {board.gerbers && board.outdated && (
-          <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
-            This board was changed after it was last built, so these Gerbers are
-            of the board before. Ask your agent to build it again.
-          </p>
+          <div className="flex flex-col items-start gap-2 px-2 pt-1 pb-1.5">
+            <p className="text-xs text-balance text-muted-foreground">
+              These Gerbers are outdated.
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setOpen(false)
+                rebuildBoard(projectId, board.id)
+              }}
+            >
+              <RefreshCwIcon data-icon="inline-start" />
+              Refresh Gerbers
+            </Button>
+          </div>
         )}
         {!board.finished && board.gerbers && (
           <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
