@@ -742,6 +742,7 @@ on("turn/interrupt", () => {
     onItem: () => {},
     onVersion: (_, from, to) => begun.push({ from, to }),
     onSummary: () => {},
+    onSignedOut: () => {},
     onTurned: () => {},
     history: () => "off" as const,
   })

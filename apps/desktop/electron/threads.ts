@@ -236,6 +236,8 @@ export type ThreadsDeps = {
   ) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
+  /** an agent turned a message away for want of a sign-in: it is signed in no longer */
+  onSignedOut: (provider: ProviderId) => void
   /**
    * whether the app keeps a project's history in git: off, where it does not (a
    * repository of somebody's own, say); local; or github, backed up there as well
@@ -2459,6 +2461,9 @@ export class Threads {
 
     // text that arrived piece by piece, so the whole message that follows is not shown twice
     const streamed = new Set<string>()
+    // Why Claude could not answer, once it has been said. Claude Code says it three times
+    // more: as the answer, as the result, and as what the session fails with.
+    let refused: string | null = null
     let messageId: string | null = null
     const tools = new Map<string, Extract<ThreadItem, { kind: "tool" }>>()
     const live = new Map<string, Extract<ThreadItem, { kind: "assistant" }>>()
@@ -2528,11 +2533,27 @@ export class Threads {
       }
       if (message.type === "assistant") {
         if (message.parent_tool_use_id) return
-        if (message.error)
-          turn.notice(
-            "error",
-            `Claude could not answer: ${message.error.replaceAll("_", " ")}.`
-          )
+        if (message.error) {
+          const why = message.message.content
+            .flatMap((block) => (block.type === "text" ? [block.text] : []))
+            .join("\n")
+            .trim()
+          refused = why
+          if (message.error === "authentication_failed") {
+            this.deps.onSignedOut("claude")
+            turn.notice(
+              "error",
+              `Claude Code is signed out, and could not sign itself back in${why ? ` (${why})` : ""}. Run claude auth login in a terminal to sign in again, then send this again.`
+            )
+          } else
+            turn.notice(
+              "error",
+              why
+                ? `Claude could not answer: ${why}`
+                : `Claude could not answer: ${message.error.replaceAll("_", " ")}.`
+            )
+          return
+        }
         message.message.content.forEach((block, index) => {
           if (
             block.type === "text" &&
@@ -2590,7 +2611,7 @@ export class Threads {
             message.errors.join("\n") ||
               `Stopped: ${message.subtype.replaceAll("_", " ")}.`
           )
-        } else if (message.is_error) {
+        } else if (message.is_error && refused === null) {
           turn.notice(
             "error",
             message.result || "Claude Code reported an error."
@@ -2646,6 +2667,8 @@ export class Threads {
       for await (const message of messages) handle(message)
     } catch (error) {
       if (abort.signal.aborted) throw error
+      // why has been said already
+      if (refused !== null) return
       // what it last said to stderr is often why
       const reason = error instanceof Error ? error.message : String(error)
       throw new Error([reason, stderr.trim()].filter(Boolean).join("\n"), {

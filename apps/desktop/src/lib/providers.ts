@@ -28,7 +28,7 @@ export const PROVIDER_WORDS: Record<
     name: "Claude",
     cli: "Claude Code",
     command: "claude",
-    signIn: "claude",
+    signIn: "claude auth login",
     install: "curl -fsSL https://claude.ai/install.sh | bash",
     docs: "https://code.claude.com/docs/en/setup",
   },

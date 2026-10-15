@@ -144,6 +144,17 @@ describe("Providers", () => {
     expect(providers.launch("codex")).toBeNull()
     expect(providers.any()).toBe(true)
 
+    // a turn it turned away for want of a sign-in has it signed out, though it still names
+    // the account it kept; looked at again, it is taken at its word
+    providers.signedOut("claude")
+    expect(providers.list()[0].status).toMatchObject({
+      signedIn: false,
+      account: "Someone",
+    })
+    await providers.check("claude")
+    expect(providers.list()[0].status?.signedIn).toBe(true)
+    asked.splice(asked.indexOf("claude"), 1)
+
     // switched off, it is not something to start: and it is not asked again
     await providers.change("claude", { enabled: false })
     expect(providers.launch("claude")).toBeNull()

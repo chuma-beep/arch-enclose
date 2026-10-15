@@ -1929,6 +1929,7 @@ if (!app.requestSingleInstanceLock()) {
         // a turn may be over: the folder it was had in is free to be another's
         follow()
       },
+      onSignedOut: (id) => providers.signedOut(id),
     })
     drafts = new Drafts({
       folder: path.join(data, "drafts"),

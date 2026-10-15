@@ -352,6 +352,18 @@ export class Providers {
     this.deps.onChange()
   }
 
+  /**
+   * One turned a message away for want of a sign-in. What it says of its account is only
+   * what it has kept of it, which it goes on saying when the sign-in has run out: until
+   * it is looked at again, it is taken for signed out.
+   */
+  signedOut(id: ProviderId) {
+    const status = this.statuses.get(id)
+    if (!status || status.signedIn === false) return
+    this.statuses.set(id, { ...status, signedIn: false, checkedAt: Date.now() })
+    this.deps.onChange()
+  }
+
   /** Look again, for each in use, at whether there is a newer version of it. */
   lookForUpdates() {
     for (const id of PROVIDERS)
