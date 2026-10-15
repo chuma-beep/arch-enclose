@@ -31,7 +31,6 @@ is Ctrl off a Mac.
 | B | [Blueprint](blueprints.md) |
 | A | [Assembly guides](working-with-claude.md#assembly-guides) |
 | Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
-| Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
 | Cmd+F | [Search](parts.md#search) |
 | T | [Tools of the project's own](project-tools.md) |
 | Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model |
@@ -46,6 +45,7 @@ is Ctrl off a Mac.
 | 2 | The board in 3D |
 | 3 | Its schematic |
 | S | Its bottom side, turned over as it is seen from under the board, and back |
+| Cmd+1 to 7 | In 3D, the same set views as the model's: the view it opens with, front, back, top, bottom, right, left |
 | Esc | Back to the model |
 
 ## The app

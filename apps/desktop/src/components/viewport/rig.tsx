@@ -1036,6 +1036,8 @@ export function Rig({
   const gl = useThree((state) => state.gl)
   const size = useThree((state) => state.size)
   const aspect = size.width / size.height
+  /** the shape of the view, wide to high, as the camera last framed for it */
+  const shape = React.useRef(aspect)
   const turnSpeed = usePreferences((state) => state.turnSpeed)
   const zoomSpeed = usePreferences((state) => state.zoomSpeed)
 
@@ -1086,12 +1088,19 @@ export function Rig({
       redraw: invalidate,
     })
     director.current = made
-    if (!bridging.current)
+    if (!bridging.current) {
+      // a board's camera: only the keys' set views are had of it, from outside
+      bridge.board = {
+        lookFrom: (axis, sign) => made.lookFrom(axis, sign),
+        home: () => made.home(true, shape.current),
+      }
       return () => {
         impl.update = update
         impl.rotate = rotate
         director.current = null
+        bridge.board = null
       }
+    }
     // what the axis gizmo, the section planes and the keyboard move the camera with
     bridge.lookFrom = (axis, sign) => made.lookFrom(axis, sign)
     bridge.orbit = (dx, dy) =>
@@ -1124,7 +1133,6 @@ export function Rig({
   // round by itself, or is through: it watches from a little further back, and comes in
   // again to where a model opens when there is no more to watch.
   const first = React.useRef(true)
-  const shape = React.useRef(aspect)
   React.useEffect(() => {
     director.current?.home(
       !first.current,

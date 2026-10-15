@@ -42,6 +42,15 @@ export const bridge: {
    * moment to pick the part under the pointer
    */
   handling: boolean
+  /**
+   * The camera of a circuit board's 3D, in PCB mode, which keeps to itself otherwise:
+   * what the keys turn it with. Look at the board from the end of one of its axes, or
+   * go back to the view it opened with. Set while a board is on screen in 3D.
+   */
+  board: {
+    lookFrom: (axis: Axis, sign: Sign) => void
+    home: () => void
+  } | null
 } = {
   screenshot: null,
   parts: null,
@@ -54,6 +63,7 @@ export const bridge: {
   under: null,
   picked: null,
   handling: false,
+  board: null,
 }
 
 // How the camera is turned, for the small widgets drawn outside the 3D view that have to

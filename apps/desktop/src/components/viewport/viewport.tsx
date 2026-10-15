@@ -1295,10 +1295,16 @@ function Model({ project }: { project: Project }) {
         if (!digit) return
         event.preventDefault()
         // the set views are the view's: a blueprint has a sheet for each of them, and
-        // the guides and a board none
-        const { blueprint, assembly, board } = useStore.getState().view
-        if (blueprint || assembly || board !== null) return
+        // the guides none; a board has them in 3D, of its own camera
+        const { blueprint, assembly, board, boardAs } = useStore.getState().view
+        if (blueprint || assembly) return
         const view = VIEWS[Number(digit) - 2]
+        if (board !== null) {
+          if (boardAs !== "3d") return
+          if (view) bridge.board?.lookFrom(view.axis, view.sign)
+          else bridge.board?.home()
+          return
+        }
         if (view) bridge.lookFrom?.(view.axis, view.sign)
         else goHome()
         return
