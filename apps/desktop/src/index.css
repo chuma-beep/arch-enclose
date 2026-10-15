@@ -194,6 +194,53 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* A list in a panel floating over the view, which scrolls: what goes out of sight at its
+   top or its foot fades out there, and is not cut off short. Only where there is more
+   that way: a list at its top has a plain top, and one that does not scroll has
+   neither. The fades grow as it is scrolled away from either end. */
+@property --fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --fade-foot {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes fade-top {
+  from {
+    --fade-top: 0px;
+  }
+  to {
+    --fade-top: 2.5rem;
+  }
+}
+@keyframes fade-foot {
+  from {
+    --fade-foot: 2.5rem;
+  }
+  to {
+    --fade-foot: 0px;
+  }
+}
+.scroll-fade {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade-top),
+    #000 calc(100% - var(--fade-foot)),
+    transparent
+  );
+  animation:
+    fade-top linear both,
+    fade-foot linear both;
+  animation-timeline: scroll(self), scroll(self);
+  animation-range:
+    0 2.5rem,
+    calc(100% - 2.5rem) 100%;
+}
+
 /* The window has no title bar of its own: these strips are what you drag it by. */
 .drag {
   -webkit-app-region: drag;

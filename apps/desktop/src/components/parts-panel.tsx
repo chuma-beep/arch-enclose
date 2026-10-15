@@ -295,7 +295,7 @@ export function PartsPanel({
     >
       <div
         ref={scroller}
-        className="flex min-h-0 [scrollbar-width:none] flex-col gap-2.5 overflow-y-auto p-2.5"
+        className="flex min-h-0 scroll-fade [scrollbar-width:none] flex-col gap-2.5 overflow-y-auto p-2.5"
         onPointerLeave={() => hover(null)}
       >
         {model.groups.map((group) => {

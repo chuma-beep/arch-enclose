@@ -65,7 +65,7 @@ export function BoardsPanel({
           Ask your agent to create a PCB
         </p>
       )}
-      <div className="flex min-h-0 [scrollbar-width:none] flex-col gap-5 overflow-y-auto px-5 pb-5 empty:hidden">
+      <div className="flex min-h-0 scroll-fade [scrollbar-width:none] flex-col gap-5 overflow-y-auto px-5 pb-5 empty:hidden">
         {boards.map((board) => (
           <BoardCard
             key={board.id}

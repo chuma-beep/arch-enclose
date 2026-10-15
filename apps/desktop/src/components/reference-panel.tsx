@@ -66,7 +66,7 @@ export function ReferencePanel({
       <h2 className="px-5 pt-4.25 pb-3.75 text-[17px]/6 font-medium">
         Reference scene
       </h2>
-      <div className="flex min-h-0 [scrollbar-width:none] flex-col gap-5 overflow-y-auto px-5 pb-5">
+      <div className="flex min-h-0 scroll-fade [scrollbar-width:none] flex-col gap-5 overflow-y-auto px-5 pb-5">
         {scenes.map((scene) => {
           const lit = scene.id === shown
           const url = pictures[scene.id]

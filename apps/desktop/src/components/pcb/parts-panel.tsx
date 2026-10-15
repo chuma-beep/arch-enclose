@@ -58,7 +58,7 @@ export function BoardPartsPanel({
       )}
       {/* (the squares in a grid of their own, which the list scrolls: a grid that is
           itself kept short squeezes them) */}
-      <div className="min-h-0 [scrollbar-width:none] overflow-y-auto px-5 pb-5 empty:hidden">
+      <div className="min-h-0 scroll-fade [scrollbar-width:none] overflow-y-auto px-5 pb-5 empty:hidden">
         <div className="grid grid-cols-2 gap-3 empty:hidden">
           {parts.map((part) => {
             const url = pictures[part.key]

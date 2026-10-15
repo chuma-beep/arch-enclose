@@ -137,7 +137,7 @@ export function ToolsPanel({
           )
         })}
       </div>
-      <div className="flex min-h-0 [scrollbar-width:none] flex-col overflow-y-auto">
+      <div className="flex min-h-0 scroll-fade [scrollbar-width:none] flex-col overflow-y-auto">
         {tool?.error != null ? (
           <Broken tool={tool} projectId={projectId} />
         ) : tool && tool.controls.length === 0 && tool.ready ? (
