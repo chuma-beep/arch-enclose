@@ -59,7 +59,14 @@ export const REACH = { nearest: 0.02, furthest: 40 }
 export const HOME_DIRECTION = new THREE.Vector3(0.5, -0.62, 0.6).normalize()
 /** How hard a wheel zooms, against the controls' own pace; and a pinch, against a wheel. */
 const ZOOM_SPEED = 3
-const PINCH = 2.25
+export const PINCH = 2.25
+
+/**
+ * How much a flat view's scale changes by for a scroll of `delta` pixels, at the zoom
+ * speed the settings have: what drawings that are zoomed as a flat view is go by too.
+ */
+export const flatZoom = (delta: number, zoomSpeed: number) =>
+  Math.pow(0.95, (delta / 10) * ZOOM_SPEED * zoomSpeed)
 /**
  * How far the view turns, in radians a pixel: under a drag on the axes in the corner,
  * which are small, and under fingers moving across a trackpad.

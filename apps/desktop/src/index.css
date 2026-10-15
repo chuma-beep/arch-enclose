@@ -163,6 +163,12 @@
   --glass: blur(20px) saturate(1.3) brightness(0.55);
 }
 
+/* Over a circuit board in PCB mode, in the dark, the cards are the navy of its ground
+   (components/pcb/ground.ts) made lighter, and not the grey they are over a model. */
+.dark [data-pcb] {
+  --sidebar-accent: color-mix(in oklab, rgb(0 16 35), white 11%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

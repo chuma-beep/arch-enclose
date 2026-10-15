@@ -298,6 +298,10 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
   const active = useStore((state) => state.activeId === project.id)
   const openConversation = useStore((state) => state.openConversation)
   const removeProject = useStore((state) => state.removeProject)
+  // In PCB mode the cross that takes the project away is not on its card: a red cross
+  // is what leaves PCB mode there, and the two are not to be taken for each other. (The
+  // card's menu still has it, which is not pressed by mistake.)
+  const onBoard = useStore((state) => state.view.board !== null)
   const { cover, under, open } = useStack(project, now)
   const [spread, setSpread] = React.useState(false)
   // its name is being written over, which is asked for from the card's menu
@@ -390,7 +394,7 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
             short={newsOf(cover, finished) !== null}
             onDone={() => setRenaming(false)}
           />
-        ) : (
+        ) : onBoard ? null : (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -634,6 +638,10 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
     (state) =>
       state.view.blueprint || state.view.assembly || state.view.board !== null
   )
+  // (over the technical view of a board, which is on a ground of its own: index.css)
+  const overDrawing = useStore(
+    (state) => state.view.board !== null && state.view.boardAs === "pcb"
+  )
   // And while one sheet has the view to itself that card is gone too, and what is at
   // the foot with it: there is nothing over the sheet that is not the sheet's. They
   // fade where they are, and come back the same way. So it is while the view has been
@@ -662,8 +670,12 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
     )
 
   return (
-    // wider than a card, by as far as the ones spread out from under it are set in
-    <aside className="pointer-events-none absolute inset-y-0 left-0 flex w-68 flex-col">
+    // wider than a card, by as far as the ones spread out from under it are set in (and
+    // over a board in PCB mode, where the cards take the tint of its ground: index.css)
+    <aside
+      data-pcb={overDrawing || undefined}
+      className="pointer-events-none absolute inset-y-0 left-0 flex w-68 flex-col"
+    >
       {/* room for the window's traffic lights, and something to drag it by */}
       <div className="drag pointer-events-auto h-12 w-58 shrink-0" />
       {/* a list that scrolls cuts off whatever is outside it, and a card's edge is drawn

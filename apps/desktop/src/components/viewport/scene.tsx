@@ -1827,7 +1827,7 @@ function Picker({
 }
 
 /** The light from under the model, as strong as where the camera is makes it (see light.ts). */
-function Underlight() {
+export function Underlight() {
   const light = React.useRef<THREE.DirectionalLight>(null)
   useFrame(({ camera }) => {
     if (light.current) light.current.intensity = underlit(camera)

@@ -640,16 +640,44 @@ export function Tools({
   const boardButtons = (
     <>
       {BOARD_AS.map((as, index) => (
-        <Switch
-          key={as}
-          label={BOARD_WAYS[as].label}
-          shortcut={String(index + 1)}
-          on={view.boardAs === as}
-          onChange={() => setView({ boardAs: as })}
-        >
-          {BOARD_WAYS[as].icon}
-        </Switch>
+        <div key={as} className="relative">
+          {/* while the board is drawn as it is made, alongside: its other side, turned
+              over to be seen from under it */}
+          {as === "pcb" && view.boardAs === "pcb" && (
+            <div className="absolute top-0 right-full mr-1.5 flex">
+              <Switch
+                label="Bottom side"
+                shortcut="S"
+                side="top"
+                on={view.boardSide === "bottom"}
+                onChange={(bottom) =>
+                  setView({ boardSide: bottom ? "bottom" : "top" })
+                }
+              >
+                <FlipHorizontal2Icon />
+              </Switch>
+            </div>
+          )}
+          <Switch
+            label={BOARD_WAYS[as].label}
+            shortcut={String(index + 1)}
+            on={view.boardAs === as}
+            onChange={() => setView({ boardAs: as })}
+          >
+            {BOARD_WAYS[as].icon}
+          </Switch>
+        </div>
       ))}
+      {/* and last, in red, what takes the view back to the model */}
+      <Press
+        key="exit"
+        label="Exit PCB mode"
+        shortcut="Esc"
+        onClick={() => setView({ board: null })}
+        className="bg-destructive text-white ring-destructive hover:bg-destructive/85 hover:text-white"
+      >
+        <XIcon />
+      </Press>
     </>
   )
 

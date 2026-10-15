@@ -36,11 +36,12 @@
 // built before is left as it was, and it says why.
 //
 // It needs Node.js 18 or later, and the internet the first time, for tscircuit itself.
-import { spawn } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 /** The tscircuit it builds with: the one the app is known to work with. */
 const TSCIRCUIT = "tscircuit@0.0.2892"
@@ -61,6 +62,11 @@ const MADE = [
   // last: what the app goes by, so that the rest is there by the time it looks
   ["circuit.json", "circuit.json"],
 ]
+
+/** How sharp the board's face is drawn in 3D, in pixels to a millimetre, and its bounds. */
+const SHARPNESS = 36
+const LEAST_TEXTURE = 1024
+const MOST_TEXTURE = 4096
 
 /** How often, at the most, how far the build has got is written down, ms. */
 const TELLING_MS = 250
@@ -275,7 +281,9 @@ async function keep() {
   if (gerbers.status !== 0)
     console.error("\nThe Gerbers could not be written; the rest of the board was.")
 
-  await parts(JSON.parse(fs.readFileSync(circuit, "utf8")))
+  const board = JSON.parse(fs.readFileSync(circuit, "utf8"))
+  await sharper(board, path.join(out, "3d.glb"))
+  await parts(board)
 
   const wrote = []
   for (const [from, to] of MADE) {
@@ -286,6 +294,58 @@ async function keep() {
     wrote.push(path.relative(process.cwd(), target))
   }
   console.log(`\nBuilt ${name}:\n${wrote.map((one) => `  ${one}`).join("\n")}`)
+}
+
+/**
+ * The board in 3D made again, with its face (its copper, print and mask, which are one
+ * picture) drawn sharper than tscircuit draws it, 1024 pixels across whatever the size
+ * of the board: as sharp as SHARPNESS has it, within what a screen's memory takes well.
+ * It is made with what tscircuit makes it with, at the version it builds with; where
+ * that cannot be had, the board in 3D is as tscircuit made it.
+ */
+async function sharper(board, glb) {
+  try {
+    // where npx keeps the tscircuit it builds with, and so what that makes 3D with
+    const cli = execFileSync(
+      "npx",
+      [
+        "--yes",
+        "-p",
+        TSCIRCUIT,
+        "node",
+        "-e",
+        "process.stdout.write(require('fs').realpathSync(require('child_process').execSync('command -v tsci').toString().trim()))",
+      ],
+      {
+        cwd: work,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        env: { ...process.env, npm_config_allow_git: "all" },
+        shell: process.platform === "win32",
+      }
+    )
+    const modules = path.dirname(path.dirname(cli))
+    const { convertCircuitJsonToGltf } = await import(
+      pathToFileURL(path.join(modules, "circuit-json-to-gltf", "dist", "index.js")).href
+    )
+    const widest = board
+      .filter((one) => one.type === "pcb_board")
+      .map((one) => Math.max(one.width ?? 0, one.height ?? 0))
+      .reduce((most, one) => Math.max(most, one), 0)
+    const resolution = Math.min(
+      MOST_TEXTURE,
+      Math.max(LEAST_TEXTURE, Math.ceil(widest * SHARPNESS))
+    )
+    const made = await convertCircuitJsonToGltf(board, {
+      format: "glb",
+      boardTextureResolution: resolution,
+    })
+    writeWhole(glb, (to) => fs.writeFileSync(to, Buffer.from(made)))
+  } catch (error) {
+    console.error(
+      `The board in 3D is as tscircuit made it: it could not be drawn sharper (${error.message}).`
+    )
+  }
 }
 
 /**

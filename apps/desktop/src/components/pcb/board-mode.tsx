@@ -15,23 +15,21 @@ import { Canvas } from "@react-three/fiber"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
-import { XIcon } from "lucide-react"
 
 import type { BoardSummary } from "@shared/api"
 import type { Building } from "@shared/board-format"
 import { LIVE } from "@/components/steps"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { useThemeColors } from "@/lib/css-color"
 import { usePreferences } from "@/lib/preferences"
 import { scrollSource } from "@/lib/scroll"
 import { useStore, type BoardAs } from "@/lib/store"
 import { boardUrl, sizeSaid, useCircuit, type Circuit } from "./boards"
-import { DRAWN, GROUND } from "./ground"
+import { DARK_GROUND, DRAWN } from "./ground"
 import { contoursOf } from "@/components/viewport/contours"
 import { EDGE } from "@/components/viewport/paint"
-import { onlyWhereItTurns } from "@/components/viewport/scene"
-import { FOV, REACH, Rig } from "@/components/viewport/rig"
+import { onlyWhereItTurns, Underlight } from "@/components/viewport/scene"
+import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 
 /** How much of the view a drawing fills when the whole of it is shown. */
@@ -39,9 +37,6 @@ const FIT = 0.86
 /** How far in a drawing can be zoomed, and out, against the whole of it. */
 const NEAREST = 60
 const FURTHEST = 0.5
-/** How hard a wheel zooms, a pixel of it; and a pinch, against a wheel. */
-const ZOOM = 0.0022
-const PINCH = 2.25
 
 /**
  * A drawing, as the page can have it: read as SVG, with nothing in it that runs (the
@@ -168,18 +163,18 @@ function Drawing({ markup }: { markup: string }) {
         move(-event.deltaX, -event.deltaY)
         return
       }
-      const lines = event.deltaMode === 1 ? 16 : 1
+      // as hard as the model's flat views zoom, at the speed the settings have (a
+      // wheel may count in lines; the drawing's scale is what the view's is not, so it
+      // goes the other way)
+      const lines = event.deltaMode === 1 ? 10 : 1
       const way = !event.ctrlKey && wheelReversed ? -1 : 1
       const box = within.getBoundingClientRect()
       zoom(
-        Math.exp(
-          event.deltaY *
-            lines *
-            ZOOM *
-            (event.ctrlKey ? PINCH : 1) *
-            way *
+        1 /
+          flatZoom(
+            event.deltaY * lines * (event.ctrlKey ? PINCH : 1) * way,
             zoomSpeed
-        ),
+          ),
         event.clientX - box.left,
         event.clientY - box.top
       )
@@ -230,6 +225,9 @@ const CREASE = 20
 /** How strong a line of an edge is, as the model's are in its solid look. */
 const LINE_OPACITY = 0.85
 
+/** How many samples a picture on a face is read with where it is seen at a slant. */
+const SLANT = 16
+
 /** A line drawn as the model's are: a pixel wide, whatever the distance, and dark. */
 const lineMaterial = () =>
   new LineMaterial({
@@ -259,13 +257,18 @@ function standing(board: THREE.Group) {
     if (thing instanceof THREE.Mesh) meshes.push(thing)
   })
   for (const mesh of meshes) {
-    // the faces stand back a little, for the lines over them to be seen
-    for (const material of [mesh.material].flat())
+    // the faces stand back a little, for the lines over them to be seen; and the
+    // picture the board's face is (its copper, print and mask) stays sharp seen at a
+    // slant, as far as the screen can keep it (three.js takes no more than it can)
+    for (const material of [mesh.material].flat()) {
       Object.assign(material, {
         polygonOffset: true,
         polygonOffsetFactor: 1.5,
         polygonOffsetUnits: 1.5,
       })
+      const face = (material as THREE.MeshStandardMaterial).map
+      if (face) face.anisotropy = SLANT
+    }
     const creases = new THREE.EdgesGeometry(mesh.geometry, CREASE)
     const edges = new LineSegmentsGeometry().setPositions(
       creases.attributes.position.array as Float32Array
@@ -367,6 +370,9 @@ function InThreeD({ url, id }: { url: string; id: string }) {
       <primitive object={shown.holder} />
       {/* (framed afresh for another board, and not for the same one built again) */}
       <Rig box={shown.box} homeKey={`board:${id}`} bridged={false} />
+      {/* the light from under it, as the model has: out while it is looked down on,
+          and coming up as the camera goes under it (after the camera has moved) */}
+      <Underlight />
     </Canvas>
   )
 }
@@ -379,10 +385,12 @@ function InThreeD({ url, id }: { url: string; id: string }) {
 function useDrawn(
   circuit: Circuit | null,
   as: BoardAs,
-  dark: boolean
+  dark: boolean,
+  ground: string,
+  side: "top" | "bottom"
 ): string | false | null {
   const [drawn, setDrawn] = React.useState<{
-    of: [Circuit, BoardAs, boolean]
+    of: [Circuit, BoardAs, string, string]
     markup: string | false
   } | null>(null)
   React.useEffect(() => {
@@ -391,20 +399,23 @@ function useDrawn(
     void import("./drawing").then(({ drawingOf }) => {
       let markup: string | false
       try {
-        markup = drawingOf(circuit, as, dark)
+        markup = drawingOf(circuit, as, dark, ground, side)
       } catch {
         // nothing tscircuit could draw: it is said so
         markup = false
       }
-      if (!over) setDrawn({ of: [circuit, as, dark], markup })
+      if (!over) setDrawn({ of: [circuit, as, ground, side], markup })
     })
     return () => {
       over = true
     }
-  }, [circuit, as, dark])
+  }, [circuit, as, dark, ground, side])
   if (!drawn || as === "3d") return null
-  const [was, wasAs, wasDark] = drawn.of
-  return was === circuit && wasAs === as && wasDark === dark
+  const [was, wasAs, wasGround, wasSide] = drawn.of
+  return was === circuit &&
+    wasAs === as &&
+    wasGround === ground &&
+    wasSide === side
     ? drawn.markup
     : null
 }
@@ -433,16 +444,29 @@ export function BoardMode({
   board: BoardSummary
 }) {
   const as: BoardAs = useStore((state) => state.view.boardAs)
-  const { dark } = useThemeColors()
+  const { dark, backdrop } = useThemeColors()
+  // the view's own ground: but KiCad's navy in the dark, for the board drawn as KiCad
+  // draws one
+  const ground =
+    dark && as === "pcb" ? DARK_GROUND : `#${backdrop.getHexString()}`
   const { circuit, trouble } = useCircuit(projectId, board)
-  const markup = useDrawn(circuit, as, dark)
+  // (the side matters only to the board drawn as it is made)
+  const side = useStore((state) => state.view.boardSide)
+  const turned = as === "pcb" && side === "bottom"
+  const markup = useDrawn(
+    circuit,
+    as,
+    dark,
+    ground,
+    as === "pcb" ? side : "top"
+  )
   const size = sizeSaid(board)
 
   return (
     // (its ground comes in over the model as the buttons change over)
     <div
       className="absolute inset-0 animate-in overflow-hidden duration-300 fade-in motion-reduce:animate-none"
-      style={{ background: dark ? GROUND.dark : GROUND.light }}
+      style={{ background: ground }}
     >
       {board.built === null && board.preview === null ? (
         <Nothing
@@ -465,7 +489,7 @@ export function BoardMode({
         )
       ) : markup ? (
         // (keyed by the board and the way it is drawn, so that each starts whole)
-        <Drawing key={`${board.id}:${as}`} markup={markup} />
+        <Drawing key={`${board.id}:${as}:${turned}`} markup={markup} />
       ) : trouble || markup === false ? (
         <Nothing
           title="The board could not be drawn"
@@ -486,6 +510,11 @@ export function BoardMode({
           {!board.finished && (
             <Badge variant="outline" className="shrink-0">
               Unfinished
+            </Badge>
+          )}
+          {turned && (
+            <Badge variant="outline" className="shrink-0">
+              Bottom side
             </Badge>
           )}
         </div>
@@ -522,26 +551,5 @@ function BuildingLine({ building }: { building: Building }) {
         </div>
       )}
     </div>
-  )
-}
-
-/** At the foot of the view in PCB mode: what takes it back to the model. */
-export function ExitBoard() {
-  const setView = useStore((state) => state.setView)
-  return (
-    <Button
-      size="lg"
-      // room either side of the words, a little less of it past the cross
-      className="pointer-events-auto animate-in gap-2 pr-4.5 pl-5 shadow-md duration-150 fade-in slide-in-from-bottom-2"
-      onClick={() => setView({ board: null })}
-    >
-      Exit PCB mode
-      <XIcon
-        className="size-5"
-        size={20}
-        absoluteStrokeWidth
-        strokeWidth={1.25}
-      />
-    </Button>
   )
 }

@@ -136,6 +136,11 @@ export type View = {
   board: string | null
   /** and how a board is looked at there: drawn as it is made, as its schematic, or in 3D */
   boardAs: BoardAs
+  /**
+   * which side of it the drawing of it as it is made is of: the top, with everything on
+   * it, or the bottom, turned over to be seen as it is from under the board
+   */
+  boardSide: "top" | "bottom"
 }
 
 /**
@@ -478,6 +483,7 @@ const homeView = (): View => ({
   tools: false,
   board: null,
   boardAs: BOARD_AS.find((one) => one === saved(BOARD_AS_KEY)) ?? "pcb",
+  boardSide: "top",
 })
 
 /** What the view can be put into, and got back out of with Esc. */

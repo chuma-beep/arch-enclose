@@ -45,6 +45,7 @@ is Ctrl off a Mac.
 | 1 | The board's [technical view](working-with-claude.md#circuit-boards) |
 | 2 | The board in 3D |
 | 3 | Its schematic |
+| S | Its bottom side, turned over as it is seen from under the board, and back |
 | Esc | Back to the model |
 
 ## The app

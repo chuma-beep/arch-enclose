@@ -21,7 +21,7 @@ import { Logo } from "@/components/mark"
 import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
-import { BoardMode, ExitBoard } from "@/components/pcb/board-mode"
+import { BoardMode } from "@/components/pcb/board-mode"
 import { useBoards } from "@/components/pcb/boards"
 import { BoardsPanel } from "@/components/pcb/boards-panel"
 import { ReferencePanel } from "@/components/reference-panel"
@@ -1327,6 +1327,16 @@ function Model({ project }: { project: Project }) {
       } else if (view.board !== null && /^[1-3]$/.test(letter)) {
         // in PCB mode, the ways the board is looked at, in the order of their buttons
         setView({ boardAs: BOARD_AS[Number(letter) - 1] })
+      } else if (view.board !== null && letter === "s") {
+        // and the other side of the board, drawn as it is made (which is brought up for
+        // it, where the board is being looked at another way)
+        setView({
+          boardAs: "pcb",
+          boardSide:
+            view.boardAs === "pcb" && view.boardSide === "bottom"
+              ? "top"
+              : "bottom",
+        })
       } else if (view.assembly || view.board !== null) {
         // every other key here is the view's, or the blueprint's: they wait until the
         // guides are put away, or PCB mode is left
@@ -1827,10 +1837,7 @@ function Model({ project }: { project: Project }) {
             )}
             {/* how far apart the parts are pulled: which a blueprint has beside its own
               bar, with the rest of how its sheets show the model */}
-            {board ? (
-              // and PCB mode, what takes the view back to the model
-              <ExitBoard />
-            ) : blueprint ? (
+            {board ? null : blueprint ? (
               <Options further={loaded.further} />
             ) : assembly ? (
               // and the guides have what asks for another of them
