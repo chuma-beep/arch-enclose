@@ -2,7 +2,7 @@
   "name": "enclose",
   "productName": "Enclose (Alpha)",
   "private": true,
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "CAD workbench with a Claude handoff",
   "homepage": "https://enclose.dev",
   "repository": "github:enclosedev/enclose",
