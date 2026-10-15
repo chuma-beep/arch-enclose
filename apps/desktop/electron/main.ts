@@ -1677,6 +1677,15 @@ function wire() {
       return settings.set({ projectsFolder: picked.filePaths[0] })
     }
   )
+  // (beside the app's archive where it is packed, and not in it: what opens it is
+  // another program, which cannot read in there)
+  ipcMain.handle(CHANNEL.settingsOpenLicenses, async () => {
+    const file = app.isPackaged
+      ? path.join(process.resourcesPath, "THIRD-PARTY-LICENSES.txt")
+      : path.join(HERE, "THIRD-PARTY-LICENSES.txt")
+    if (!fs.existsSync(file)) return false
+    return (await shell.openPath(file)) === ""
+  })
   ipcMain.handle(CHANNEL.settingsRevealProjectsFolder, () => {
     const { projectsFolder } = settings.get()
     fs.mkdirSync(projectsFolder, { recursive: true })

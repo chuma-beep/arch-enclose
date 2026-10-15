@@ -823,6 +823,34 @@ function Connections() {
   )
 }
 
+/**
+ * What of other people's code goes out with the app, and under what terms: opened in the
+ * system's own reader. The app as it is worked on has it only once it has been built.
+ */
+function Licenses() {
+  const [none, setNone] = React.useState(false)
+  return (
+    <Row
+      title="Third-party licenses"
+      detail={
+        none ? "Written when the app is built (npm run build)" : undefined
+      }
+    >
+      <button
+        type="button"
+        onClick={() =>
+          void window.cad.settings
+            .openLicenses()
+            .then((opened) => setNone(!opened))
+        }
+        className="cursor-pointer text-sm underline underline-offset-4"
+      >
+        Open
+      </button>
+    </Row>
+  )
+}
+
 function About() {
   return (
     <Group title="Enclose">
@@ -837,6 +865,7 @@ function About() {
           enclose.dev
         </a>
       </Row>
+      <Licenses />
       <Row title="Fork it and collaborate">
         <a
           href="https://github.com/enclosedev/enclose"

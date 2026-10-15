@@ -83,6 +83,7 @@ examples: those it fetches.
 | `npm run icons` | The icon's other sizes, from `icons/icon.png`, the icon of the app as it is run from a checkout, and the picture behind the installer's window |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
+| `npm run build` | The window in `dist/` and the Electron side in `dist-electron/`, with `THIRD-PARTY-LICENSES.txt`: every package bundled into either or loaded as it runs, with its license ([`scripts/licenses.mjs`](../apps/desktop/scripts/licenses.mjs)) |
 | `npm run dist` | The app to install, a disk image for each kind of Mac, and what an installed app updates itself from, in `release/` |
 
 ### The icon

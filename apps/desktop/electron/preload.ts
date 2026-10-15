@@ -163,6 +163,7 @@ const api: CadApi = {
       ipcRenderer.invoke(CHANNEL.settingsChooseProjectsFolder),
     revealProjectsFolder: () =>
       ipcRenderer.invoke(CHANNEL.settingsRevealProjectsFolder),
+    openLicenses: () => ipcRenderer.invoke(CHANNEL.settingsOpenLicenses),
     projectsFolderSize: () =>
       ipcRenderer.invoke(CHANNEL.settingsProjectsFolderSize),
     setLookOver: (on) => ipcRenderer.invoke(CHANNEL.settingsSetLookOver, on),

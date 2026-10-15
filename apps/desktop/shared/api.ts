@@ -969,6 +969,12 @@ export type CadApi = {
     chooseProjectsFolder(): Promise<Settings>
     /** show the folder new projects go in, making it if it is not there yet */
     revealProjectsFolder(): Promise<void>
+    /**
+     * Open what of other people's code goes out with the app, and under what terms
+     * (scripts/licenses.mjs). False where there is none: it is written by a build, and
+     * the app as it is worked on may not have been built.
+     */
+    openLicenses(): Promise<boolean>
     /** how much room that folder takes, in bytes: nothing, if it is not there yet */
     projectsFolderSize(): Promise<number>
     /** whether Claude is to look over files as they are opened; resolves likewise */
@@ -1068,6 +1074,7 @@ export const CHANNEL = {
   settingsGet: "settings:get",
   settingsChooseProjectsFolder: "settings:choose-projects-folder",
   settingsRevealProjectsFolder: "settings:reveal-projects-folder",
+  settingsOpenLicenses: "settings:open-licenses",
   settingsProjectsFolderSize: "settings:projects-folder-size",
   settingsSetLookOver: "settings:set-look-over",
   settingsSetAnalytics: "settings:set-analytics",

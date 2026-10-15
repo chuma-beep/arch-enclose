@@ -11,6 +11,8 @@ Enclose is for macOS, 13 (Ventura) or newer.
 - Python 3. Models are built with Python and
   [build123d](https://build123d.readthedocs.io); where build123d is missing, Claude makes
   a virtual environment for it in the project's folder.
+- For circuit boards, [Node.js](https://nodejs.org) 18 or later. Boards are designed
+  with [tscircuit](https://tscircuit.com), which the first board fetches, once.
 
 ## Download
 

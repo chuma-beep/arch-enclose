@@ -78,6 +78,12 @@ try {
           to: "kit",
           filter: ["**/*", "!**/__pycache__", "!**/.DS_Store"],
         },
+        // what of other people's code goes out with the app, and under what terms:
+        // written by the build (scripts/licenses.mjs), and opened from the settings
+        {
+          from: "dist-electron/THIRD-PARTY-LICENSES.txt",
+          to: "THIRD-PARTY-LICENSES.txt",
+        },
       ],
       mac: {
         category: "public.app-category.graphics-design",

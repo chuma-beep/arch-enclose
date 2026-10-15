@@ -29,3 +29,8 @@ Some of what is here came from others, and stays under their terms:
   TheRobotStudio (Apache 2.0): its [README](examples/arm/source/README.md) says more.
 - The figure of a person that stands in the reference scenes is made from Blender
   Studio's Human Base Meshes (CC0): [`kit/figure`](kit/figure) says how.
+
+The packages the app is built with, React, three.js and tscircuit's among them, go out
+with it under their own licenses. Each build lists them, with their texts, in
+`THIRD-PARTY-LICENSES.txt` ([`scripts/licenses.mjs`](apps/desktop/scripts/licenses.mjs)),
+which the app carries and opens from its settings (Enclose, Third-party licenses).
