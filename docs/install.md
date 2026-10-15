@@ -8,9 +8,11 @@ Enclose is for macOS, 13 (Ventura) or newer.
   Enclose has no login of its own: the conversation is with the Claude Code on your
   machine. Codex or Grok will do in its place: see
   [Other agents](working-with-claude.md#other-agents).
-- Python 3. Models are built with Python and
-  [build123d](https://build123d.readthedocs.io); where build123d is missing, Claude makes
-  a virtual environment for it in the project's folder.
+- Nothing for Python. Models are built with Python and
+  [build123d](https://build123d.readthedocs.io): where the `python3` your terminal runs
+  has build123d, Enclose uses it. Where it has not, Enclose makes a Python of its own with
+  build123d in it the first time it opens, once (a few hundred MB to download, kept in its
+  own folder), and builds with that.
 - For circuit boards, [Node.js](https://nodejs.org) 18 or later. Boards are designed
   with [tscircuit](https://tscircuit.com), which the first board fetches, once.
 

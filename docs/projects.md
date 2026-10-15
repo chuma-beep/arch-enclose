@@ -68,8 +68,10 @@ it. Say what you want made and Claude sets it up: it copies the app's exporter,
 [`kit/enclose.py`](../kit/enclose.py), into the folder, writes a `model.py` that builds
 the parts with [build123d](https://build123d.readthedocs.io) and hands them to it, and
 runs it. The exporter writes the meshes, the edges, a STEP file of each part and the
-manifest, and the model takes the cube's place as soon as it has. A machine that has
-Python but not build123d gets a virtual environment in the folder first.
+manifest, and the model takes the cube's place as soon as it has. The build runs with the
+`python3` a terminal would, where that has build123d, and otherwise with the Python the
+app makes of its own (see [Install](install.md#what-it-needs)), which it puts first on
+the `PATH` of the build and of Claude.
 
 ## Starting from an example
 
@@ -135,9 +137,10 @@ come to hundreds of megabytes: it is saved as STL or OBJ (see
 A folder that already holds a model the app can show, or an `enclose.json`, is a project
 as it stands and is opened where it is. So is a folder with no CAD file in it.
 
-The build needs a Python with build123d. Where there is none the project is still made,
-with the files in it, and says so: ask Claude to set it up and it makes a virtual
-environment in the folder, as it does for a project started from nothing.
+The build needs a Python with build123d. Where the app is still making its own, the
+files wait for it, and the view says so; where it could not make one (with no connection,
+say), the project is still made, with the files in it, and says why: ask Claude to set it
+up and it makes a virtual environment in the folder.
 
 ### Claude looks the model over
 

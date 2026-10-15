@@ -950,9 +950,11 @@ function Model({ project }: { project: Project }) {
     : bringingIn?.state === "working"
       ? {
           title: `Importing ${project.name}`,
-          detail: bringingIn.total
-            ? `Preparing ${bringingIn.done} of ${bringingIn.total} parts`
-            : "Reading the files",
+          detail: bringingIn.settingUp
+            ? `${bringingIn.settingUp}, to read CAD files with. Only the first time.`
+            : bringingIn.total
+              ? `Preparing ${bringingIn.done} of ${bringingIn.total} parts`
+              : "Reading the files",
           progress: bringingIn.total
             ? (MAKING * bringingIn.done) / bringingIn.total
             : null,
@@ -1719,9 +1721,14 @@ function Model({ project }: { project: Project }) {
               <TriangleAlertIcon />
               <AlertTitle>Nothing to read the files with yet</AlertTitle>
               <AlertDescription>
-                Enclose reads CAD files with Python and build123d, and did not
-                find both on this machine. The files are in the project: ask
-                Claude to set it up, and it will see to the rest.
+                <p>
+                  Enclose reads CAD files with Python and build123d, and could
+                  not set them up: {bringingIn.detail}
+                </p>
+                <p>
+                  The files are in the project: ask Claude to set it up, and it
+                  will see to the rest.
+                </p>
               </AlertDescription>
             </Alert>
           ) : (

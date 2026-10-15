@@ -14,8 +14,8 @@ Early days: for macOS only, and of CAD files it opens STEP, STL and OBJ.
 Download the latest version from
 [GitHub Releases](https://github.com/enclosedev/enclose/releases/latest): the disk image
 that ends in `arm64` for Apple silicon, `x64` for Intel. It needs macOS 13 or newer,
-[Claude Code](https://code.claude.com/docs/en/overview) installed and signed in, and
-Python 3; and for circuit boards, [Node.js](https://nodejs.org).
+[Claude Code](https://code.claude.com/docs/en/overview) installed and signed in; and
+for circuit boards, [Node.js](https://nodejs.org).
 
 ## Documentation
 

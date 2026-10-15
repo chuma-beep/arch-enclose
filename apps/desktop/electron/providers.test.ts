@@ -5,7 +5,14 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import type { Provider } from "../shared/api"
-import { expandHome, Providers, splitArgs, type Looked } from "./providers"
+import {
+  cleanEnv,
+  expandHome,
+  Providers,
+  putFirstOnPath,
+  splitArgs,
+  type Looked,
+} from "./providers"
 import { SettingsStore } from "./settings"
 
 describe("splitArgs", () => {
@@ -34,6 +41,20 @@ describe("expandHome", () => {
     expect(expandHome("~")).toBe(os.homedir())
     expect(expandHome("/opt/~/x")).toBe("/opt/~/x")
     expect(expandHome("~other/x")).toBe("~other/x")
+  })
+})
+
+describe("cleanEnv", () => {
+  it("puts a folder first on the PATH, while one is named", () => {
+    let folder: string | null = "/app/python/env/bin"
+    putFirstOnPath(() => folder)
+    try {
+      expect(cleanEnv().PATH?.split(path.delimiter)[0]).toBe(folder)
+      folder = null
+      expect(cleanEnv().PATH).toBe(process.env.PATH)
+    } finally {
+      putFirstOnPath(() => null)
+    }
   })
 })
 

@@ -96,7 +96,14 @@ import {
   resolveInside,
 } from "./projects"
 import { appScenes, readScene } from "./reference"
-import { cleanEnv, expandHome, Providers } from "./providers"
+import {
+  cleanEnv,
+  expandHome,
+  locate,
+  Providers,
+  putFirstOnPath,
+} from "./providers"
+import { Python } from "./python"
 import { SettingsStore, type Vault } from "./settings"
 import {
   Threads,
@@ -196,6 +203,7 @@ const showing = new Map<string, string>()
 let settings: SettingsStore
 /** the agents on this machine: Claude Code, Codex, Grok */
 let providers: Providers
+let python: Python
 /** where the app's own tools answer, for an agent that cannot be handed them */
 const toolServer = new ToolServer()
 /**
@@ -562,6 +570,21 @@ function newFolder(): { dir: string; name: string } {
 
 /** what stops the build of each project whose files are being made a model of */
 const builds = new Map<string, () => void>()
+/** the projects whose files wait for the app to make a Python to read them with */
+const forPython = new Set<string>()
+
+/** Say in the list how the Python the files wait for is coming on. */
+function settingUp() {
+  const status = python.get()
+  if (status.state !== "making") return
+  for (const id of forPython)
+    projects.report(id, {
+      state: "working",
+      done: 0,
+      total: null,
+      settingUp: status.step,
+    })
+}
 
 /** Make a model of the files brought into a project, and say in the list how it goes. */
 function makeModel(id: string) {
@@ -571,9 +594,26 @@ function makeModel(id: string) {
   projects.report(id, { state: "working", done: 0, total: null })
   // Python is found on the PATH a terminal would have, which a Mac gives an app no part
   // of: looking for the agents is what takes that PATH up
-  void providers.found.then(() => {
+  void providers.found.then(async () => {
+    // and read with a Python that has build123d, which the app may have to make first
+    forPython.add(id)
+    settingUp()
+    const ready = await python.ready()
+    forPython.delete(id)
     // taken off the list while that was waited for
     if (!projects.get(id)) return
+    if (!ready) {
+      const status = python.get()
+      projects.report(id, {
+        state: "failed",
+        why: "python",
+        detail:
+          status.state === "failed"
+            ? status.detail
+            : "No Python with build123d was found.",
+      })
+      return
+    }
     const build = runBuild(project.path, command, cleanEnv(), (done, total) =>
       projects.report(id, { state: "working", done, total })
     )
@@ -1939,6 +1979,15 @@ if (!app.requestSingleInstanceLock()) {
       env: cleanEnv,
       onChange: broadcast,
     })
+    // Models are built with a Python that has build123d: where the machine has none, the
+    // app makes one of its own, as soon as it can look for one (see python.ts).
+    python = new Python({
+      dir: path.join(data, "python"),
+      env: cleanEnv,
+      locate,
+      onChange: settingUp,
+    })
+    putFirstOnPath(() => python.bin())
     providers = new Providers({
       settings,
       look: { claude: lookAtClaude, codex: lookAtCodex, grok: lookAtGrok },
@@ -1949,6 +1998,7 @@ if (!app.requestSingleInstanceLock()) {
       },
     })
     wire()
+    void providers.found.then(() => python.ready())
     // a newer version of an agent comes out while the app is open, too
     setInterval(() => providers.lookForUpdates(), NEWER_EVERY_MS).unref()
 

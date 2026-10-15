@@ -70,11 +70,24 @@ const PARENT_SESSION = [
   "CLAUDE_EFFORT",
 ]
 
-/** The environment to start anything with: ours, minus what belongs to a parent session. */
+/** A folder to put first on the PATH of anything started: the app's own Python's, say. */
+let first: () => string | null = () => null
+
+/** Have a folder put first on the PATH of anything started, while it says one. */
+export function putFirstOnPath(folder: () => string | null) {
+  first = folder
+}
+
+/**
+ * The environment to start anything with: ours, minus what belongs to a parent session,
+ * with the app's own Python first on the PATH where it has one.
+ */
 export function cleanEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env }
   for (const key of PARENT_SESSION) delete env[key]
   delete env.VITE_DEV_SERVER_URL
+  const folder = first()
+  if (folder) env.PATH = [folder, env.PATH].filter(Boolean).join(path.delimiter)
   return env
 }
 

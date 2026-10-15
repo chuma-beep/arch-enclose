@@ -99,6 +99,16 @@ export default function Privacy() {
         .
       </p>
 
+      <h2>Python</h2>
+      <p>
+        Models are built with Python and build123d. Where your Mac has no Python with
+        build123d, the app makes one of its own, once: it downloads{' '}
+        <a href="https://docs.astral.sh/uv/">uv</a> from GitHub, which downloads Python from
+        GitHub and build123d and what it needs from{' '}
+        <a href="https://pypi.org">the Python Package Index</a>. Those see what is asked for
+        and the address it comes from, and nothing of your projects.
+      </p>
+
       <h2>Backing projects up to GitHub</h2>
       <p>
         Only if you connect it, in Settings, Connections. You sign in on GitHub’s own site

@@ -57,7 +57,13 @@ export type ConversationSummary = {
  * them with. build: they were read, or tried, and no model came of it.
  */
 export type BringingIn =
-  | { state: "working"; done: number; total: number | null }
+  | {
+      state: "working"
+      done: number
+      total: number | null
+      /** the app is making a Python to read the files with first, and is at this step */
+      settingUp?: string
+    }
   | { state: "failed"; why: "python" | "build"; detail: string }
 
 /**
