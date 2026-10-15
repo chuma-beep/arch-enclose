@@ -2,10 +2,16 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Provider } from "../shared/api"
-import { expandHome, Providers, splitArgs, type Looked } from "./providers"
+import {
+  expandHome,
+  loginShell,
+  Providers,
+  splitArgs,
+  type Looked,
+} from "./providers"
 import { SettingsStore } from "./settings"
 
 describe("splitArgs", () => {
@@ -37,6 +43,87 @@ describe("expandHome", () => {
   })
 })
 
+describe("loginShell", () => {
+  let shell: string | undefined
+  let dir: string
+  beforeEach(() => {
+    shell = process.env.SHELL
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-login-shell-"))
+  })
+  afterEach(() => {
+    if (shell === undefined) delete process.env.SHELL
+    else process.env.SHELL = shell
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("is the user's own shell, as it is, where it is a shell that is there", () => {
+    const mine = path.join(dir, "fish")
+    fs.writeFileSync(mine, "#!/bin/sh\n", { mode: 0o755 })
+    process.env.SHELL = mine
+    expect(loginShell()).toBe(mine)
+  })
+
+  it("falls back to what is always there only when there is no shell of the user's own", () => {
+    // a $SHELL that is not there is not a shell to ask, so one that is always there is
+    process.env.SHELL = path.join(dir, "not-there")
+    expect(loginShell()).toMatch(/^\/bin\/(bash|sh|zsh)$/)
+    // and with no $SHELL at all, this is all there is to ask
+    delete process.env.SHELL
+    expect(loginShell()).toMatch(/^\/bin\/(bash|sh|zsh)$/)
+  })
+})
+
+describe("locate", () => {
+  let dir: string
+  let wasShell: string | undefined
+  let wasPath: string | undefined
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-locate-"))
+    wasShell = process.env.SHELL
+    wasPath = process.env.PATH
+    process.env.PATH = dir
+  })
+  afterEach(() => {
+    if (wasShell === undefined) delete process.env.SHELL
+    else process.env.SHELL = wasShell
+    process.env.PATH = wasPath
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("asks again later when there is no shell to ask the first time", async () => {
+    // its own copy of the module: what it remembers (that a shell was already asked) is
+    // kept between calls, and a test before this one has had the shell answer
+    vi.resetModules()
+    const { locate } = await import("./providers")
+    // where a shell will say the agent is, not on the PATH the app starts with
+    const bin = path.join(dir, "bin")
+    fs.mkdirSync(bin)
+    const claude = path.join(bin, "claude")
+    fs.writeFileSync(claude, "#!/bin/sh\n", { mode: 0o755 })
+
+    // no `$SHELL`, and none of the shells that are always there: nothing to ask
+    delete process.env.SHELL
+    const alwaysThere = ["/bin/bash", "/bin/sh", "/bin/zsh"]
+    const realAccess = fs.accessSync
+    vi.spyOn(fs, "accessSync").mockImplementation((file, mode) => {
+      if (typeof file === "string" && alwaysThere.includes(file))
+        throw new Error("ENOENT")
+      return realAccess(file, mode)
+    })
+    // nothing to ask: the agent is not found, and a shell is asked for again later
+    expect(await locate("claude")).toBeNull()
+
+    vi.restoreAllMocks()
+    // a shell is there now: it is asked, and the agent is found
+    const answer = path.join(dir, "answer-sh")
+    fs.writeFileSync(answer, `#!/bin/sh\nprintf "__PATH__${bin}__PATH__"\n`, {
+      mode: 0o755,
+    })
+    process.env.SHELL = answer
+    expect(await locate("claude")).toBe(claude)
+  })
+})
+
 describe("Providers", () => {
   let dir: string
   let was: string | undefined
@@ -57,6 +144,20 @@ describe("Providers", () => {
     })
     return file
   }
+  /**
+   * A login shell that is there, and answers with the PATH it was given: a stand-in for
+   * the real one, whose profile would bring this machine's own PATH in with it and let
+   * the agents installed here be found.
+   */
+  const standInShell = () => {
+    const file = path.join(dir, "stand-in-sh")
+    fs.writeFileSync(
+      file,
+      `#!/bin/sh\nprintf "__PATH__%s__PATH__" "$PATH"\n`,
+      { mode: 0o755 }
+    )
+    return file
+  }
   const settled = (providers: Providers) =>
     new Promise<void>((resolve) => {
       const look = () =>
@@ -70,8 +171,8 @@ describe("Providers", () => {
     command("claude", "2.1.0")
     const grok = command("grok-nightly", "1.0.50")
     // (a PATH with nothing else on it: what is installed on this machine is not found)
+    process.env.SHELL = standInShell()
     process.env.PATH = dir
-    process.env.SHELL = "/nonexistent"
     const settings = new SettingsStore(path.join(dir, "settings.json"), {
       projectsFolder: dir,
       lookOver: true,
@@ -183,8 +284,8 @@ echo "${version} (Claude Code)"
         }
       )
     says("2.1.296")
+    process.env.SHELL = standInShell()
     process.env.PATH = dir
-    process.env.SHELL = "/nonexistent"
     const settings = new SettingsStore(path.join(dir, "settings.json"), {
       projectsFolder: dir,
       lookOver: true,

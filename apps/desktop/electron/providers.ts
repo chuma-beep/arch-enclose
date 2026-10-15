@@ -149,10 +149,40 @@ function onPath(name: string): string | null {
  * finding no agent until it was opened again.
  */
 let adopted: Promise<void> | null = null
+/**
+ * The one login shell to ask for the PATH a terminal would have: the user's own
+ * (`$SHELL`) where that is a shell to be found - a path that is there, or a bare name the
+ * PATH answers to - and otherwise the first that is always there. The user's own is asked
+ * alone, and never fallen back from: falling past a shell that is only slow to answer (a
+ * heavy profile, the first time after the machine was started) would take the bare
+ * `/bin/sh` below it instead, whose profile is a different and often stale one, and keep
+ * the PATH it gives - the very "no agent found" the note above is about. Falling back is
+ * for when there is no `$SHELL` to ask at all, which is what an Arch box is often
+ * launched with.
+ */
+export function loginShell(): string | null {
+  const own = process.env.SHELL
+  // a bare name (no path) is left to be found on the PATH, as when it is run
+  if (own && (own.includes("/") ? executable(own) : true)) return own
+  // A Mac's own login shell is zsh, whose profile (`~/.zprofile`) is where Homebrew and
+  // the agents put their PATH: asked for first there, as the old default of `/bin/zsh`
+  // did. Elsewhere bash is what a box is launched with.
+  const alwaysThere =
+    process.platform === "darwin"
+      ? ["/bin/zsh", "/bin/bash", "/bin/sh"]
+      : ["/bin/bash", "/bin/sh", "/bin/zsh"]
+  return alwaysThere.find((one) => executable(one)) ?? null
+}
 function adoptShellPath(): Promise<void> {
-  adopted ??= (async () => {
-    if (process.platform === "win32") return
-    const shell = process.env.SHELL ?? "/bin/zsh"
+  if (adopted) return adopted
+  // Ask the shell once. Where there is none to ask, or it did not answer, it is asked
+  // again the next time something is looked for, so the reset has to happen after the
+  // async part has run: set from inside its own body it would be overwritten by the
+  // `adopted =` below before it took effect.
+  const asked = (async () => {
+    if (process.platform === "win32") return true
+    const shell = loginShell()
+    if (!shell) return false
     try {
       const { stdout } = await run(
         shell,
@@ -161,11 +191,15 @@ function adoptShellPath(): Promise<void> {
       )
       const found = /__PATH__(.*)__PATH__/s.exec(stdout)?.[1]
       if (found) process.env.PATH = found
+      return true
     } catch {
       // keep the PATH we were started with, for now
-      adopted = null
+      return false
     }
   })()
+  adopted = asked.then((answered) => {
+    if (!answered) adopted = null
+  })
   return adopted
 }
 
