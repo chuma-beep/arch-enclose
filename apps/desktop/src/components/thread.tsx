@@ -4,7 +4,6 @@ import {
   ArrowUpIcon,
   BoxesIcon,
   BoxIcon,
-  CircuitBoardIcon,
   ClockIcon,
   EyeIcon,
   GitBranchPlusIcon,
@@ -23,7 +22,7 @@ import type {
   ThreadItem,
 } from "@shared/api"
 import { Composer } from "@/components/composer"
-import { ReferenceIcon } from "@/components/icons"
+import { BoardIcon, ReferenceIcon } from "@/components/icons"
 import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
 import { QUOTABLE, Quoting } from "@/components/quoting"
@@ -165,7 +164,7 @@ function UserMessage({
       {/* it was written with a circuit board on screen, and is about that board */}
       {item.board && (
         <Badge variant="outline" title={item.board}>
-          <CircuitBoardIcon data-icon="inline-start" />
+          <BoardIcon data-icon="inline-start" />
           {item.board}
         </Badge>
       )}
@@ -480,94 +479,153 @@ function JobCard({
   // what came of it: what was said last, once it is over
   const said = !working && last?.kind === "assistant" ? last : null
   const took = (item.ended ?? now) - item.at
+  // Once it is over it is kept to a square, which what came of it is often longer than:
+  // the foot of it fades out where there is more, and a click on it shows the rest. A
+  // click on what it is called puts it back.
+  const [open, setOpen] = React.useState(false)
+  const kept = !working && !open
+  const body = React.useRef<HTMLDivElement>(null)
+  const [more, setMore] = React.useState(false)
+  React.useLayoutEffect(() => {
+    const within = body.current
+    if (!within || !kept) return setMore(false)
+    const measure = () => setMore(within.scrollHeight > within.clientHeight + 1)
+    measure()
+    const sized = new ResizeObserver(measure)
+    sized.observe(within)
+    for (const child of within.children) sized.observe(child)
+    return () => sized.disconnect()
+  }, [kept, blocks])
+  const title = working
+    ? `Making ${item.name} in detail`
+    : item.state === "done"
+      ? `Made ${item.name} in detail`
+      : item.state === "stopped"
+        ? `Stopped making ${item.name}`
+        : `${item.name} could not be made`
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-foreground/[0.025] px-4 py-3">
-      <div className="flex min-w-0 items-center gap-2 text-sm">
-        <CircuitBoardIcon className="size-4 shrink-0" />
-        <span className={cn("min-w-0 truncate font-medium", working && LIVE)}>
-          {working
-            ? `Making ${item.name} in detail`
-            : item.state === "done"
-              ? `Made ${item.name} in detail`
-              : item.state === "stopped"
-                ? `Stopped making ${item.name}`
-                : `${item.name} could not be made`}
-        </span>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {duration(took)}
-        </span>
-        {/* the board in PCB mode; and while it is being made, what stops it, as the
-            foot of the view has for a turn */}
-        <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setView({ board: item.board })}
-                />
-              }
+    // (as wide as the conversation, which is what the square is counted from)
+    <div className="@container">
+      <div
+        className={cn(
+          "flex flex-col gap-3 rounded-xl border bg-foreground/[0.025] px-4 py-3 transition-colors duration-150 hover:border-foreground/18",
+          kept && "max-h-[100cqw]"
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2 text-sm">
+          <BoardIcon className="size-4 shrink-0" />
+          {working ? (
+            <span className={cn("min-w-0 truncate font-medium", LIVE)}>
+              {title}
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-expanded={open || !more}
+              onClick={() => setOpen(!open)}
+              className="min-w-0 cursor-pointer truncate text-left font-medium outline-none focus-visible:underline"
             >
-              <EyeIcon />
-              <span className="sr-only">Show the board</span>
-            </TooltipTrigger>
-            <TooltipContent>Show the board</TooltipContent>
-          </Tooltip>
-          {working && (
+              {title}
+            </button>
+          )}
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            {duration(took)}
+          </span>
+          {/* the board in PCB mode; and while it is being made, what stops it, as the
+            foot of the view has for a turn */}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
+                    variant="ghost"
                     size="icon-sm"
-                    className="bg-destructive text-white hover:bg-destructive/80"
-                    onClick={() => void window.cad.thread.stopJob(project.id)}
+                    onClick={() => setView({ board: item.board })}
                   />
                 }
               >
-                <SquareIcon className="size-3 fill-current" />
-                <span className="sr-only">Stop making the board</span>
+                <EyeIcon />
+                <span className="sr-only">Show the board</span>
               </TooltipTrigger>
-              <TooltipContent>Stop making the board</TooltipContent>
+              <TooltipContent>Show the board</TooltipContent>
             </Tooltip>
-          )}
-        </span>
-      </div>
-      {blocks
-        .filter((block) => block !== said)
-        .map((block) =>
-          block.kind === "steps" ? (
-            working ? (
-              <AtWork key={block.id} stretch={block} live={block === last} />
-            ) : (
-              <Steps
-                key={block.id}
-                steps={block.steps}
-                took={block.took}
-                working={false}
-              />
-            )
-          ) : block.kind === "assistant" ? (
-            <Reply key={block.id} item={block} />
-          ) : block.kind === "notice" ? (
-            <div
-              key={block.id}
-              className={cn(
-                "text-xs",
-                block.tone === "error"
-                  ? "text-destructive"
-                  : "text-muted-foreground"
-              )}
-            >
-              {block.text}
-            </div>
-          ) : null
-        )}
-      {said && (
-        <div {...{ [QUOTABLE]: "" }}>
-          <Reply item={said} />
+            {working && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      className="bg-destructive text-white hover:bg-destructive/80"
+                      onClick={() => void window.cad.thread.stopJob(project.id)}
+                    />
+                  }
+                >
+                  <SquareIcon className="size-3 fill-current" />
+                  <span className="sr-only">Stop making the board</span>
+                </TooltipTrigger>
+                <TooltipContent>Stop making the board</TooltipContent>
+              </Tooltip>
+            )}
+          </span>
         </div>
-      )}
+        <div
+          ref={body}
+          className={cn(
+            "relative -mx-4 -mb-3 flex min-h-0 flex-col gap-3 px-4 pb-3",
+            kept && "overflow-hidden",
+            // what is under the fade is there to be had
+            more && "mask-b-from-[calc(100%-5rem)] mask-b-to-100%"
+          )}
+        >
+          {blocks
+            .filter((block) => block !== said)
+            .map((block) =>
+              block.kind === "steps" ? (
+                working ? (
+                  <AtWork
+                    key={block.id}
+                    stretch={block}
+                    live={block === last}
+                  />
+                ) : (
+                  <Steps
+                    key={block.id}
+                    steps={block.steps}
+                    took={block.took}
+                    working={false}
+                  />
+                )
+              ) : block.kind === "assistant" ? (
+                <Reply key={block.id} item={block} />
+              ) : block.kind === "notice" ? (
+                <div
+                  key={block.id}
+                  className={cn(
+                    "text-xs",
+                    block.tone === "error"
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {block.text}
+                </div>
+              ) : null
+            )}
+          {said && (
+            <div {...{ [QUOTABLE]: "" }}>
+              <Reply item={said} />
+            </div>
+          )}
+          {more && (
+            <button
+              type="button"
+              aria-label="Show all of it"
+              onClick={() => setOpen(true)}
+              className="absolute inset-0 cursor-pointer outline-none"
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

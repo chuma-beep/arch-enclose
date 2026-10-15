@@ -1333,6 +1333,10 @@ function Model({ project }: { project: Project }) {
       } else if (view.board !== null && /^[1-3]$/.test(letter)) {
         // in PCB mode, the ways the board is looked at, in the order of their buttons
         setView({ boardAs: BOARD_AS[Number(letter) - 1] })
+      } else if (view.board !== null && letter === "p") {
+        // and what is on the board, as P lists the model's parts
+        const { boardPartsOpen, setBoardPartsOpen } = useStore.getState()
+        setBoardPartsOpen(!boardPartsOpen)
       } else if (view.board !== null && letter === "s") {
         // and the other side of the board, drawn as it is made (which is brought up for
         // it, where the board is being looked at another way)

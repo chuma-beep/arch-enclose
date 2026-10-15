@@ -553,6 +553,25 @@ type State = {
   toolsOpen: boolean
   /** whether the list of the project's circuit boards is up, in the place the list of parts has */
   boardsOpen: boolean
+  /** whether the list of what is on the board in PCB mode is up, in the same place */
+  boardPartsOpen: boolean
+  /**
+   * The parts of the board in PCB mode that the camera is to be brought to, by the
+   * names they have on it (C1, U1), and when that was asked: null once it is done.
+   */
+  boardFocus: { names: string[]; at: number } | null
+  /** the parts of the board whose square in the list of them the pointer is over */
+  boardHover: string[] | null
+  /**
+   * The part of the board in PCB mode that was clicked in 3D: what it is called on the
+   * board, and the place on it that was clicked, in the view's own frame. Null for none.
+   */
+  boardPicked: { name: string; at: Vec3 } | null
+  /**
+   * What is being said of that part, where it is: something new ("new"), or what was
+   * said of it already (that note's id). Null while nothing is.
+   */
+  boardWriting: string | null
   /**
    * The reference scene the user has picked for each project from that list, by what
    * the scene is known by: the one the project's model is set in from then on.
@@ -806,6 +825,25 @@ type State = {
   /** Bring the project's own tools up, which sets them to work on the model; or put them away. */
   setToolsOpen(open: boolean): void
   setBoardsOpen(open: boolean): void
+  setBoardPartsOpen(open: boolean): void
+  /** Bring the camera to these parts of the board in PCB mode, seen in 3D for it. */
+  focusBoardParts(names: string[]): void
+  /** The camera has been brought to the parts it was asked to be. */
+  focusedBoardParts(): void
+  hoverBoardParts(names: string[] | null): void
+  pickBoardPart(picked: { name: string; at: Vec3 } | null): void
+  /**
+   * Start saying something of the part of the board picked out ("new"), go back to what
+   * was said of one already (its note's id: the board is gone to, and the part picked
+   * out again), or stop (null).
+   */
+  writeBoard(note: string | null): void
+  /**
+   * Keep what was written of the part of the board picked out, as `keepNote` keeps what
+   * is said of a part of the model: `label` is what the part goes by. Gives back the
+   * note's id, or null if there was nothing to keep.
+   */
+  keepBoardNote(text: string, label: string): string | null
   /**
    * Set the open project's model in a reference scene picked by hand, which is kept as
    * the one for that project.
@@ -976,6 +1014,11 @@ export const useStore = create<State>()((set, get) => ({
   referenceOpen: false,
   toolsOpen: false,
   boardsOpen: false,
+  boardPartsOpen: false,
+  boardFocus: null,
+  boardHover: null,
+  boardPicked: null,
+  boardWriting: null,
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
@@ -1032,6 +1075,11 @@ export const useStore = create<State>()((set, get) => ({
       // its boards likewise)
       toolsOpen: false,
       boardsOpen: false,
+      boardPartsOpen: false,
+      boardFocus: null,
+      boardHover: null,
+      boardPicked: null,
+      boardWriting: null,
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
     }))
@@ -1125,6 +1173,14 @@ export const useStore = create<State>()((set, get) => ({
         view,
         cuts: kept,
         entered: enteredNow(view, state.entered),
+        // the list of what is on a board is of that board: another, or none, puts it away
+        ...(view.board !== state.view.board && {
+          boardPartsOpen: false,
+          boardFocus: null,
+          boardHover: null,
+          boardPicked: null,
+          boardWriting: null,
+        }),
         // a sheet that takes the view to itself has it clear: the list of parts is put away
         ...(view.sheet !== null &&
           state.view.sheet === null && { partsOpen: false }),
@@ -1603,9 +1659,90 @@ export const useStore = create<State>()((set, get) => ({
             partsOpen: false,
             referenceOpen: false,
             toolsOpen: false,
+            boardPartsOpen: false,
           }
         : { boardsOpen }
     )
+  },
+
+  setBoardPartsOpen(boardPartsOpen) {
+    // (in the place the list of boards has, which PCB mode is gone on from)
+    set(
+      boardPartsOpen
+        ? { boardPartsOpen, boardsOpen: false }
+        : { boardPartsOpen }
+    )
+  },
+
+  focusBoardParts(names) {
+    // the camera is the 3D's: the board is turned to that, where it is drawn
+    if (get().view.boardAs !== "3d") get().setView({ boardAs: "3d" })
+    set({ boardFocus: { names, at: Date.now() } })
+  },
+
+  focusedBoardParts() {
+    set({ boardFocus: null })
+  },
+
+  hoverBoardParts(boardHover) {
+    set({ boardHover })
+  },
+
+  pickBoardPart(boardPicked) {
+    set({ boardPicked, boardWriting: null })
+  },
+
+  writeBoard(note) {
+    const { activeId, notes, boardPicked, view, setView } = get()
+    if (note === null || note === "new") {
+      set({ boardWriting: boardPicked ? note : null })
+      return
+    }
+    // back to one already made: its board is gone to, and its part picked out again
+    const made = (activeId ? notes[activeId] : undefined)?.find(
+      (one) => one.id === note
+    )
+    const board = made?.part.board
+    if (!made || !board || !made.part.point) return
+    if (view.board !== board) setView({ board })
+    set({
+      boardPicked: { name: made.part.id, at: made.part.point },
+      boardWriting: note,
+    })
+  },
+
+  keepBoardNote(text, label) {
+    const { activeId, notes, boardPicked, boardWriting, view } = get()
+    const said = text.trim()
+    if (!activeId || !boardPicked || boardWriting === null || !view.board)
+      return null
+    const before = notes[activeId] ?? []
+    const at = Date.now()
+    const id =
+      boardWriting === "new" ? `note-${at}-${before.length}` : boardWriting
+    const part = {
+      id: boardPicked.name,
+      label,
+      point: boardPicked.at,
+      normal: null,
+      face: null,
+      board: view.board,
+    }
+    const next =
+      boardWriting === "new"
+        ? said
+          ? [...before, { id, part, text: said, at }]
+          : before
+        : // one left with nothing in it is taken back
+          before.flatMap((note) =>
+            note.id !== id ? [note] : said ? [{ ...note, text: said }] : []
+          )
+    set({
+      notes: { ...notes, [activeId]: next },
+      boardWriting: null,
+      ...(boardWriting === "new" && said !== "" && { noted: id }),
+    })
+    return said ? id : null
   },
 
   pickScene(sceneId) {
@@ -1637,6 +1774,7 @@ export const useStore = create<State>()((set, get) => ({
       referenceOpen,
       toolsOpen,
       boardsOpen,
+      boardPartsOpen,
       entered,
       setView,
     } = get()
@@ -1646,12 +1784,25 @@ export const useStore = create<State>()((set, get) => ({
       set({ finding: null })
       return true
     }
-    if (partsOpen || referenceOpen || toolsOpen || boardsOpen) {
+    // a part of a board picked out, with its name and what can be done with it, is let
+    // go of before anything else of PCB mode
+    if (get().boardPicked !== null) {
+      set({ boardPicked: null, boardWriting: null })
+      return true
+    }
+    if (
+      partsOpen ||
+      referenceOpen ||
+      toolsOpen ||
+      boardsOpen ||
+      boardPartsOpen
+    ) {
       set({
         partsOpen: false,
         referenceOpen: false,
         toolsOpen: false,
         boardsOpen: false,
+        boardPartsOpen: false,
       })
       return true
     }

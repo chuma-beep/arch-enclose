@@ -35,8 +35,11 @@ import { DRAWN } from "./ground"
 import { contoursOf } from "@/components/viewport/contours"
 import { EDGE } from "@/components/viewport/paint"
 import { onlyWhereItTurns, Underlight } from "@/components/viewport/scene"
+import { bridge } from "@/components/viewport/bridge"
 import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
+import { BoardPartMark, onBoard } from "./part-mark"
+import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
 /** How much of the view a drawing fills when the whole of it is shown. */
@@ -437,6 +440,12 @@ function sweepable(material: THREE.Material, sweep: Sweep) {
   material.customProgramCacheKey = () => "board-sweep"
 }
 
+/** A line drawn over a board, which a click goes through to what is under it. */
+function unpicked(line: LineSegments2) {
+  line.raycast = () => {}
+  return line
+}
+
 /**
  * A board in 3D as the view shows it: as tscircuit built it, in its own colours, with
  * its lines drawn as the model's parts made of a mesh have theirs: wherever two of its
@@ -456,6 +465,33 @@ function standing(board: THREE.Group) {
   board.traverse((thing) => {
     if (thing instanceof THREE.Mesh) meshes.push(thing)
   })
+  // Each thing on the board is a node of its own, by its name on the board (U1): its
+  // faces are given colours of their own, to be lit by themselves, each remembering its
+  // own colour. (Parts of one kind share theirs as they come.)
+  const lit = new Map<
+    string,
+    { material: THREE.MeshStandardMaterial; own: THREE.Color }[]
+  >()
+  const named = new Map<THREE.Object3D, string>()
+  for (const node of board.children) {
+    if (!node.name) continue
+    const faces: { material: THREE.MeshStandardMaterial; own: THREE.Color }[] =
+      []
+    node.traverse((thing) => {
+      named.set(thing, node.name)
+      if (!(thing instanceof THREE.Mesh)) return
+      const own = [thing.material].flat().map((material) => {
+        // (the one it came with is no one's now)
+        made.push(material)
+        const copy = (material as THREE.Material).clone()
+        if (copy instanceof THREE.MeshStandardMaterial)
+          faces.push({ material: copy, own: copy.color.clone() })
+        return copy
+      })
+      thing.material = Array.isArray(thing.material) ? own : own[0]
+    })
+    lit.set(node.name, faces)
+  }
   for (const mesh of meshes) {
     // the faces stand back a little, for the lines over them to be seen; and the
     // picture the board's face is (its copper, print and mask) stays sharp seen at a
@@ -476,7 +512,7 @@ function standing(board: THREE.Group) {
     )
     creases.dispose()
     const drawn = lineMaterial()
-    mesh.add(new LineSegments2(edges, drawn))
+    mesh.add(unpicked(new LineSegments2(edges, drawn)))
     made.push(edges, drawn)
     const { index, attributes } = mesh.geometry
     if (!index) continue
@@ -502,7 +538,7 @@ function standing(board: THREE.Group) {
     )
     const turning = lineMaterial()
     turning.onBeforeCompile = onlyWhereItTurns
-    mesh.add(new LineSegments2(outline, turning))
+    mesh.add(unpicked(new LineSegments2(outline, turning)))
     made.push(outline, turning)
   }
   holder.updateMatrixWorld(true)
@@ -516,6 +552,20 @@ function standing(board: THREE.Group) {
     holder,
     box,
     sweep,
+    /** The name on the board of what this is of: null where it is of none. */
+    nameOf: (thing: THREE.Object3D) => named.get(thing) ?? null,
+    /**
+     * Light the things on the board so much each (0 to 1), by their names, in this
+     * colour: and the rest not at all, but darkened to `rest` of their own.
+     */
+    light: (how: Map<string, number>, colour: THREE.Color, rest = 1) => {
+      for (const [name, faces] of lit)
+        for (const { material, own } of faces) {
+          const much = how.get(name)
+          if (much === undefined) material.color.copy(own).multiplyScalar(rest)
+          else material.color.copy(own).lerp(colour, much)
+        }
+    },
     // (and in the view's own frame, for the light to go across no more than the board)
     seen: new THREE.Box3(min.clone(), max.clone()),
     dispose: () => {
@@ -598,6 +648,205 @@ function Sweeping({
   return null
 }
 
+/** How far a part with no 3D of its own stands off the board, as it is gone to: mm. */
+const STANDS = 1
+/** How much of the board round the parts gone to is in view too, against their size. */
+const AROUND = 0.6
+
+/**
+ * The box that some parts of a board fill, by their names on it (C1, U1), in the frame
+ * the camera goes by (the model's: the board's own X and Y, and up from it). Where a
+ * part is in the board's 3D, the box is of that; where it is not, of the room it takes
+ * up on the board, on the side it is on. Null where none of them is on the board.
+ */
+function partsBox(
+  holder: THREE.Object3D,
+  circuit: Circuit | null,
+  names: string[]
+): THREE.Box3 | null {
+  const box = new THREE.Box3()
+  holder.updateMatrixWorld(true)
+  const named = new Map<string, string>()
+  let thick = 1.6
+  for (const element of circuit ?? []) {
+    if (element.type === "source_component")
+      named.set(String(element.source_component_id), String(element.name))
+    if (element.type === "pcb_board" && typeof element.thickness === "number")
+      thick = element.thickness
+  }
+  for (const name of names) {
+    const own = holder.getObjectByName(name)
+    let meshes = 0
+    own?.traverse((thing) => {
+      if (thing instanceof THREE.Mesh) meshes++
+    })
+    if (own && meshes > 0) {
+      const { min, max } = new THREE.Box3().setFromObject(own)
+      // (the world's Y is the model's Z, and its Z the model's -Y)
+      box.union(
+        new THREE.Box3(
+          new THREE.Vector3(min.x, -max.z, min.y),
+          new THREE.Vector3(max.x, -min.z, max.y)
+        )
+      )
+      continue
+    }
+    const placed = (circuit ?? []).find(
+      (element) =>
+        element.type === "pcb_component" &&
+        named.get(String(element.source_component_id)) === name
+    ) as
+      | {
+          center?: { x: number; y: number }
+          width?: number
+          height?: number
+          layer?: string
+        }
+      | undefined
+    if (!placed?.center || !placed.width || !placed.height) continue
+    const under = placed.layer === "bottom"
+    const face = under ? -thick / 2 : thick / 2
+    box.union(
+      new THREE.Box3(
+        new THREE.Vector3(
+          placed.center.x - placed.width / 2,
+          placed.center.y - placed.height / 2,
+          under ? face - STANDS : face
+        ),
+        new THREE.Vector3(
+          placed.center.x + placed.width / 2,
+          placed.center.y + placed.height / 2,
+          under ? face : face + STANDS
+        )
+      )
+    )
+  }
+  if (box.isEmpty()) return null
+  // with some of the board round them, to be seen where they are on it
+  const size = box.getSize(new THREE.Vector3())
+  return box.expandByScalar(Math.max(size.x, size.y) * AROUND)
+}
+
+/** How far the pointer can have moved between press and release for it to be a click, px. */
+const DRAGGED = 4
+/** How much a part whose square in the list of them the pointer is over is lit, 0 to 1. */
+const HOVER_LIT = 0.55
+/** And how much of its own light the rest of the board keeps meanwhile. */
+const HOVER_REST = 0.4
+
+/**
+ * Picking a part of the board out with a click, at the place clicked: a click on the
+ * board itself, or on nothing, lets go of it. Not the end of a drag, which moved the
+ * view. Over a part, the pointer says it can be clicked.
+ */
+function Picking({
+  shown,
+  names,
+}: {
+  shown: ReturnType<typeof standing>
+  /** what is on the board, by the names it has there: what a click picks out */
+  names: Set<string>
+}) {
+  const gl = useThree((state) => state.gl)
+  const get = useThree((state) => state.get)
+  React.useEffect(() => {
+    const canvas = gl.domElement
+    const ray = new THREE.Raycaster()
+    const pointer = new THREE.Vector2()
+    /** The part under the pointer, and where on it: null where it is none. */
+    const under = (event: PointerEvent) => {
+      const box = canvas.getBoundingClientRect()
+      pointer.set(
+        ((event.clientX - box.left) / box.width) * 2 - 1,
+        -((event.clientY - box.top) / box.height) * 2 + 1
+      )
+      ray.setFromCamera(pointer, get().camera)
+      const hit = ray.intersectObject(shown.holder, true)[0]
+      const name = hit ? shown.nameOf(hit.object) : null
+      return hit && name && names.has(name) ? { name, at: hit.point } : null
+    }
+    let down: { x: number; y: number } | null = null
+    const press = (event: PointerEvent) => {
+      down = event.button === 0 ? { x: event.clientX, y: event.clientY } : null
+    }
+    const release = (event: PointerEvent) => {
+      if (!down) return
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y)
+      down = null
+      if (moved > DRAGGED) return
+      const found = under(event)
+      useStore
+        .getState()
+        .pickBoardPart(
+          found ? { name: found.name, at: onBoard(found.at) } : null
+        )
+    }
+    const move = (event: PointerEvent) => {
+      if (event.buttons !== 0) return
+      canvas.style.cursor = under(event) ? "pointer" : ""
+    }
+    canvas.addEventListener("pointerdown", press)
+    canvas.addEventListener("pointerup", release)
+    canvas.addEventListener("pointermove", move)
+    return () => {
+      canvas.removeEventListener("pointerdown", press)
+      canvas.removeEventListener("pointerup", release)
+      canvas.removeEventListener("pointermove", move)
+      canvas.style.cursor = ""
+    }
+  }, [gl, get, shown, names])
+  return null
+}
+
+/**
+ * The parts of the board that are lit: the one picked out, all the way, in the colour a
+ * part of the model is when it is picked out; and those whose square in the list of
+ * them the pointer is over, less.
+ */
+function Lighting({ shown }: { shown: ReturnType<typeof standing> }) {
+  const picked = useStore((state) => state.boardPicked?.name ?? null)
+  const hover = useStore((state) => state.boardHover)
+  const { picked: colour } = useThemeColors()
+  const invalidate = useThree((state) => state.invalidate)
+  React.useEffect(() => {
+    const how = new Map<string, number>()
+    for (const name of hover ?? []) how.set(name, HOVER_LIT)
+    if (picked) how.set(picked, 1)
+    // (the parts of one kind are pale as often as not, as the light is: the rest of the
+    // board goes dark around them while their square is pointed at)
+    shown.light(how, colour, hover && hover.length > 0 ? HOVER_REST : 1)
+    invalidate()
+  }, [shown, picked, hover, colour, invalidate])
+  return null
+}
+
+/**
+ * The camera brought to the parts the list of them was picked in, as soon as the board
+ * is there to bring it to: clear of the list, which lies over the right of the view.
+ */
+function Focusing({
+  holder,
+  circuit,
+}: {
+  holder: THREE.Object3D
+  circuit: Circuit | null
+}) {
+  const focus = useStore((state) => state.boardFocus)
+  const gl = useThree((state) => state.gl)
+  React.useEffect(() => {
+    if (!focus) return
+    const box = partsBox(holder, circuit, focus.names)
+    const list = document.querySelector("[data-board-parts]")
+    const view = gl.domElement.getBoundingClientRect()
+    const covered = list
+      ? Math.max(0, view.right - list.getBoundingClientRect().left)
+      : 0
+    if (box) bridge.board?.goTo(box, covered)
+    useStore.getState().focusedBoardParts()
+  }, [focus, holder, circuit, gl])
+  return null
+}
+
 /**
  * The board in 3D, in a view of its own that is looked round as the model's is: the
  * same camera, which the same hand moves, lit as the model is.
@@ -607,12 +856,15 @@ function InThreeD({
   id,
   swept,
   dark,
+  circuit,
 }: {
   url: string
   id: string
   /** the board is still being made: a light goes across it, over and over */
   swept: boolean
   dark: boolean
+  /** the board as tscircuit has it: where its parts are, for the camera to go to */
+  circuit: Circuit | null
 }) {
   const [shown, setShown] = React.useState<ReturnType<typeof standing> | null>(
     null
@@ -635,8 +887,22 @@ function InThreeD({
       had?.dispose()
     }
   }, [url])
+  // what is on the board, by the names it has there: what a click picks out
+  const names = React.useMemo(
+    () =>
+      new Set(
+        (circuit ?? []).flatMap((element) =>
+          element.type === "source_component" &&
+          typeof element.name === "string"
+            ? [element.name]
+            : []
+        )
+      ),
+    [circuit]
+  )
   if (!shown) return null
   const radius = shown.box.getSize(new THREE.Vector3()).length() / 2 || 1
+
   return (
     <Canvas
       className="touch-none"
@@ -644,6 +910,8 @@ function InThreeD({
       resize={{ debounce: 0 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
+      // a click on nothing of the board lets go of what was picked out of it
+
       camera={{
         fov: FOV,
         near: (radius * REACH.nearest) / 4,
@@ -667,6 +935,11 @@ function InThreeD({
         swept={swept}
         dark={dark}
       />
+      {/* (after the camera is set up, which it goes by) */}
+      <Focusing holder={shown.holder} circuit={circuit} />
+      <Lighting shown={shown} />
+      <Picking shown={shown} names={names} />
+      <BoardPartMark circuit={circuit} />
     </Canvas>
   )
 }
@@ -763,6 +1036,7 @@ export function BoardMode({
   )
   const size = sizeSaid(board)
   const making = useBeingMade(projectId, board)
+  const partsOpen = useStore((state) => state.boardPartsOpen)
 
   return (
     // (its ground comes in over the model as the buttons change over)
@@ -793,6 +1067,7 @@ export function BoardMode({
             url={boardUrl(projectId, board, "model")}
             swept={making}
             dark={dark}
+            circuit={circuit}
           />
         ) : (
           <Nothing
@@ -814,6 +1089,16 @@ export function BoardMode({
           detail={trouble ?? "What was built of it does not read as a board."}
         />
       ) : null}
+
+      {partsOpen && (
+        <BoardPartsPanel
+          projectId={projectId}
+          board={board}
+          circuit={circuit}
+          // where the list of boards goes, beside the buttons
+          className="absolute top-1/2 right-17.5 max-h-[80%] max-w-[calc(100%-5.5rem)] -translate-y-1/2"
+        />
+      )}
 
       {/* what it is, at the top: where the window is not dragged by; and under that,
           while it is being built, how far that has got */}

@@ -1089,10 +1089,12 @@ export function Rig({
     })
     director.current = made
     if (!bridging.current) {
-      // a board's camera: only the keys' set views are had of it, from outside
+      // a board's camera: only the keys' set views, and going to a part of it, are had
+      // of it from outside
       bridge.board = {
         lookFrom: (axis, sign) => made.lookFrom(axis, sign),
         home: () => made.home(true, shape.current),
+        goTo: (box, covered) => made.goTo(box, covered),
       }
       return () => {
         impl.update = update

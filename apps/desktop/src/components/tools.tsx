@@ -4,7 +4,6 @@ import {
   FlipHorizontal2Icon,
   BookOpenIcon,
   BoxesIcon,
-  CircuitBoardIcon,
   DownloadIcon,
   DraftingCompassIcon,
   Grid3x3Icon,
@@ -19,7 +18,7 @@ import {
   XIcon,
 } from "lucide-react"
 
-import { ReferenceIcon, SectionIcon } from "@/components/icons"
+import { BoardIcon, ReferenceIcon, SectionIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -605,6 +604,8 @@ export function Tools({
   const setToolsOpen = useStore((state) => state.setToolsOpen)
   const boardsOpen = useStore((state) => state.boardsOpen)
   const setBoardsOpen = useStore((state) => state.setBoardsOpen)
+  const boardPartsOpen = useStore((state) => state.boardPartsOpen)
+  const setBoardPartsOpen = useStore((state) => state.setBoardPartsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
   const bare = useStore((state) => state.bare)
@@ -669,6 +670,16 @@ export function Tools({
           </Switch>
         </div>
       ))}
+      {/* what is on the board, kind by kind */}
+      <Switch
+        label="Parts"
+        shortcut="P"
+        opens="board-parts"
+        on={boardPartsOpen}
+        onChange={() => setBoardPartsOpen(!boardPartsOpen)}
+      >
+        <BoxesIcon />
+      </Switch>
       {/* and last, in red, what takes the view back to the model */}
       <Press
         key="exit"
@@ -820,7 +831,7 @@ export function Tools({
                 on={boardsOpen}
                 onChange={() => setBoardsOpen(!boardsOpen)}
               >
-                <CircuitBoardIcon />
+                <BoardIcon />
               </Switch>
               {/* the model drawn flat, from each of its sides and from its corners, on
               sheets that take the view's place: there is nothing to draw of the cube

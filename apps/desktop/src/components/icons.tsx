@@ -117,6 +117,21 @@ export function SectionIcon(props: IconProps) {
   )
 }
 
+/**
+ * A circuit board: lucide's, without the square round it. Two pads, and the trace from
+ * each to the edge of the board, which is all of it there is to see.
+ */
+export function BoardIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M11 9h4a2 2 0 0 0 2-2V3" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="M7 21v-4a2 2 0 0 1 2-2h4" />
+      <circle cx="15" cy="15" r="2" />
+    </Icon>
+  )
+}
+
 /** A thing on a table: something of a known size for it to be seen beside. */
 export function ReferenceIcon(props: IconProps) {
   return (

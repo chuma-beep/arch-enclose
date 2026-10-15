@@ -146,7 +146,14 @@ right change over to the board's, and the cards of the other projects are put aw
 **Schematic**. Beside **Technical view**, **Bottom side** (S) turns the board over, to show its bottom as it is seen from under it. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
 wheel, and a double click shows all of it again. The 3D is looked round as the model is,
 with the same camera, in tscircuit's own colours with the edges drawn as the model's
-are. A message written in PCB mode is about the board on screen. The red **Exit PCB mode**,
+are. **Parts** (P) lists what is on the board, each kind of part once in a small square
+with a picture of it in 3D, what it is, and how many of it there are with their names on
+the board (C1, C2); a part the board has no 3D of is a grey block its size. Pointing at
+one lights those parts on the board in 3D, with the rest of the board darkened round them,
+and a click on one brings the camera to them. A click on a part of the board in 3D picks
+it out, with its name and what it is beside it and a button to say something of it, as
+a part of the model has: what is said goes with the next message, as a chip on the
+message box, and Claude is told which part of which board it is about. A message written in PCB mode is about the board on screen. The red **Exit PCB mode**,
 last of the buttons down the right, or Esc, brings the model back.
 
 A detailed board is made in the background, by another agent, while the conversation

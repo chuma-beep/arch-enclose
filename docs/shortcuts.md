@@ -45,6 +45,7 @@ is Ctrl off a Mac.
 | 2 | The board in 3D |
 | 3 | Its schematic |
 | S | Its bottom side, turned over as it is seen from under the board, and back |
+| P | The parts on the board |
 | Cmd+1 to 7 | In 3D, the same set views as the model's: the view it opens with, front, back, top, bottom, right, left |
 | Esc | Back to the model |
 

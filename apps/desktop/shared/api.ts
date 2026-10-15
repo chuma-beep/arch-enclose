@@ -166,6 +166,12 @@ export type PartRef = {
    * this is then where on the piece was clicked.
    */
   piece?: ObjectRef
+  /**
+   * It is a part of a circuit board and not of the model: the board, by what it is known
+   * by. Its id and label are then its name on the board (U1), and `point` is where on
+   * it, in the board's own frame: its X and Y in mm, and up from the middle of the board.
+   */
+  board?: string
 }
 
 /** Something said of a part: a change wanted at the point of it that was clicked. */

@@ -676,6 +676,7 @@ const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
       ["3D view", ["2"]],
       ["Schematic", ["3"]],
       ["Bottom side of the board", ["S"]],
+      ["Parts on the board", ["P"]],
       ["Set views, in 3D", [CMD, "1–7"]],
       ["Exit PCB mode", ["Esc"]],
     ],

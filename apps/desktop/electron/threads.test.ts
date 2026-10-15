@@ -163,6 +163,34 @@ describe("withNotes", () => {
     )
   })
 
+  it("says of a part of a circuit board which board it is on", () => {
+    const told = withNotes(
+      "",
+      [
+        {
+          part: {
+            id: "U1",
+            label: "U1 · ATTINY1614-SSNR",
+            point: [-6, -3.2, 2.1],
+            normal: null,
+            face: null,
+            board: "clock",
+          },
+          text: "A SOIC one",
+        },
+      ],
+      [],
+      undefined,
+      null,
+      [],
+      { id: "clock", name: "Clock" }
+    )
+    expect(told).toContain('<board id="clock" name="Clock" />')
+    expect(told).toContain(
+      '<comment board="clock" part="U1 · ATTINY1614-SSNR" id="U1" point="-6.00, -3.20, 2.10" normal="unknown">'
+    )
+  })
+
   const buttons = [
     { label: "Power button", parts: ["power_cap", "power_switch"] },
     { label: "Record button", parts: ["record_cap", "record_switch"] },

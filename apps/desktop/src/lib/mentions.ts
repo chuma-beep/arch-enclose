@@ -143,8 +143,9 @@ export function partsOf(
   )
   return [
     ...new Set([
+      // (a part of a circuit board is none of the model's)
       ...said.flatMap((part) =>
-        part ? [part.id, ...(part.piece?.parts ?? [])] : []
+        part && !part.board ? [part.id, ...(part.piece?.parts ?? [])] : []
       ),
       ...(message.objects ?? []).flatMap((one) => one.parts),
       ...called,

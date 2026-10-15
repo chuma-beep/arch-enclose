@@ -4,7 +4,6 @@ import {
   ArrowUpIcon,
   BoxesIcon,
   ChevronDownIcon,
-  CircuitBoardIcon,
   CircleGaugeIcon,
   LockKeyholeIcon,
   LockKeyholeOpenIcon,
@@ -25,7 +24,7 @@ import type {
   Provider,
   ProviderId,
 } from "@shared/api"
-import { ProviderIcon, ReferenceIcon } from "@/components/icons"
+import { BoardIcon, ProviderIcon, ReferenceIcon } from "@/components/icons"
 import { MentionMenu, type Choice } from "@/components/mention-menu"
 import { Thumb } from "@/components/picture"
 import { Badge } from "@/components/ui/badge"
@@ -432,6 +431,7 @@ function Waiting({
   board: string | null
 }) {
   const write = useStore((state) => state.write)
+  const writeBoard = useStore((state) => state.writeBoard)
   const dropNote = useStore((state) => state.dropNote)
   const dropCalled = useStore((state) => state.dropCalled)
   const quote = useStore((state) => state.quote)
@@ -469,7 +469,7 @@ function Waiting({
             title="This message is about the circuit board on screen"
             className="h-6 max-w-44 shrink-0 gap-1"
           >
-            <CircuitBoardIcon className="shrink-0" />
+            <BoardIcon className="shrink-0" />
             <span className="truncate">{board}</span>
           </Badge>
         )}
@@ -566,7 +566,9 @@ function Waiting({
               <button
                 type="button"
                 title="Change what was said"
-                onClick={() => write(note.id)}
+                onClick={() =>
+                  note.part.board ? writeBoard(note.id) : write(note.id)
+                }
                 className="flex min-w-0 cursor-pointer items-center gap-1.5 outline-none"
               >
                 <span className="shrink-0">{goesBy(note.part)}</span>

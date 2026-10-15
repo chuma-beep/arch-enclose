@@ -45,11 +45,13 @@ export const bridge: {
   /**
    * The camera of a circuit board's 3D, in PCB mode, which keeps to itself otherwise:
    * what the keys turn it with. Look at the board from the end of one of its axes, or
-   * go back to the view it opened with. Set while a board is on screen in 3D.
+   * go back to the view it opened with; or bring it to what fills a box of the board,
+   * as `goTo` does the model's. Set while a board is on screen in 3D.
    */
   board: {
     lookFrom: (axis: Axis, sign: Sign) => void
     home: () => void
+    goTo: (box: THREE.Box3, covered?: number) => void
   } | null
 } = {
   screenshot: null,

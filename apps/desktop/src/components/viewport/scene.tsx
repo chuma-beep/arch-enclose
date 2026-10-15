@@ -2258,7 +2258,8 @@ export function Scene({
               )}
               {notes.map(
                 (note) =>
-                  note.part.id === part.part.id && (
+                  note.part.id === part.part.id &&
+                  !note.part.board && (
                     <NoteMark key={note.id} loaded={part} note={note} />
                   )
               )}
