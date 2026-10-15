@@ -49,9 +49,10 @@ import { sectionFacing } from "./viewport/section-planes"
  * What every button floating over the view is: a frosted circle of its own. And it
  * fades out where all of them are put away (see `Tools`), each by itself and not all as
  * one: glass inside something that is fading has nothing behind it to be glass over.
+ * Its icon is drawn in thinner lines than an icon's own (see .thin-icons).
  */
 const ROUND =
-  "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10 transition-[color,background-color,border-color,opacity] duration-200 group-data-[away]/tools:opacity-0!"
+  "glass size-9 bg-background/60 px-0 shadow-sm ring-1 ring-foreground/10 transition-[color,background-color,border-color,opacity] duration-200 group-data-[away]/tools:opacity-0! thin-icons"
 
 /** The edge of the view the buttons are down. */
 const EDGE = "group/tools pointer-events-none absolute inset-y-0 right-0 w-15"

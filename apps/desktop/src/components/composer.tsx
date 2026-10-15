@@ -146,7 +146,7 @@ function ModelChoice({ provider }: { provider: Provider }) {
         side="top"
         // there are many of them: the list is no taller than it was, and scrolls. It is
         // as wide as the longest thing said in it, short of a width to read across
-        className="max-h-[min(22rem,var(--available-height))] w-max max-w-[min(26rem,var(--available-width))]"
+        className="thin-icons max-h-[min(22rem,var(--available-height))] w-max max-w-[min(26rem,var(--available-width))]"
       >
         <DropdownMenuGroup>
           <DropdownMenuLabel>{MODEL_TITLE}</DropdownMenuLabel>
@@ -195,7 +195,7 @@ function EffortChoice({ provider }: { provider: Provider }) {
         {effort ? EFFORT_WORDS[effort] : "Default"}
         <Arrow />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-56">
+      <DropdownMenuContent align="start" side="top" className="thin-icons w-56">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{effortTitle(name)}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
@@ -243,7 +243,7 @@ function AccessChoice({ provider }: { provider: Provider }) {
         align="end"
         side="top"
         // as wide as the longest thing said in it
-        className="w-max max-w-(--available-width)"
+        className="thin-icons w-max max-w-(--available-width)"
       >
         <DropdownMenuGroup>
           <DropdownMenuLabel>{title}</DropdownMenuLabel>
@@ -335,7 +335,7 @@ function Manner({
         sideOffset={12}
         collisionAvoidance={{ side: "flip", align: "shift" }}
         collisionPadding={BOX_INSET}
-        className="w-auto gap-0 p-1.5 ring-foreground/8"
+        className="thin-icons w-auto gap-0 p-1.5 ring-foreground/8"
       >
         <Tabs
           value={id}

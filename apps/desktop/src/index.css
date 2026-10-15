@@ -184,6 +184,16 @@
   font-weight: 500;
 }
 
+/* Icons in lines 1.25px wide, whatever size they are shown at: thinner than an icon's
+   own, which are 2 of the 24 they are drawn on. Over the view and in the conversation.
+   A line that an icon gives a width of its own keeps it, as its icon has it. */
+.thin-icons svg {
+  stroke-width: 1.25px;
+}
+.thin-icons svg :not([stroke-width]) {
+  vector-effect: non-scaling-stroke;
+}
+
 /* The window has no title bar of its own: these strips are what you drag it by. */
 .drag {
   -webkit-app-region: drag;

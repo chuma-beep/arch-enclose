@@ -825,8 +825,9 @@ export function Thread({ project }: { project: Project }) {
   return (
     <aside
       ref={panel}
-      // (a ground of its own, for the light that goes across it to go behind the rest)
-      className="relative isolate flex shrink-0 flex-col border-l bg-background"
+      // (a ground of its own, for the light that goes across it to go behind the rest;
+      // and its icons in the lines of the buttons over the view)
+      className="thin-icons relative isolate flex shrink-0 flex-col border-l bg-background"
       // however wide it was dragged, the view keeps its share of a narrower window
       style={{
         width,
