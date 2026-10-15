@@ -8,7 +8,9 @@ import { CONFIG_NAMES, MANIFEST_NAMES } from "../shared/manifest-format"
 import { findReference } from "./reference"
 import { findTools } from "./custom-tools"
 import { findGuides } from "./assembly"
+import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
+import { BOARD_FOLDER, BUILT_FOLDER } from "../shared/board-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 
 type Saved = {
@@ -281,6 +283,12 @@ export class Projects {
   private guidesWatched = new Map<string, string>()
   private guideWatchers = new Map<string, fs.FSWatcher[]>()
   private guideTimers = new Map<string, NodeJS.Timeout>()
+  /** And the circuit boards, with what is built of them: all by project, again. */
+  private boards = new Map<string, string>()
+  private boardRevisions = new Map<string, number>()
+  private boardsWatched = new Map<string, string>()
+  private boardWatchers = new Map<string, fs.FSWatcher[]>()
+  private boardTimers = new Map<string, NodeJS.Timeout>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
@@ -315,6 +323,7 @@ export class Projects {
     this.locateScene(project)
     this.locateTools(project)
     this.locateGuides(project)
+    this.locateBoards(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
@@ -504,6 +513,54 @@ export class Projects {
     return true
   }
 
+  /**
+   * Find the circuit boards a project has, and watch for them, as its guides are found
+   * and watched for: and the folder in theirs that what is built of them goes in, for a
+   * board built again to show up by itself. True if they are not as they were last
+   * found.
+   */
+  private locateBoards(project: Saved): boolean {
+    const { id } = project
+    const dir = path.join(project.path, BOARD_FOLDER)
+    const built = path.join(dir, BUILT_FOLDER)
+    const found = boardsWritten(project.path)
+    const there = fs.existsSync(dir)
+    const builtThere = fs.existsSync(built)
+    const watched = `${project.path}|${there}|${builtThere}`
+    if (this.boardsWatched.get(id) !== watched) {
+      this.boardsWatched.set(id, watched)
+      for (const watcher of this.boardWatchers.get(id) ?? []) watcher.close()
+      const again = () => {
+        clearTimeout(this.boardTimers.get(id))
+        this.boardTimers.set(
+          id,
+          setTimeout(() => {
+            if (this.locateBoards(project)) this.onChange()
+          }, 300)
+        )
+      }
+      const watchers: fs.FSWatcher[] = []
+      try {
+        watchers.push(
+          fs.watch(project.path, { persistent: false }, (_, changed) => {
+            if (changed === BOARD_FOLDER) again()
+          })
+        )
+        if (there) watchers.push(fs.watch(dir, { persistent: false }, again))
+        if (builtThere)
+          watchers.push(fs.watch(built, { persistent: false }, again))
+      } catch {
+        // unwatchable: the boards are still read, they just won't be read again by themselves
+      }
+      this.boardWatchers.set(id, watchers)
+    }
+    if (found === (this.boards.get(id) ?? "")) return false
+    if (found) this.boards.set(id, found)
+    else this.boards.delete(id)
+    this.boardRevisions.set(id, (this.boardRevisions.get(id) ?? 0) + 1)
+    return true
+  }
+
   /** The projects, the one added last first: they are kept in the order they came. */
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
     return [...this.saved].reverse().map((p) => {
@@ -526,6 +583,9 @@ export class Projects {
           : null,
         assembly: this.guides.has(p.id)
           ? (this.guideRevisions.get(p.id) ?? 0)
+          : null,
+        boards: this.boards.has(p.id)
+          ? (this.boardRevisions.get(p.id) ?? 0)
           : null,
         // whether one is being made is known to whoever has the conversations
         assembling: false,
@@ -653,6 +713,13 @@ export class Projects {
     this.guides.delete(id)
     this.guideRevisions.delete(id)
     this.guidesWatched.delete(id)
+    for (const watcher of this.boardWatchers.get(id) ?? []) watcher.close()
+    this.boardWatchers.delete(id)
+    clearTimeout(this.boardTimers.get(id))
+    this.boardTimers.delete(id)
+    this.boards.delete(id)
+    this.boardRevisions.delete(id)
+    this.boardsWatched.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     // projects made before `made` was kept are known by having a name of their own
@@ -813,5 +880,8 @@ export class Projects {
     for (const watchers of this.guideWatchers.values())
       for (const watcher of watchers) watcher.close()
     for (const timer of this.guideTimers.values()) clearTimeout(timer)
+    for (const watchers of this.boardWatchers.values())
+      for (const watcher of watchers) watcher.close()
+    for (const timer of this.boardTimers.values()) clearTimeout(timer)
   }
 }

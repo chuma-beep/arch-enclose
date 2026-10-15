@@ -119,6 +119,33 @@ project's own, so [each conversation has its own](#versions), and a turn that wr
 can be [taken back](#taking-a-change-back). [`kit/assembly.md`](../kit/assembly.md)
 says how a guide is written, and is what Claude reads before it writes one.
 
+## Circuit boards
+
+The boards that go in the thing are designed with [tscircuit](https://tscircuit.com),
+and Claude makes them when a board comes up in what you ask: a PCB, the electronics,
+how it is wired. A board in detail, every part chosen and wired and routed, takes a
+while, so Claude first asks whether you want that now. If not, it makes a rough one,
+the outline the thing has room for, its mounting holes and the parts that decide its
+shape, so that the design goes on round it. A rough board is marked **Unfinished**, to be
+made in detail when you are ready. Either way the board is put into the model, where it
+goes.
+
+**PCB**, beside the view, lists the project's boards, each with a picture of it in 3D,
+its name and its size; with none yet, it says to ask for one. Pick one and the view is
+in PCB mode, on a green ground, with the board where the model was. The buttons down
+the right show it as it is made (**Technical view**), in **3D**, or as its
+**Schematic**. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
+wheel, and a double click shows all of it again; the 3D turns as the model does. A
+message written in PCB mode is about the board on screen. **Exit PCB mode**, at the foot
+of the view, or Esc, brings the model back.
+
+A board is kept in `pcb/` at the top of the project: its tscircuit file
+(`pcb/main.circuit.tsx`), a small file with its name and whether it is finished, and in
+`pcb/build/` what is built of it, which Claude builds with the app's
+[`kit/board.mjs`](../kit/board.mjs). That needs [Node.js](https://nodejs.org), and
+fetches tscircuit the first time. [`kit/pcb.md`](../kit/pcb.md) says how a board is
+written and fitted into the model, and is what Claude reads before it makes one.
+
 ## Conversations
 
 A project can have any number of conversations, and none of them is deleted while the

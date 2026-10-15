@@ -14,7 +14,7 @@
 - [Blueprints](blueprints.md): the model drawn flat, saved as SVG
 - [Tools of a project's own](project-tools.md): controls Claude builds for your model
 - [Working with Claude](working-with-claude.md): conversations, replies, access,
-  assembly guides, and taking a change back
+  assembly guides, circuit boards, and taking a change back
 - [Writing a message](messages.md): parts by name, skills, commands and pictures
 - [Screws](screws.md)
 - [Keyboard shortcuts](shortcuts.md)

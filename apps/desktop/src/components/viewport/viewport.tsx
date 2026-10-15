@@ -21,6 +21,9 @@ import { Logo } from "@/components/mark"
 import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
+import { BoardMode, ExitBoard } from "@/components/pcb/board-mode"
+import { useBoards } from "@/components/pcb/boards"
+import { BoardsPanel } from "@/components/pcb/boards-panel"
 import { ReferencePanel } from "@/components/reference-panel"
 import { Switch, Tools } from "@/components/tools"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -850,6 +853,21 @@ function Model({ project }: { project: Project }) {
       return
     if (atWorkHere) useStore.getState().setView({ assembly: true })
   }, [project.assembly, atWorkHere])
+  // The circuit boards that go in the thing, each designed with tscircuit and built by
+  // Claude (see components/pcb). One picked from their list takes the view's place, in
+  // PCB mode, until that is left with Esc or the button at the foot of the view. A
+  // board that is taken away takes PCB mode with it.
+  const boards = useBoards(project)
+  const boardsOpen = useStore((s) => s.boardsOpen)
+  const onBoard = React.useMemo(
+    () => boards?.find((board) => board.id === view.board) ?? null,
+    [boards, view.board]
+  )
+  React.useEffect(() => {
+    const { view, setView } = useStore.getState()
+    if (!boards || view.board === null) return
+    if (!boards.some((one) => one.id === view.board)) setView({ board: null })
+  }, [boards])
   // Meanwhile the view is Claude's: the camera goes round the model by itself, and
   // nothing in the view answers the hand or the keys. When it is through, the camera
   // goes back to where a model opens, as Cmd+1 would take it.
@@ -1220,9 +1238,9 @@ function Model({ project }: { project: Project }) {
         event.preventDefault()
         if (event.repeat) return
         // the scene is the view's: a blueprint is of the model alone, and the guides
-        // are no view of it
-        const { blueprint, assembly } = useStore.getState().view
-        if (!blueprint && !assembly) toggleReference()
+        // and a board are no view of it
+        const { blueprint, assembly, board } = useStore.getState().view
+        if (!blueprint && !assembly && board === null) toggleReference()
         return
       }
       if (event.shiftKey) {
@@ -1231,8 +1249,9 @@ function Model({ project }: { project: Project }) {
         if (!loaded || !alone || event.key.toLowerCase() !== "g") return
         if (spokenFor(event.target)) return
         const { view, setView } = useStore.getState()
-        // (the ground is the view's: there is none under a blueprint, or the guides)
-        if (view.blueprint || view.assembly) return
+        // (the ground is the view's: there is none under a blueprint, the guides or a
+        // board)
+        if (view.blueprint || view.assembly || view.board !== null) return
         setView({ grid: !view.grid })
         event.preventDefault()
         return
@@ -1242,9 +1261,9 @@ function Model({ project }: { project: Project }) {
         if (!digit) return
         event.preventDefault()
         // the set views are the view's: a blueprint has a sheet for each of them, and
-        // the guides none
-        const { blueprint, assembly } = useStore.getState().view
-        if (blueprint || assembly) return
+        // the guides and a board none
+        const { blueprint, assembly, board } = useStore.getState().view
+        if (blueprint || assembly || board !== null) return
         const view = VIEWS[Number(digit) - 2]
         if (view) bridge.lookFrom?.(view.axis, view.sign)
         else goHome()
@@ -1271,9 +1290,9 @@ function Model({ project }: { project: Project }) {
         // nor any guide to putting it together
         if (loaded.standIn) return
         setView({ assembly: !view.assembly })
-      } else if (view.assembly) {
+      } else if (view.assembly || view.board !== null) {
         // every other key here is the view's, or the blueprint's: they wait until the
-        // guides are put away
+        // guides are put away, or PCB mode is left
         return
       } else if (view.blueprint && "sxy".includes(letter)) {
         // the cut is the view's: a blueprint is of the model whole
@@ -1360,6 +1379,8 @@ function Model({ project }: { project: Project }) {
   const blueprint = view.blueprint && real !== null && !lookingOver
   // And so do the model's assembly guides: their covers, to be opened and taken away.
   const assembly = view.assembly && real !== null && !lookingOver
+  // And so does a board, in PCB mode: one of the circuit boards that go in the thing.
+  const board = onBoard && loaded && !lookingOver ? onBoard : null
   const { only, hidden } = view
   const drawn = React.useMemo(
     () =>
@@ -1380,7 +1401,14 @@ function Model({ project }: { project: Project }) {
   // part that is not on show does not come into it.
   const { came, done: cameAndWent } = arrivals
   const coming = React.useMemo(() => {
-    if (!came || !loaded || view.blueprint || view.assembly || lookingOver)
+    if (
+      !came ||
+      !loaded ||
+      view.blueprint ||
+      view.assembly ||
+      view.board !== null ||
+      lookingOver
+    )
       return null
     const parts = loaded.parts
       .filter(
@@ -1397,6 +1425,7 @@ function Model({ project }: { project: Project }) {
     loaded,
     view.blueprint,
     view.assembly,
+    view.board,
     lookingOver,
     only,
     hidden,
@@ -1553,11 +1582,12 @@ function Model({ project }: { project: Project }) {
   return (
     <>
       {loaded && (
-        // (out of sight under a blueprint or the guides, and none of it there to be pressed)
+        // (out of sight under a blueprint, the guides or a board, and none of it there
+        // to be pressed)
         <div
           className={cn(
             "absolute inset-0",
-            (blueprint || assembly) && "invisible"
+            (blueprint || assembly || board) && "invisible"
           )}
         >
           <Scene
@@ -1613,6 +1643,7 @@ function Model({ project }: { project: Project }) {
       {assembly && real && (
         <Assembly project={project} loaded={real} listed={listed} />
       )}
+      {board && <BoardMode projectId={project.id} board={board} />}
 
       {waiting && <Waiting {...waiting} />}
       {state.status === "error" && (
@@ -1649,14 +1680,14 @@ function Model({ project }: { project: Project }) {
         </div>
       )}
 
-      {searched && <Search finds={finds} onShow={showFound} />}
+      {searched && !board && <Search finds={finds} onShow={showFound} />}
       <Tools
         loaded={loaded}
         projectId={project.id}
         locked={lookingOver}
         hasTools={hasTools}
       />
-      {loaded && partsOpen && !lookingOver && !assembly && (
+      {loaded && partsOpen && !lookingOver && !assembly && !board && (
         <PartsPanel
           loaded={loaded}
           projectId={project.id}
@@ -1707,6 +1738,19 @@ function Model({ project }: { project: Project }) {
             )}
           />
         )}
+      {loaded && boards && boardsOpen && !lookingOver && (
+        <BoardsPanel
+          projectId={project.id}
+          boards={boards}
+          // where the list of reference scenes goes, which is never up with it
+          className={cn(
+            "absolute top-1/2 max-h-[80%] -translate-y-1/2 transition-[right]",
+            view.section && !blueprint && !assembly
+              ? "right-38.5"
+              : "right-17.5"
+          )}
+        />
+      )}
       {/* at the foot of the view, in the middle: what the app has to tell, and what to
           do with the parts picked out together and with the scene the model is set in,
           over how far apart the parts are pulled. Each is a pill floating over the model;
@@ -1727,14 +1771,14 @@ function Model({ project }: { project: Project }) {
               />
             )}
             <Saying />
-            {!assembly && (
+            {!assembly && !board && (
               <AddToChat
                 listed={listed}
                 groups={loaded.model.groups}
                 projectId={project.id}
               />
             )}
-            {reference && !lookingOver && !blueprint && !assembly && (
+            {reference && !lookingOver && !blueprint && !assembly && !board && (
               <div className="flex items-center gap-2">
                 {reference.scene.figures.length > 0 && <ShowFigure />}
                 <ImproveReference
@@ -1745,7 +1789,10 @@ function Model({ project }: { project: Project }) {
             )}
             {/* how far apart the parts are pulled: which a blueprint has beside its own
               bar, with the rest of how its sheets show the model */}
-            {blueprint ? (
+            {board ? (
+              // and PCB mode, what takes the view back to the model
+              <ExitBoard />
+            ) : blueprint ? (
               <Options further={loaded.further} />
             ) : assembly ? (
               // and the guides have what asks for another of them
@@ -1762,14 +1809,21 @@ function Model({ project }: { project: Project }) {
           <Saying />
         )}
       </div>
-      {loaded && middle && !lookingOver && !blueprint && !assembly && (
-        <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
-          <SectionPlanes middle={middle} />
-          <AxisGizmo />
-        </div>
-      )}
+      {loaded &&
+        middle &&
+        !lookingOver &&
+        !blueprint &&
+        !assembly &&
+        !board && (
+          <div className="pointer-events-none absolute right-3 bottom-3 flex items-center gap-1">
+            <SectionPlanes middle={middle} />
+            <AxisGizmo />
+          </div>
+        )}
       <ShadingPie
-        enabled={loaded !== null && !lookingOver && !blueprint && !assembly}
+        enabled={
+          loaded !== null && !lookingOver && !blueprint && !assembly && !board
+        }
         tap={cutAcrossZ}
       />
     </>

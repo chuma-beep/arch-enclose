@@ -62,6 +62,9 @@ const api: CadApi = {
   tools: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.toolsRead, projectId),
   },
+  boards: {
+    read: (projectId) => ipcRenderer.invoke(CHANNEL.boardsRead, projectId),
+  },
   assembly: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.assemblyRead, projectId),
     make: (projectId, conversationId, of, manner) =>
@@ -107,7 +110,8 @@ const api: CadApi = {
       manner,
       reference,
       pictures,
-      quotes
+      quotes,
+      board
     ) =>
       ipcRenderer.invoke(
         CHANNEL.threadSend,
@@ -119,7 +123,8 @@ const api: CadApi = {
         manner,
         reference ?? null,
         pictures ?? [],
-        quotes ?? []
+        quotes ?? [],
+        board ?? null
       ),
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),

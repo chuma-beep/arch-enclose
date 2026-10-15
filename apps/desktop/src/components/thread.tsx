@@ -4,6 +4,7 @@ import {
   ArrowUpIcon,
   BoxesIcon,
   BoxIcon,
+  CircuitBoardIcon,
   ClockIcon,
   GitBranchPlusIcon,
   PanelRightCloseIcon,
@@ -152,6 +153,13 @@ function UserMessage({
         <Badge variant="outline" title={item.reference}>
           <ReferenceIcon data-icon="inline-start" />
           Reference scene
+        </Badge>
+      )}
+      {/* it was written with a circuit board on screen, and is about that board */}
+      {item.board && (
+        <Badge variant="outline" title={item.board}>
+          <CircuitBoardIcon data-icon="inline-start" />
+          {item.board}
         </Badge>
       )}
       {/* it began a new version of the project, with what was asked for in another */}

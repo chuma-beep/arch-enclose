@@ -127,7 +127,20 @@ export type View = {
    * the tools have them, and not where it is built.
    */
   tools: boolean
+  /**
+   * The circuit board that is looked at, by what it is known by, and not the model: PCB
+   * mode, which has the view's place as a blueprint's sheets do. Never with the
+   * blueprint or the guides: one of them at a time has the view's place. Null while it
+   * is the model that is looked at.
+   */
+  board: string | null
+  /** and how a board is looked at there: drawn as it is made, as its schematic, or in 3D */
+  boardAs: BoardAs
 }
+
+/** The ways a circuit board is looked at, in PCB mode. */
+export const BOARD_AS = ["pcb", "schematic", "3d"] as const
+export type BoardAs = (typeof BOARD_AS)[number]
 
 /**
  * What is picked out of the model, to be shown on its own: one part, a group of them,
@@ -213,6 +226,7 @@ const REFERENCE_KEY = "enclose:reference"
 const FIGURE_KEY = "enclose:figure"
 const WAITING_KEY = "enclose:waiting"
 const KEPT_MESHES_KEY = "enclose:kept-meshes"
+const BOARD_AS_KEY = "enclose:board-as"
 
 /** What is asked of the agent when a model made of a mesh is to be built again as code. */
 export const REBUILD = "Rebuild this model as an editable design."
@@ -459,6 +473,8 @@ const homeView = (): View => ({
   assembly: false,
   reference: null,
   tools: false,
+  board: null,
+  boardAs: BOARD_AS.find((one) => one === saved(BOARD_AS_KEY)) ?? "pcb",
 })
 
 /** What the view can be put into, and got back out of with Esc. */
@@ -471,6 +487,7 @@ export type Entered =
   | "assembly"
   | "reference"
   | "tools"
+  | "board"
 
 /** Those of them that are on, in the order they were gone into: the last is the latest. */
 function enteredNow(view: View, before: Entered[]): Entered[] {
@@ -483,6 +500,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     assembly: view.assembly,
     reference: view.reference !== null,
     tools: view.tools,
+    board: view.board !== null,
   }
   const still = before.filter((name) => on[name])
   const fresh = (Object.keys(on) as Entered[]).filter(
@@ -524,6 +542,8 @@ type State = {
    * has. Put away, the tools are still at work on the model until they are left.
    */
   toolsOpen: boolean
+  /** whether the list of the project's circuit boards is up, in the place the list of parts has */
+  boardsOpen: boolean
   /**
    * The reference scene the user has picked for each project from that list, by what
    * the scene is known by: the one the project's model is set in from then on.
@@ -776,6 +796,7 @@ type State = {
   setReferenceOpen(open: boolean): void
   /** Bring the project's own tools up, which sets them to work on the model; or put them away. */
   setToolsOpen(open: boolean): void
+  setBoardsOpen(open: boolean): void
   /**
    * Set the open project's model in a reference scene picked by hand, which is kept as
    * the one for that project.
@@ -786,9 +807,10 @@ type State = {
   setBare(bare: boolean): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
-   * parts list away, if it is up, or the list of reference scenes, or the project's
-   * tools; and otherwise get out of the last thing gone into, the blueprint, a reference
-   * scene and the tools' hold on the model among them.
+   * parts list away, if it is up, or the list of reference scenes, the project's tools
+   * or its boards; then get out of PCB mode, or the guides; and otherwise get out of
+   * the last thing gone into, the blueprint, a reference scene and the tools' hold on
+   * the model among them.
    * False if there was nothing to do.
    */
   leave(): boolean
@@ -944,6 +966,7 @@ export const useStore = create<State>()((set, get) => ({
   partsOpen: false,
   referenceOpen: false,
   toolsOpen: false,
+  boardsOpen: false,
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
@@ -996,8 +1019,10 @@ export const useStore = create<State>()((set, get) => ({
       finding: null,
       writing: null,
       quoting: null,
-      // (the tools are the project's own: another's are not up until asked for)
+      // (the tools are the project's own: another's are not up until asked for, and
+      // its boards likewise)
       toolsOpen: false,
+      boardsOpen: false,
       view: homeView(),
       entered: enteredNow(homeView(), state.entered),
     }))
@@ -1059,6 +1084,7 @@ export const useStore = create<State>()((set, get) => ({
       localStorage.setItem(DIMENSIONS_KEY, patch.dimensions ? "on" : "off")
     if (patch.labels !== undefined)
       localStorage.setItem(LABELS_KEY, patch.labels ? "on" : "off")
+    if (patch.boardAs) localStorage.setItem(BOARD_AS_KEY, patch.boardAs)
     // a cut is kept as it is left, for the next time its project is cut open
     const { activeId, cuts } = get()
     const kept =
@@ -1067,10 +1093,18 @@ export const useStore = create<State>()((set, get) => ({
     const before = get().entered
     set((state) => {
       const view = { ...state.view, ...patch }
-      // the blueprint and the guides have the view's place by turns: gone into, one
-      // puts the other away
-      if (patch.assembly) view.blueprint = false
-      else if (patch.blueprint) view.assembly = false
+      // the blueprint, the guides and a board have the view's place by turns: gone
+      // into, one puts the others away
+      if (patch.assembly) {
+        view.blueprint = false
+        view.board = null
+      } else if (patch.blueprint) {
+        view.assembly = false
+        view.board = null
+      } else if (patch.board) {
+        view.blueprint = false
+        view.assembly = false
+      }
       // (a sheet is shown by itself only while it is the blueprint that is looked at)
       if (!view.blueprint) view.sheet = null
       return {
@@ -1100,6 +1134,21 @@ export const useStore = create<State>()((set, get) => ({
             referenceOpen: false,
             toolsOpen: false,
             finding: null,
+            sweep: null,
+            hoveredId: null,
+            writing: null,
+          }),
+        // A board is no view of the model at all: what is picked out of the model is let
+        // go of, and the lists are put away for it, the list of boards among them.
+        ...(view.board !== null &&
+          state.view.board === null && {
+            partsOpen: false,
+            referenceOpen: false,
+            toolsOpen: false,
+            boardsOpen: false,
+            finding: null,
+            selection: null,
+            several: NONE,
             sweep: null,
             hoveredId: null,
             writing: null,
@@ -1490,11 +1539,16 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   setPartsOpen(partsOpen) {
-    // (the list of reference scenes has the same place, and the project's tools: one
-    // of them at a time)
+    // (the list of reference scenes has the same place, and the project's tools and its
+    // boards: one of them at a time)
     set(
       partsOpen
-        ? { partsOpen, referenceOpen: false, toolsOpen: false }
+        ? {
+            partsOpen,
+            referenceOpen: false,
+            toolsOpen: false,
+            boardsOpen: false,
+          }
         : { partsOpen }
     )
   },
@@ -1502,7 +1556,12 @@ export const useStore = create<State>()((set, get) => ({
   setReferenceOpen(referenceOpen) {
     set(
       referenceOpen
-        ? { referenceOpen, partsOpen: false, toolsOpen: false }
+        ? {
+            referenceOpen,
+            partsOpen: false,
+            toolsOpen: false,
+            boardsOpen: false,
+          }
         : { referenceOpen }
     )
   },
@@ -1510,11 +1569,29 @@ export const useStore = create<State>()((set, get) => ({
   setToolsOpen(toolsOpen) {
     set(
       toolsOpen
-        ? { toolsOpen, partsOpen: false, referenceOpen: false }
+        ? {
+            toolsOpen,
+            partsOpen: false,
+            referenceOpen: false,
+            boardsOpen: false,
+          }
         : { toolsOpen }
     )
     // brought up, they are at work: and stay so, put away, until they are left
     if (toolsOpen && !get().view.tools) get().setView({ tools: true })
+  },
+
+  setBoardsOpen(boardsOpen) {
+    set(
+      boardsOpen
+        ? {
+            boardsOpen,
+            partsOpen: false,
+            referenceOpen: false,
+            toolsOpen: false,
+          }
+        : { boardsOpen }
+    )
   },
 
   pickScene(sceneId) {
@@ -1540,16 +1617,34 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   leave() {
-    const { finding, partsOpen, referenceOpen, toolsOpen, entered, setView } =
-      get()
+    const {
+      finding,
+      partsOpen,
+      referenceOpen,
+      toolsOpen,
+      boardsOpen,
+      entered,
+      setView,
+    } = get()
     // what is being typed goes first, and then the list: both are things on top of the
     // view. What was picked in the list stays
     if (finding !== null) {
       set({ finding: null })
       return true
     }
-    if (partsOpen || referenceOpen || toolsOpen) {
-      set({ partsOpen: false, referenceOpen: false, toolsOpen: false })
+    if (partsOpen || referenceOpen || toolsOpen || boardsOpen) {
+      set({
+        partsOpen: false,
+        referenceOpen: false,
+        toolsOpen: false,
+        boardsOpen: false,
+      })
+      return true
+    }
+    // A board is over everything else of the view, as the guides are: PCB mode is got
+    // out of before anything that was gone into under it.
+    if (get().view.board !== null) {
+      setView({ board: null })
       return true
     }
     // The guides are over everything else of the view: they are got out of before
@@ -1578,6 +1673,7 @@ export const useStore = create<State>()((set, get) => ({
     else if (last === "assembly") setView({ assembly: false })
     else if (last === "reference") setView({ reference: null })
     else if (last === "tools") setView({ tools: false })
+    else if (last === "board") setView({ board: null })
     else setView({ only: null })
     return true
   },
@@ -1616,8 +1712,10 @@ export const useStore = create<State>()((set, get) => ({
     const objects = called.flatMap(({ label, parts }): ObjectRef[] =>
       parts ? [{ label, parts }] : []
     )
-    // and with the reference scene called on, it is the scene the message is about
+    // and with the reference scene called on, it is the scene the message is about;
+    // written in PCB mode, it is about the board on screen
     const reference = called.find((one) => one.scene)?.scene ?? null
+    const board = get().view.board
     const notes = get().notes[project.id] ?? []
     const quotes = get().quotes[project.id] ?? []
     const pictures = get().pictures[project.id] ?? []
@@ -1659,7 +1757,8 @@ export const useStore = create<State>()((set, get) => ({
         mannerIn(get(), open),
         reference,
         pictures,
-        quotes.map(({ quote, text }) => ({ quote, text }))
+        quotes.map(({ quote, text }) => ({ quote, text })),
+        board
       )
       .then((id) => {
         // stay with it: a conversation that has just begun is not yet the one on the

@@ -267,7 +267,9 @@ describe("words picked out of the conversation", () => {
     state().send()
     expect(sent).toHaveLength(1)
     expect(sent[0][0]).toBe("clock")
-    expect(sent[0].at(-1)).toEqual([{ quote: "Which screws?", text: "M3" }])
+    expect(sent[0][8]).toEqual([{ quote: "Which screws?", text: "M3" }])
+    // and no circuit board was on screen for it to be about
+    expect(sent[0][9]).toBeNull()
     // (what was being said of other words when it went is let go of)
     expect(state()).toMatchObject({ quoting: null, quotes: { clock: [] } })
     // nothing waiting is nothing to send

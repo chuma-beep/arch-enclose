@@ -4,14 +4,18 @@ import {
   FlipHorizontal2Icon,
   BookOpenIcon,
   BoxesIcon,
+  CircuitBoardIcon,
   DownloadIcon,
   DraftingCompassIcon,
   Grid3x3Icon,
   HammerIcon,
+  LayersIcon,
   MessageSquareIcon,
+  Rotate3dIcon,
   RotateCcwIcon,
   SearchIcon,
   UnfoldVerticalIcon,
+  WorkflowIcon,
   XIcon,
 } from "lucide-react"
 
@@ -36,7 +40,7 @@ import { oneFile, sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { usePreferences, type Format } from "@/lib/preferences"
 import { savedAs } from "@/lib/saved"
-import { SPREAD, useStore } from "@/lib/store"
+import { SPREAD, useStore, type BoardAs } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
 
@@ -371,6 +375,13 @@ function Size({ kind, bytes }: { kind: string; bytes?: number }) {
   )
 }
 
+/** The ways a circuit board is looked at in PCB mode, as the buttons for them have it. */
+const BOARD_WAYS: { as: BoardAs; label: string; icon: React.ReactNode }[] = [
+  { as: "pcb", label: "Technical view", icon: <LayersIcon /> },
+  { as: "3d", label: "3D view", icon: <Rotate3dIcon /> },
+  { as: "schematic", label: "Schematic", icon: <WorkflowIcon /> },
+]
+
 /**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
  * conversation, and the model as a file. In the middle, how the model is looked at.
@@ -380,6 +391,11 @@ function Size({ kind, bytes }: { kind: string; bytes?: number }) {
  * and not to be pressed. While it is its assembly guides, none of them is but the
  * blueprint's and the guides' own: a guide is of the model as it is built, whatever of
  * it is on show.
+ *
+ * In PCB mode, with one of the project's circuit boards where the model was, the ones
+ * in the middle are the board's instead: the ways it is looked at, one of them lit. The
+ * model is not there to be saved, nor the board yet: the conversation is all there is
+ * at the top.
  *
  * And while the view has the window to itself (Cmd+.) they are all put away: there
  * still, for whatever they bring up to know its button by, and not to be seen or
@@ -414,6 +430,8 @@ export function Tools({
   const setReferenceOpen = useStore((state) => state.setReferenceOpen)
   const toolsOpen = useStore((state) => state.toolsOpen)
   const setToolsOpen = useStore((state) => state.setToolsOpen)
+  const boardsOpen = useStore((state) => state.boardsOpen)
+  const setBoardsOpen = useStore((state) => state.setBoardsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
   const bare = useStore((state) => state.bare)
@@ -434,17 +452,41 @@ export function Tools({
       </div>
     )
 
+  const conversation = (
+    <Switch
+      label="Conversation"
+      shortcut={MAC ? "⌘B" : "Ctrl B"}
+      on={threadOpen}
+      onChange={setThreadOpen}
+    >
+      <MessageSquareIcon />
+    </Switch>
+  )
+
+  if (view.board !== null)
+    return (
+      <div className={EDGE} inert={bare} data-away={bare || undefined}>
+        <Stack className="absolute top-3 right-3">{conversation}</Stack>
+        {/* how the board is looked at: one way at a time, and always one */}
+        <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
+          {BOARD_WAYS.map((way) => (
+            <Switch
+              key={way.as}
+              label={way.label}
+              on={view.boardAs === way.as}
+              onChange={() => setView({ boardAs: way.as })}
+            >
+              {way.icon}
+            </Switch>
+          ))}
+        </Stack>
+      </div>
+    )
+
   return (
     <div className={EDGE} inert={bare} data-away={bare || undefined}>
       <Stack className="absolute top-3 right-3">
-        <Switch
-          label="Conversation"
-          shortcut={MAC ? "⌘B" : "Ctrl B"}
-          on={threadOpen}
-          onChange={setThreadOpen}
-        >
-          <MessageSquareIcon />
-        </Switch>
+        {conversation}
         {loaded && <Downloads loaded={loaded} projectId={projectId} />}
       </Stack>
 
@@ -550,6 +592,17 @@ export function Tools({
               <ReferenceIcon />
             </Switch>
           )}
+          {/* the circuit boards that go in the thing: the button brings up the list of
+              them, and a board picked there takes the view's place, in PCB mode. Where
+              the project has none yet, the list says how one comes. Lit while it is up */}
+          <Switch
+            label="PCB"
+            opens="boards"
+            on={boardsOpen}
+            onChange={() => setBoardsOpen(!boardsOpen)}
+          >
+            <CircuitBoardIcon />
+          </Switch>
           {/* the model drawn flat, from each of its sides and from its corners, on
               sheets that take the view's place: there is nothing to draw of the cube
               that stands in for one */}

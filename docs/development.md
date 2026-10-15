@@ -66,8 +66,9 @@ examples/      projects to open and try things on: a table clock, with a tool, a
 kit/           the exporter a project copies in to write its model (Python), the
                screws it can put in one, the app's own reference scenes, each drawn
                in code and kept as built, the figure of a person that stands in some
-               of them, and how a project's own tools and its assembly guides are
-               written
+               of them, how a project's own tools and its assembly guides are
+               written, and how its circuit boards are made, with the script that
+               builds them
 spikes/        experiments kept for their measurements
 ```
 
@@ -290,4 +291,7 @@ GitHub, [`electron/github.ts`](../apps/desktop/electron/github.ts) and
 - An assembly guide:
   [`shared/assembly-format.ts`](../apps/desktop/shared/assembly-format.ts), and
   [`kit/assembly.md`](../kit/assembly.md) for how one is worked out.
+- A circuit board: [`shared/board-format.ts`](../apps/desktop/shared/board-format.ts),
+  [`kit/pcb.md`](../kit/pcb.md) for how one is made, and
+  [`kit/board.mjs`](../kit/board.mjs), which builds it.
 - The exporter a project copies in: [`kit/enclose.py`](../kit/enclose.py).

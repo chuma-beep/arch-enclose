@@ -17,6 +17,7 @@ import electronUpdater from "electron-updater"
 
 import {
   ACCESSES,
+  BOARD_HOST,
   CHANNEL,
   EFFORTS,
   FEATURES,
@@ -25,6 +26,7 @@ import {
   OWN_SCENE,
   PROVIDERS,
   SCENE_HOST,
+  type BoardSummary,
   type GitHubState,
   type GroupAsked,
   type GuideSummary,
@@ -48,11 +50,13 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
+import { BOARD_FOLDER } from "../shared/board-format"
 import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
+import { boardsIn } from "./boards"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
@@ -90,7 +94,12 @@ import {
 import { appScenes, readScene } from "./reference"
 import { cleanEnv, expandHome, Providers } from "./providers"
 import { SettingsStore, type Vault } from "./settings"
-import { Threads, type Arranging, type Referenced } from "./threads"
+import {
+  Threads,
+  type Arranging,
+  type Boarded,
+  type Referenced,
+} from "./threads"
 import { ToolServer } from "./tools"
 import { Updates } from "./update"
 
@@ -220,8 +229,8 @@ const SCENES = appScenes(path.join(TOP, "kit", "scenes"))
 
 /**
  * The folder a file asked for is in, by the host it is asked of: a project's model, the
- * reference scene the project has of its own, one of the app's, or the pictures put
- * with the project's messages.
+ * reference scene the project has of its own, one of the app's, the pictures put with
+ * the project's messages, or its circuit boards.
  */
 function servedFrom(host: string): string | null {
   const [name, kind] = host.split(".")
@@ -229,9 +238,19 @@ function servedFrom(host: string): string | null {
     return SCENES.find((scene) => scene.id === name)?.dir ?? null
   const project = projects.get(name)
   if (kind === PICTURE_HOST) return project ? pictures.folder(project.id) : null
+  if (kind === BOARD_HOST)
+    return project ? path.join(project.path, BOARD_FOLDER) : null
   const manifest =
     kind === SCENE_HOST.own ? project?.reference : project?.manifest
   return manifest ? path.dirname(manifest) : null
+}
+
+/** The circuit board a message is about, from what the window knows it by. */
+function boardBy(projectId: string, board: unknown): Boarded | null {
+  const project = projects.get(projectId)
+  if (typeof board !== "string" || !project) return null
+  const found = boardsIn(project.path).find((one) => one.id === board)
+  return found ? { id: found.id, name: found.name } : null
 }
 
 /** The reference scene a message is about, from what the window knows it by. */
@@ -1120,6 +1139,10 @@ function wire() {
     const project = projects.get(String(id))
     return project ? readTools(project.path) : []
   })
+  ipcMain.handle(CHANNEL.boardsRead, (_, id: string): BoardSummary[] => {
+    const project = projects.get(String(id))
+    return project ? boardsIn(project.path) : []
+  })
   ipcMain.handle(CHANNEL.assemblyRead, (_, id: string): GuideSummary[] => {
     const project = projects.get(String(id))
     return project ? guidesIn(project.path) : []
@@ -1476,7 +1499,8 @@ function wire() {
       given: Partial<Manner> | null,
       reference: unknown,
       attached: unknown,
-      quotes: unknown
+      quotes: unknown,
+      board: unknown
     ) => {
       const manner = mannerFrom(given)
       const noted = Array.isArray(notes)
@@ -1486,6 +1510,7 @@ function wire() {
       const about = referencedBy(String(id), reference)
       const shown = pictures.read(String(id), attached)
       const quoted = quotesFrom(quotes)
+      const onScreen = boardBy(String(id), board)
       // answers at once, with the conversation it went into: the turn runs for as long
       // as it runs, and reports through thread items
       const into = threads.send(
@@ -1497,7 +1522,8 @@ function wire() {
         manner,
         about,
         shown,
-        quoted
+        quoted,
+        onScreen
       )
       // the user has started on the project themselves: its model is theirs to have
       // put in order, by asking
@@ -1512,6 +1538,7 @@ function wire() {
           pictures: shown.length,
           quotes: quoted.length,
           reference: about !== null,
+          board: onScreen !== null,
         })
       return into
     }

@@ -113,6 +113,12 @@ export type Project = {
    */
   assembly: number | null
   /**
+   * Whether it has circuit boards, in its folder (see shared/board-format.ts): null if
+   * not, and otherwise a number that goes up each time one of them is written or built,
+   * so the window knows to read them again.
+   */
+  boards: number | null
+  /**
    * An assembly guide is being made for it, because the user asked for one from the
    * view: the turn Claude is on in it is that.
    */
@@ -215,6 +221,11 @@ export type ThreadItem =
        * the model: this is what the scene goes by.
        */
       reference?: string
+      /**
+       * The message was written with one of the project's circuit boards on screen, in
+       * PCB mode, and is about that board: this is what the board is called.
+       */
+      board?: string
       /** the pictures that went with the message */
       pictures?: Attached[]
       /**
@@ -496,6 +507,30 @@ export type GuideSummary = {
 }
 
 /**
+ * One of a project's circuit boards, as the list of them has it (see
+ * shared/board-format.ts).
+ */
+export type BoardSummary = {
+  /** what it is known by: what its file is called, without the ending */
+  id: string
+  /** what it is called */
+  name: string
+  /** whether it is a board to be made: false of one only roughed out so far */
+  finished: boolean
+  /**
+   * When it was last built (ms), which its built files are loaded again by: null while
+   * there is nothing built of it to show
+   */
+  built: number | null
+  /** how big it is, mm across and from top to bottom: null while that is not known */
+  size: [number, number] | null
+  /** whether it has been built in 3D as well, to be shown so */
+  model: boolean
+  /** why what says what it is did not read, in a line: null where it did, or there is none */
+  trouble: string | null
+}
+
+/**
  * How the view draws a model's parts, where that is more than its manifest says: what
  * the user has done to it by hand in the app. A guide's page is told, to draw them so.
  */
@@ -568,6 +603,7 @@ export const FEATURES = [
   "assembly",
   "reference",
   "tools",
+  "board",
 ] as const
 export type Feature = (typeof FEATURES)[number]
 
@@ -734,6 +770,13 @@ export type CadApi = {
     /** A project's own tools, as they are written in its folder: none if it has none. */
     read(projectId: string): Promise<ToolSource[]>
   }
+  boards: {
+    /**
+     * A project's circuit boards, in the order of their files: none if it has none. Their
+     * built files come by the model's scheme, from <project id>.pcb.
+     */
+    read(projectId: string): Promise<BoardSummary[]>
+  }
   assembly: {
     /** A project's assembly guides, the one written last first: none if it has none. */
     read(projectId: string): Promise<GuideSummary[]>
@@ -798,7 +841,9 @@ export type CadApi = {
       /** the pictures that go with it, as the app keeps them */
       pictures?: Attached[],
       /** the words picked out of the conversation that go with it, and what is said of each */
-      quotes?: Quote[]
+      quotes?: Quote[],
+      /** the circuit board on screen, in PCB mode, by what it is known by: the message is about it */
+      board?: string | null
     ): Promise<string | null>
     /**
      * Have Claude look over the model of files just opened, from what the view shows of
@@ -935,6 +980,7 @@ export const CHANNEL = {
   modelNameGroup: "model:name-group",
   referenceScenes: "reference:scenes",
   toolsRead: "tools:read",
+  boardsRead: "boards:read",
   assemblyRead: "assembly:read",
   assemblyMake: "assembly:make",
   assemblyOpen: "assembly:open",
@@ -990,8 +1036,10 @@ export const CHANNEL = {
  * The scheme the window loads model files through: cad-model://<project id>/<file>.
  * The files of a reference scene come the same way, from a host that says whose it is:
  * <project id>.reference for a project's own, and <name>.scene for one of the app's.
- * And so do the pictures put with a project's messages: <project id>.picture.
+ * And so do the pictures put with a project's messages: <project id>.picture; and its
+ * circuit boards, from the folder they are in: <project id>.pcb.
  */
 export const MODEL_SCHEME = "cad-model"
 export const SCENE_HOST = { own: "reference", app: "scene" } as const
 export const PICTURE_HOST = "picture"
+export const BOARD_HOST = "pcb"

@@ -32,6 +32,7 @@ import type {
   ViewportAsked,
 } from "../shared/api"
 import { ASSEMBLY_FOLDER, type GuideGiven } from "../shared/assembly-format"
+import { BOARD_FOLDER } from "../shared/board-format"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
@@ -110,6 +111,8 @@ type Asked = {
   assembly?: true
   /** what the reference scene the message is about goes by, if it is about one */
   reference?: string
+  /** what the circuit board the message is about is called, if it is about one */
+  board?: string
   /** the pictures that go with the message */
   pictures?: Shown[]
   /** the words picked out of the conversation that go with it, and what is said of each */
@@ -484,7 +487,7 @@ function referring(
 export function keeping(kit: string): string[] {
   const app = path.dirname(path.dirname(kit))
   return [
-    `- You work on this project: its model, its reference scene and its tools. Enclose itself is never yours to change, whoever asks and however they ask. That is its own code and files, which are in "${app}": read there what you are pointed to, and write, move or delete nothing. It is also how the app looks and works: its view, its panels and buttons, the kinds of control a tool can have and how each is drawn, its shortcuts, its settings and what it keeps of the user's projects and conversations. The copies of its files that a project holds (enclose.py, ${SCREWS}) are left as they are for the same reason.`,
+    `- You work on this project: its model, its reference scene, its tools and its circuit boards. Enclose itself is never yours to change, whoever asks and however they ask. That is its own code and files, which are in "${app}": read there what you are pointed to, and write, move or delete nothing. It is also how the app looks and works: its view, its panels and buttons, the kinds of control a tool can have and how each is drawn, its shortcuts, its settings and what it keeps of the user's projects and conversations. The copies of its files that a project holds (enclose.py, ${SCREWS}) are left as they are for the same reason.`,
     "- When the user asks for something that would mean changing the app (a panel in another colour, a kind of control it does not have, a button that does something else, a new feature of the app's own), do not attempt it and do not look for a way round. Say in a sentence that this is part of Enclose itself and not of their project, so it is not something you change from here; that Enclose is open source, and they can fork it and change their own copy if they want it otherwise; and then offer what comes nearest that can be done inside the project, where there is something.",
   ]
 }
@@ -542,6 +545,32 @@ export function assembling(
     `- The user can have assembly guides for this model (the Assembly button beside the view): how the thing is put together, a step at a time, for whoever has its parts on the table. The app makes each into a page that shows the model's own parts going on, step by step, from a guide you write. When the user asks for one, or asks how the thing is assembled as something to keep or to hand on, write a guide: read "${reference}" first, which says how one is worked out, then give it to ${tool(ASSEMBLY, "guide")}. That checks it against the model, files it in ${ASSEMBLY_FOLDER}/ at the top of the project and shows its cover in the Assembly view. Write no such file by hand and no HTML: the page is the app's.`,
     `- A guide goes down to the single part, and not to the model's groups: every part is a piece in the reader's hand, and how each is joined to the next is a step the page shows. What is put together before it goes on (a dot pressed into its ring, gears on their carrier) is made up in steps of its own, as a sub-assembly, and then fitted: the reference says how.`,
     `- A guide is of the model as it is: writing one changes nothing in the model's files. Where the thing cannot be put together as it is drawn (a part with no way in, nothing that holds a part where it sits), say so in the short reply, and write the guide for what there is. You cannot see the page, so check a guide against the parts themselves, their sizes and places (${tool(VIEWPORT, "parts")}), before you give it. When the user wants a guide changed, give the whole of it again with the change in: it is filed as the next version, and the ones before are kept.`,
+  ]
+}
+
+/** The app's script that builds a circuit board, and the reference for one, beside the exporter. */
+const BOARD_BUILD = "board.mjs"
+const BOARD_GUIDE = "pcb.md"
+
+/**
+ * What an agent is told of circuit boards: that the thing can have them, made with
+ * tscircuit and looked at in the app's PCB mode, and built by the app's script; that
+ * one is made only when the user brings it up; and that a board in detail is other work
+ * than the shape of the thing, which takes a while, so whether it is wanted now is asked
+ * first (`canAsk`), and a rough one keeps the thing going meanwhile. How one is written,
+ * built and fitted into the model is in a file it reads when it comes to make one.
+ */
+export function wiring(kit: string, canAsk: boolean): string[] {
+  const reference = path.join(path.dirname(kit), BOARD_GUIDE)
+  const build = path.join(path.dirname(kit), BOARD_BUILD)
+  return [
+    `- The thing can have circuit boards of its own, designed with tscircuit, in ${BOARD_FOLDER}/ at the top of the project, and built with the app's script: node "${build}" ${BOARD_FOLDER}/<name>.circuit.tsx. The user finds them with the PCB button beside the view, each with a picture, and opens one in PCB mode, where it takes the model's place: drawn as it is made, as its schematic, or in 3D. A board only roughed out so far is listed as Unfinished. Before you make or change a board, read "${reference}": it says how one is written, built and checked, and fitted into the model.`,
+    "- Make a board only when the user brings one up: a PCB, a circuit board, the electronics of the thing and how they are wired. Until then a board in the model is a plain part like any other, sized from what goes on it.",
+    canAsk
+      ? '- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So when the user brings a board up and has not said which they want, ask before you start, with AskUserQuestion, whether they are ready for the detailed board now. Offer "Detailed board now" (every part chosen and wired, ready to order: this takes a while) and "Rough board for now" (its outline and the main parts where they go, to keep designing the thing: made in detail later).'
+      : "- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So unless the user asks for the detailed board, make a rough one, and say in the short reply that the detailed board can be asked for when they are ready for it.",
+    "- A rough board keeps the design of the thing going: its outline, cut to the room the thing has for it, its mounting holes, and the parts that decide the shape (connectors where they come through the case, buttons, lights that show, a display, the battery, a module) at their real sizes and where they go, with nothing routed. Make it quickly, mark it unfinished and fit it into the model, so that the case is shaped round it. When the user wants it in detail, make that same board in detail, and mark it finished.",
+    `- A message that holds a <board> block was written with that board open in PCB mode, and is about it: the block's id is what its files are called (${BOARD_FOLDER}/<id>.circuit.tsx). Change the board, build it, and build the model again too where what you changed moves anything it is fitted to.`,
   ]
 }
 
@@ -665,6 +694,7 @@ function guide(
     ...(trying ? tooling(tool, kit) : []),
     // (there is nothing to write a guide to until there is a model)
     ...(trying && manifest ? assembling(tool, kit) : []),
+    ...(trying ? wiring(kit, canAsk) : []),
     ...(trying ? versioning(tool) : []),
     ...keepingHistory(history),
     ...SIZES,
@@ -701,7 +731,7 @@ function guide(
       '  3. Find a Python that has build123d: try python3 -c "import build123d". If it has not, make a virtual environment in the folder (python3 -m venv .venv, then .venv/bin/pip install build123d; or uv if it is installed) and use that one.',
       '  4. Write enclose.json at the top of the folder, naming the model and the build command: { "model": "build/enclose.model.json", "build": "python3 model.py" }, with the Python you found. Paths in it are relative to the folder, never absolute.',
       "  5. Run the build. The model shows in the app by itself once build/enclose.model.json is written. Then take a screenshot and check the result before you report it.",
-      `- Keep the folder plain: model.py, enclose.py, enclose.json, ${SCREWS} where the thing has screws, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).`,
+      `- Keep the folder plain: model.py, enclose.py, enclose.json, ${SCREWS} where the thing has screws, ${BOARD_FOLDER}/ where it has circuit boards, and build/, which is output and never edited by hand (if the folder is a git repository, ignore build/ and .venv/).`,
       "- Start with the simplest thing that is what they asked for, show it, and say in a sentence or two what you assumed (sizes, wall thickness) so that they can correct it.",
       "",
       "A project that cannot use build123d can write the model's files some other way, as long as they come out in this format:",
@@ -718,6 +748,9 @@ function guide(
  */
 export type Referenced = { name: string; app: string | null }
 
+/** The circuit board a message is about: what it is known by, and what it is called. */
+export type Boarded = { id: string; name: string }
+
 /** What Claude has not been told of what was taken back of its turns, and put back. */
 export type Told = { undone: string[]; redone: string[] }
 const NOT_TOLD: Told = { undone: [], redone: [] }
@@ -725,7 +758,8 @@ const NOT_TOLD: Told = { undone: [], redone: [] }
 /**
  * The message as Claude gets it: which of its turns have had what they did taken back
  * since it last heard, or put back; the reference scene the message is about, if it is
- * about that and not the model; the whole objects it is about; what was said of parts
+ * about that and not the model; the circuit board it is about, where it was written with
+ * one on screen; the whole objects it is about; what was said of parts
  * of the model; what was said of words picked out of the conversation; and then the
  * message. A message that is a command leads with it, or Claude Code would not know it
  * for one.
@@ -736,7 +770,8 @@ export function withNotes(
   objects: ObjectRef[] = [],
   told: Told = NOT_TOLD,
   reference: Referenced | null = null,
-  quotes: Quote[] = []
+  quotes: Quote[] = [],
+  board: Boarded | null = null
 ): string {
   const turned = (["undone", "redone"] as const).flatMap((how) =>
     told[how].length > 0
@@ -760,11 +795,15 @@ export function withNotes(
           : `<reference scene="${named(reference.name)}" of="this project" />`,
       ]
     : []
+  const shown = board
+    ? [`<board id="${board.id}" name="${named(board.name)}" />`]
+    : []
   if (
     notes.length === 0 &&
     objects.length === 0 &&
     turned.length === 0 &&
     scene.length === 0 &&
+    shown.length === 0 &&
     quotes.length === 0
   )
     return text
@@ -808,7 +847,7 @@ export function withNotes(
           "</quotes>",
         ]
       : []
-  const ahead = [turned, scene, called, comments, quoted]
+  const ahead = [turned, scene, shown, called, comments, quoted]
     .filter((block) => block.length > 0)
     .flatMap((block, index) => (index > 0 ? ["", ...block] : block))
   return (text.startsWith("/") ? [text, "", ...ahead] : [...ahead, "", text])
@@ -999,6 +1038,7 @@ function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
       ? said
       : [
           ...(item.reference ? [item.reference] : []),
+          ...(item.board ? [item.board] : []),
           ...(item.objects ?? []).map((one) => one.label),
           ...(item.quotes ?? []).map((one) => `“${one.quote}”`),
           ...(pictures > 0
@@ -1043,6 +1083,7 @@ function saidOf(
     ...(asked.quotes?.length ? { quotes: asked.quotes } : {}),
     ...(objects.length > 0 ? { objects } : {}),
     ...(asked.reference ? { reference: asked.reference } : {}),
+    ...(asked.board ? { board: asked.board } : {}),
     ...(pictures.length > 0
       ? {
           // what is in each is kept in its file, and not with what was said
@@ -1349,16 +1390,19 @@ export class Threads {
     /** the pictures that go with it */
     pictures: Shown[] = [],
     /** the words picked out of the conversation that go with it, and what is said of each */
-    quotes: Quote[] = []
+    quotes: Quote[] = [],
+    /** the circuit board on screen, in PCB mode, which the message is then about */
+    board: Boarded | null = null
   ): string | null {
     const asked: Asked = {
       content: (told, provider) =>
         pictured(
-          withNotes(text, notes, objects, told, reference, quotes),
+          withNotes(text, notes, objects, told, reference, quotes, board),
           pictures,
           TAKES_PICTURES[provider]
         ),
       reference: reference?.name,
+      board: board?.name,
       pictures,
       quotes,
     }

@@ -4,6 +4,7 @@ import {
   ArrowUpIcon,
   BoxesIcon,
   ChevronDownIcon,
+  CircuitBoardIcon,
   CircleGaugeIcon,
   LockKeyholeIcon,
   LockKeyholeOpenIcon,
@@ -83,6 +84,7 @@ import {
   pictureName,
   PICTURE_TYPES,
 } from "@shared/pictures"
+import { useBoards } from "./pcb/boards"
 import { bridge } from "./viewport/bridge"
 
 /**
@@ -414,16 +416,20 @@ const of = (chip: Chip) =>
  * with it on the box the message is about the scene. What was said of a part is a chip
  * that says which part and how it begins; pressed, it opens that again beside the part.
  * Words picked out of the conversation are a chip of how they begin, and of what was said
- * of them; pressed, it opens that again over the chip.
+ * of them; pressed, it opens that again over the chip. And in PCB mode the circuit board
+ * on screen is a chip, first, for as long as it is on screen: the message is about it.
  */
 function Waiting({
   called,
   notes,
   quotes,
+  board,
 }: {
   called: Called[]
   notes: Note[]
   quotes: Quoted[]
+  /** what the board on screen is called, in PCB mode */
+  board: string | null
 }) {
   const write = useStore((state) => state.write)
   const dropNote = useStore((state) => state.dropNote)
@@ -456,6 +462,17 @@ function Waiting({
         ref={row}
         className="flex min-w-0 [scrollbar-width:none] gap-1.5 overflow-x-auto"
       >
+        {/* (nothing to take it off with: it goes with PCB mode) */}
+        {board && (
+          <Badge
+            variant="secondary"
+            title="This message is about the circuit board on screen"
+            className="h-6 max-w-44 shrink-0 gap-1"
+          >
+            <CircuitBoardIcon className="shrink-0" />
+            <span className="truncate">{board}</span>
+          </Badge>
+        )}
         {chips.map((chip) => {
           if ("called" in chip) {
             const part = chip.called
@@ -738,6 +755,10 @@ export function Composer({
     project ? (state.pictures[project.id] ?? NO_PICTURES) : NO_PICTURES
   )
   const pictureTrouble = useStore((state) => state.pictureTrouble)
+  // the circuit board on screen, in PCB mode, which a message is then about
+  const boards = useBoards(project)
+  const onScreen = useStore((state) => state.view.board)
+  const board = boards?.find((one) => one.id === onScreen)?.name ?? null
   const attach = useStore((state) => state.attach)
   const dropPicture = useStore((state) => state.dropPicture)
   // whether it is being written in, which is when a name being written is looked for
@@ -953,8 +974,11 @@ export function Composer({
           trouble={pictureTrouble}
         />
       )}
-      {(called.length > 0 || notes.length > 0 || quotes.length > 0) && (
-        <Waiting called={called} notes={notes} quotes={quotes} />
+      {(called.length > 0 ||
+        notes.length > 0 ||
+        quotes.length > 0 ||
+        board) && (
+        <Waiting called={called} notes={notes} quotes={quotes} board={board} />
       )}
       <div className="relative w-full">
         {pictures.length > 0 && (

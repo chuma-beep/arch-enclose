@@ -20,6 +20,7 @@ import {
   Threads,
   versionAsked,
   versioning,
+  wiring,
   withNotes,
   type ThreadsDeps,
 } from "./threads"
@@ -174,6 +175,21 @@ describe("withNotes", () => {
         "</objects>",
         "",
         "Make these 2 mm taller",
+      ].join("\n")
+    )
+  })
+
+  it("says which circuit board a message is about, where one was on screen", () => {
+    expect(
+      withNotes("Move the button up", [], [], undefined, null, [], {
+        id: "main",
+        name: 'Main "board"',
+      })
+    ).toBe(
+      [
+        '<board id="main" name="Main \'board\'" />',
+        "",
+        "Move the button up",
       ].join("\n")
     )
   })
@@ -497,6 +513,24 @@ describe("tooling", () => {
     expect(told).toContain("mcp__viewport__tool sets one of its controls")
     const grok = tooling((set, name) => `${set}__${name}`, "/k/enclose.py")
     expect(grok.join("\n")).toContain("viewport__tool sets")
+  })
+})
+
+describe("wiring", () => {
+  it("says where a board is built from, and where how to make one is said", () => {
+    const told = wiring("/app/kit/enclose.py", true).join("\n")
+    expect(told).toContain('node "/app/kit/board.mjs" pcb/<name>.circuit.tsx')
+    expect(told).toContain('read "/app/kit/pcb.md"')
+    expect(told).toContain("<board> block")
+  })
+
+  it("has whether the detailed board is wanted now asked, where there is a way to ask", () => {
+    const asking = wiring("/app/kit/enclose.py", true)
+    const telling = wiring("/app/kit/enclose.py", false)
+    expect(asking.join("\n")).toContain("AskUserQuestion")
+    expect(asking.join("\n")).toContain('"Rough board for now"')
+    expect(telling.join("\n")).not.toContain("AskUserQuestion")
+    expect(telling.join("\n")).toContain("make a rough one")
   })
 })
 
