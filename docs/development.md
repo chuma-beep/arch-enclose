@@ -80,7 +80,7 @@ examples: those it fetches.
 
 | Command | What it makes |
 |---|---|
-| `npm run icons` | The icon's other sizes, from `icons/icon.png`, the icon of the app as it is run from a checkout, and the picture behind the installer's window |
+| `npm run icons` | The icon's other sizes, from `icons/icon.png`, the icon of the app as it is run from a checkout, and the picture behind the installer's window (the `.icns` files and that picture take a Mac; the PNG and the ICO are made anywhere) |
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
 | `npm run build` | The window in `dist/` and the Electron side in `dist-electron/`, with `THIRD-PARTY-LICENSES.txt`: every package bundled into either or loaded as it runs, with its license ([`scripts/licenses.mjs`](../apps/desktop/scripts/licenses.mjs)) |
@@ -92,6 +92,13 @@ The icon is drawn once, as [`icons/icon.png`](../apps/desktop/icons/icon.png): 1
 Apple's grid, with the margin a Mac wants round the tile. `npm run icons` makes the rest
 from it: `icon.icns` for macOS, and for Windows and Linux, where an icon fills its
 square, `icon.ico` and `icon-512.png` with the margin cut away.
+
+The `.icns` files, and the picture behind the installer's window below, are made on a Mac
+only: they use `sips` and `iconutil`, which come with one. `icon.ico` and `icon-512.png`
+are scaled with [sharp](https://sharp.pixelplumbing.com), which `npm install` supplies, so
+they can be made on any system. Run off a Mac, the command leaves the committed `.icns`
+files and installer picture as they are (a different filter would change the `.icns`
+files, which are signed into the app).
 
 Run from a checkout, the app has another icon, and another name, Enclose (Dev):
 [`icons/icon-dev.png`](../apps/desktop/icons/icon-dev.png) is the same mark on blue, and
