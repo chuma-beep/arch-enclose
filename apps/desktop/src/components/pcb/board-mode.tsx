@@ -25,7 +25,7 @@ import { usePreferences } from "@/lib/preferences"
 import { scrollSource } from "@/lib/scroll"
 import { useStore, type BoardAs } from "@/lib/store"
 import { boardUrl, sizeSaid, useCircuit, type Circuit } from "./boards"
-import { DARK_GROUND, DRAWN } from "./ground"
+import { DRAWN } from "./ground"
 import { contoursOf } from "@/components/viewport/contours"
 import { EDGE } from "@/components/viewport/paint"
 import { onlyWhereItTurns, Underlight } from "@/components/viewport/scene"
@@ -445,10 +445,8 @@ export function BoardMode({
 }) {
   const as: BoardAs = useStore((state) => state.view.boardAs)
   const { dark, backdrop } = useThemeColors()
-  // the view's own ground: but KiCad's navy in the dark, for the board drawn as KiCad
-  // draws one
-  const ground =
-    dark && as === "pcb" ? DARK_GROUND : `#${backdrop.getHexString()}`
+  // on the view's own ground, as the model is
+  const ground = `#${backdrop.getHexString()}`
   const { circuit, trouble } = useCircuit(projectId, board)
   // (the side matters only to the board drawn as it is made)
   const side = useStore((state) => state.view.boardSide)

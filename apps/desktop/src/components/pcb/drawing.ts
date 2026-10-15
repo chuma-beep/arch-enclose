@@ -64,6 +64,22 @@ const REDS = [
   "#8D2323",
 ]
 
+/** The colour a board's edge is drawn in: KiCad's grey, which on the light is too pale. */
+const edgeOf = (dark: boolean) =>
+  dark ? "rgb(208, 210, 205)" : "rgba(20, 24, 22, 0.6)"
+
+/**
+ * The holes through the board that are no part of a pad, its mounting holes, drawn with
+ * an edge, as its own edge is: a hole is the ground showing through, and with nothing
+ * drawn round it, on the ground, it would not be seen at all. (A pad's hole has the
+ * pad's copper round it.) The line is as thin at any zoom.
+ */
+const holesEdged = (markup: string, dark: boolean) =>
+  markup.replaceAll(
+    'data-type="pcb_hole"',
+    `stroke="${edgeOf(dark)}" stroke-width="1" vector-effect="non-scaling-stroke" data-type="pcb_hole"`
+  )
+
 /**
  * How the board is drawn as it is made: as KiCad draws one, on the ground it is seen on.
  */
@@ -88,7 +104,7 @@ function pcbLook(
       // a hole is a hole: the ground shows through it
       drill: ground,
       // and its edge in KiCad's grey for one, which on the light ground is too pale
-      boardOutline: dark ? "rgb(208, 210, 205)" : "rgba(20, 24, 22, 0.6)",
+      boardOutline: edgeOf(dark),
     },
   }
 }
@@ -121,14 +137,20 @@ export function drawingOf(
   const elements = circuit as unknown as AnyCircuitElement[]
   if (as === "pcb" && side === "bottom")
     return turnedOver(
-      convertCircuitJsonToPcbSvg(elements, {
-        ...pcbLook(elements, dark, ground),
-        // what is on the bottom, and what goes through: seen from under the board
-        layer: "bottom",
-      })
+      holesEdged(
+        convertCircuitJsonToPcbSvg(elements, {
+          ...pcbLook(elements, dark, ground),
+          // what is on the bottom, and what goes through: seen from under the board
+          layer: "bottom",
+        }),
+        dark
+      )
     )
   if (as === "pcb")
-    return convertCircuitJsonToPcbSvg(elements, pcbLook(elements, dark, ground))
+    return holesEdged(
+      convertCircuitJsonToPcbSvg(elements, pcbLook(elements, dark, ground)),
+      dark
+    )
   const theme = dark ? "dark" : "light"
   const drawn = convertCircuitJsonToSchematicSvg(elements, {
     ...DRAWN,

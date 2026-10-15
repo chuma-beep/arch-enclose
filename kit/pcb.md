@@ -105,6 +105,21 @@ export default () => (
   shows its edge as flat sides.
 - Give its thickness: 1.6 mm is what most boards are made at, and tscircuit's own is
   1.4 mm.
+- A mounting hole is a `<hole>` with a keep-out round it, so that no trace runs where the
+  screw's head, or its washer, presses on the board (or, under it, the post it goes
+  into): a circle on both sides, as wide as the head, or the washer, and 0.5 mm more all
+  round. The library of screws has how wide each head is
+  (`Screw("M2.5", 6, "pan").head_diameter`).
+
+  ```tsx
+  {/* an M2.5 pan head is 5 mm across: 2.5 mm, and 0.5 mm more */}
+  <hole diameter="2.9mm" pcbX={20} pcbY={-13} />
+  <keepout shape="circle" radius="3mm" pcbX={20} pcbY={-13} layers={["top", "bottom"]} />
+  ```
+
+  Give it its layers: without them the router runs traces through it as if it were not
+  there. (`<pcbkeepout>`, which tscircuit's documentation names, is not known to the
+  tscircuit the app builds with: it is `<keepout>`.)
 - A footprint is named as tscircuit names them (`0402`, `0603`, `soic8`, `sot23`,
   `qfn32`, `pinrow4`, `pushbutton`), or comes with a real part. To find one with its
   stock: `npm_config_allow_git=all npx --yes -p tscircuit tsci search --jlcpcb "ESP32-C3"`.
@@ -144,7 +159,7 @@ detail later, when the user is ready for it.
 A rough board (`"finished": false`) is what the shape of the thing needs to know:
 
 - its outline, cut to the room the thing has for it, and its thickness;
-- its mounting holes, where the thing's posts or screws will be;
+- its mounting holes, where the thing's posts or screws will be, each with its keep-out;
 - the parts that decide the shape, at their real footprints and where they go:
   connectors at the edge where they come through the case, buttons, lights that show,
   a display, the battery or its holder, a module such as an ESP32 or a Pi Pico;
