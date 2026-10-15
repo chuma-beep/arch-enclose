@@ -39,6 +39,17 @@ A mesh's bodies are made solids, which can be cut into and added to, but whose c
 are runs of flat faces: hand each over with `mesh=found.mesh`, which draws it smooth and
 keeps it out of the STEP files.
 
+A circuit board that the app has built (pcb/, which kit/pcb.md is about) is read with
+`read_board`: the board, and every part on it whose maker's model it has, each where the
+board's layout puts it, all of them in the board's own frame. Place them together:
+
+    from build123d import Pos, Rot
+    from enclose import read_board
+
+    placing = Pos(0, 0, 12) * Rot(0, 0, 90)  # where the board goes, and which way round
+    board = [placing * found.shape for found in read_board("main")]
+    model.part("main_board", board, label="Main board", group=electronics)
+
 Screws are not drawn by hand. Enclose has them in a file of its own beside this one,
 screws.py, which a project copies in as it does this: metric screws, nuts and washers
 in their standard sizes, each with its thread and with the holes that fit it. Its
@@ -164,7 +175,7 @@ _as_compound, _as_edge, _as_face, _as_shell, _as_solid, _as_vertex = (
     _as("Vertex"),
 )
 
-__all__ = ["Model", "Reference", "read_files", "read_step"]
+__all__ = ["Model", "Reference", "read_board", "read_files", "read_step"]
 
 MANIFEST = "enclose.model.json"
 REFERENCE = "enclose.reference.json"
@@ -793,6 +804,68 @@ def read_files(*files: str) -> list[Found]:
     if len({body.color for body in found}) == 1:
         for body in found:
             body.color = None
+    return found
+
+
+# Where the app's script that builds circuit boards (kit/board.mjs) puts what it makes,
+# beside the script being run.
+_BOARDS = os.path.join("pcb", "build")
+
+
+def read_board(name: str) -> list[Found]:
+    """One of the project's circuit boards, as it was last built, as parts to hand to
+    `Model.part`: the board from its STEP file (`pcb/build/<name>.step`), with what
+    tscircuit put in that, and each part on it whose maker's own model it could not,
+    read from beside it (`pcb/build/<name>.parts/`) and put where the board's layout
+    has it. Each part is `Found` under its name on the board (U1, J2); the board's own
+    bodies come first.
+
+    All of it is in the board's own frame, as its STEP file has it: its middle at the
+    origin and halfway through its thickness, the side its parts are on facing up (+Z),
+    and the board's own X and Y as X and Y. Move all of it together, by the one placing,
+    to where the board goes in the thing."""
+    here = os.path.dirname(os.path.abspath(sys.argv[0] or "."))
+    folder = os.path.join(here, _BOARDS)
+    step = os.path.join(folder, f"{name}.step")
+    if not os.path.exists(step):
+        raise ValueError(
+            f"There is no {os.path.join(_BOARDS, name)}.step: build the board first."
+        )
+    found = read_step(step)
+    listed = os.path.join(folder, f"{name}.parts.json")
+    if not os.path.exists(listed):
+        return found
+    from build123d import Location, Pos, Rot
+
+    taken = {body.id for body in found}
+    with open(listed) as file:
+        parts = json.load(file).get("parts", [])
+    for part in parts:
+        bodies = _read(os.path.join(folder, part["file"]))
+        if not bodies:
+            continue
+        shape = (
+            bodies[0][3]
+            if len(bodies) == 1
+            else Compound(children=[body[3] for body in bodies])
+        )
+        (x, y, z), (ax, ay, az), (ox, oy, oz) = (
+            part["at"],
+            part["turn"],
+            part["origin"],
+        )
+        # its middle as its maker has it brought to the origin, turned as the layout
+        # turns it (about X, then Y, then Z), and put where the layout has it
+        placing: Location = (
+            Pos(x, y, z) * Rot(0, 0, az) * Rot(0, ay, 0) * Rot(ax, 0, 0) * Pos(-ox, -oy, -oz)
+        )
+        id = base = _slug(part["name"])
+        n = 1
+        while id in taken:
+            n += 1
+            id = f"{base}_{n}"
+        taken.add(id)
+        found.append(Found(id, part["name"], "Parts", None, placing * shape))
     return found
 
 

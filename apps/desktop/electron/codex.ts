@@ -236,7 +236,11 @@ type Wanted = {
 /** One turn of a conversation, run by Codex. Resolves once it is over. */
 export async function runCodex(turn: Turn): Promise<void> {
   const { launch, manner } = turn
-  const policy = POLICY[turn.lookOver ? "supervised" : manner.access]
+  // (while the project's files are locked it is shut in to reading them, whatever it may
+  // do otherwise)
+  const policy = turn.readOnly
+    ? { ...POLICY[manner.access], sandbox: "read-only" }
+    : POLICY[turn.lookOver ? "supervised" : manner.access]
   const halt = stopped(turn.signal)
   // Codex numbers what it does afresh in each thread: an item is known by the turn too
   const run = turn.id("codex")

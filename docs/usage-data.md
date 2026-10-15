@@ -25,6 +25,7 @@ Each thing counted is an event: its name, and a few words and numbers that say w
 | `assembly guide written` | How many steps |
 | `assembly guide opened` | |
 | `assembly guide saved` | How many steps |
+| `board saved` | Whether its Gerbers or its STEP file |
 | `assembly guide removed` | |
 | `feature used` | Which of these the view was put into: a section, the exploded view, parts shown alone, parts hidden, the blueprint, the assembly guides, a reference scene, a project's own tools, or a circuit board in PCB mode. Each is counted once for a run of the app |
 | `provider switched` | Which agent, and whether on or off |

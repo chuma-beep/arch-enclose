@@ -66,7 +66,7 @@ const NAME = `truncate ${SMALL} font-medium`
  * What there is to say of a conversation besides what was last said in it: that Claude is
  * in the middle of it, or has got to the end of it and it has not been looked at since.
  */
-type News = "working" | "asking" | "done" | "failed"
+type News = "working" | "asking" | "board" | "done" | "failed"
 
 function newsOf(
   conversation: ConversationSummary | null,
@@ -74,6 +74,8 @@ function newsOf(
 ): News | null {
   if (!conversation) return null
   if (conversation.status !== "idle") return conversation.status
+  // a board being made in the background, beside it
+  if (conversation.job) return "board"
   if (!finished.includes(conversation.id)) return null
   return conversation.failed ? "failed" : "done"
 }
@@ -85,6 +87,11 @@ const NEWS: Record<News, { label: string; under: string; className: string }> =
       label: "Working",
       under: "Working in an earlier chat",
       // a light passes along it for as long as Claude is at work
+      className: "text-attention shimmer",
+    },
+    board: {
+      label: "Making a board",
+      under: "Making a board in an earlier chat",
       className: "text-attention shimmer",
     },
     asking: {
@@ -201,6 +208,9 @@ function Written({
           {NEWS[news].label}
           {news === "working" && conversation?.since != null && (
             <Going since={conversation.since} />
+          )}
+          {news === "board" && conversation?.job && (
+            <Going since={conversation.job.since} />
           )}
         </span>
       )}
@@ -617,10 +627,12 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   const projects = useStore((state) => state.projects)
   // While it is a model's blueprint that is looked at, the sheets have the window: the
   // card of the project they are of stays, at the top, and the rest are put away. And
-  // so it is while it is the model's assembly guides, whose covers have it likewise.
+  // so it is while it is the model's assembly guides, whose covers have it likewise, and
+  // in PCB mode, where one of its circuit boards has it.
   const activeId = useStore((state) => state.activeId)
   const sheets = useStore(
-    (state) => state.view.blueprint || state.view.assembly
+    (state) =>
+      state.view.blueprint || state.view.assembly || state.view.board !== null
   )
   // And while one sheet has the view to itself that card is gone too, and what is at
   // the foot with it: there is nothing over the sheet that is not the sheet's. They

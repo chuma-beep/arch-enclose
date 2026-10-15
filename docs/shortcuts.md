@@ -30,11 +30,22 @@ is Ctrl off a Mac.
 | H | Put what is picked out out of sight, or bring everything back |
 | B | [Blueprint](blueprints.md) |
 | A | [Assembly guides](working-with-claude.md#assembly-guides) |
+| Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
+| Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
 | Cmd+F | [Search](parts.md#search) |
 | T | [Tools of the project's own](project-tools.md) |
 | Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model |
 | Cmd+Shift+Z | Put it back |
 | Esc | Close, or step back |
+
+## PCB mode
+
+| | |
+|---|---|
+| 1 | The board's [technical view](working-with-claude.md#circuit-boards) |
+| 2 | The board in 3D |
+| 3 | Its schematic |
+| Esc | Back to the model |
 
 ## The app
 

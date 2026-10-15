@@ -58,6 +58,7 @@ export const VIEWPORT = "viewport"
 export const MODEL = "model"
 export const ASSEMBLY = "assembly"
 export const VERSIONS = "versions"
+export const BOARDS = "boards"
 
 /**
  * The tools an agent sees what the user sees with. `ask` puts a question to the window.
@@ -353,6 +354,55 @@ export function versionTools(
           ),
       },
       async ({ brief }) => begin(brief).then(words, failed)
+    ),
+  ]
+}
+
+/**
+ * What an agent has a circuit board made in detail with, in the background, beside the
+ * conversation, and what it reaches that with once it is under way: something the user
+ * said for it, or its being stopped. Each answers in words, or fails with why.
+ */
+export function boardTools(job: {
+  make: (board: string, brief: string) => Promise<string>
+  tell: (note: string) => Promise<string>
+  stop: () => Promise<string>
+}): AppTool[] {
+  return [
+    appTool(
+      "make",
+      "Have one of the project's circuit boards made in detail in the background, beside this conversation, once the user has said they want the detailed board now. The board's file (pcb/<board>.circuit.tsx) and its board.json are there already, as you set the board up: the rough board, fitted into the model. When this turn ends, the app has another agent make that board in detail, in a card of its own in this conversation, and the conversation goes on meanwhile; the model is locked until it is done. Call it once, at the end of the turn.",
+      {
+        board: z
+          .string()
+          .describe(
+            'The board, by what it is known by: its file\'s name without .circuit.tsx ("main").'
+          ),
+        brief: z
+          .string()
+          .describe(
+            "What the board is to be, for the agent that makes it, which knows nothing of this conversation: what it does, every part and choice the user has asked for or agreed to, what the board has to fit and connect to in the model (the outline, holes and connectors the case was shaped round), and anything still to decide."
+          ),
+      },
+      async ({ board, brief }) => job.make(board, brief).then(words, failed)
+    ),
+    appTool(
+      "tell",
+      'Pass something on to the agent making a circuit board in the background: what the user said that bears on the board ("use a blue LED"), or a size of the model it has to go by. It is told as soon as it can be.',
+      {
+        note: z
+          .string()
+          .describe(
+            "What to tell it, standing by itself, in the user's words where they are theirs."
+          ),
+      },
+      async ({ note }) => job.tell(note).then(words, failed)
+    ),
+    appTool(
+      "stop",
+      "Stop the circuit board being made in the background: only when the user agrees to it, so that the model can be changed now. What was made of the board so far stays in its files.",
+      {},
+      async () => job.stop().then(words, failed)
     ),
   ]
 }

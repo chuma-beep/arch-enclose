@@ -354,7 +354,7 @@ const hatched =
  * Makes a line be drawn only where the surface it lies in turns away from the eye: where,
  * of the two triangles that meet at it, one faces the eye and the other does not.
  */
-function onlyWhereItTurns(shader: { vertexShader: string }) {
+export function onlyWhereItTurns(shader: { vertexShader: string }) {
   shader.vertexShader = shader.vertexShader
     .replace(
       "attribute vec3 instanceEnd;",

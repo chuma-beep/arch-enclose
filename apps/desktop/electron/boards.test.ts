@@ -72,9 +72,49 @@ describe("boardsIn", () => {
         built: null,
         size: null,
         model: false,
+        step: false,
+        gerbers: false,
+        building: null,
+        preview: null,
         trouble: null,
       },
     ])
+  })
+
+  it("says how far a build has got, while one is under way and saying so", () => {
+    write("pcb/main.circuit.tsx", "")
+    const now = Date.now()
+    write(
+      "pcb/build/main.building.json",
+      JSON.stringify({ since: now, at: now, stage: "routing", progress: 0.4 })
+    )
+    expect(boardsIn(root)[0].building).toMatchObject({
+      stage: "routing",
+      progress: 0.4,
+    })
+    // one that has said nothing for a long while is over, whatever it left behind
+    write(
+      "pcb/build/main.building.json",
+      JSON.stringify({ since: 0, at: 0, stage: "routing" })
+    )
+    expect(boardsIn(root)[0].building).toBeNull()
+  })
+
+  it("has a quick look at a board as it is written, where that is newer than its build", () => {
+    write("pcb/main.circuit.tsx", "")
+    write("pcb/build/main.circuit.json", BOARD)
+    write("pcb/build/main.preview.json", BOARD)
+    const later = new Date(Date.now() + 5000)
+    fs.utimesSync(path.join(root, "pcb/build/main.preview.json"), later, later)
+    expect(boardsIn(root)[0].preview).toBe(Math.round(later.getTime()))
+    // built since, it is the build that is shown
+    const latest = new Date(Date.now() + 10_000)
+    fs.utimesSync(
+      path.join(root, "pcb/build/main.circuit.json"),
+      latest,
+      latest
+    )
+    expect(boardsIn(root)[0].preview).toBeNull()
   })
 
   it("says why what says what a board is did not read", () => {

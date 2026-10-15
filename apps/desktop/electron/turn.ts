@@ -63,6 +63,19 @@ export type Turn = {
    * is let do when the user asks.
    */
   lookOver: boolean
+  /**
+   * The project's files are not the agent's to change in this turn: a circuit board is
+   * being made in the background, and the model waits for it. The agent can read, run
+   * and answer, and is let write nothing, as far as it can be kept from it.
+   */
+  readOnly?: boolean
+  /** Nobody is there to answer a question: the agent decides, and says what it decided. */
+  noQuestions?: boolean
+  /**
+   * More that is said to the agent while it is at work, as it comes: where the agent
+   * takes more of a message in the middle of a turn. Ends with the turn.
+   */
+  more?: AsyncIterable<string>
   /** A tool call in a few words: what kind of thing, and on what. */
   describe(name: string, input: unknown): { name: string; detail: string }
   /** An id for an item, which no other item has. */

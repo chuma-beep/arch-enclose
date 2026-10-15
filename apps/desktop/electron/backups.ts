@@ -13,6 +13,7 @@ import {
   branchFor,
   commitAll,
   isRepository,
+  loggedAs,
   managed,
   messageOf,
   setUp,
@@ -159,20 +160,33 @@ export class Backups {
       what,
       conversation,
       conversationId,
+      log,
     }: {
       what: string
       conversation: string | null
       conversationId: string | null
+      /**
+       * What the changes were, in the lines of a change log ("Added: a lid"), from the
+       * files the commit holds: what it then says, in place of what was asked. Nothing,
+       * where it could not be had.
+       */
+      log?: (files: string[]) => Promise<string[] | null>
     }
   ): Promise<unknown> {
     return this.queue(id, async () => {
       const project = this.project(id)
       if (!project || !(await managed(this.deps.git, project.path))) return
+      const plain = messageOf(what, conversation)
       await this.commit(
         project,
         conversationId,
         what,
-        messageOf(what, conversation)
+        log
+          ? async (files) => {
+              const lines = await log(files).catch(() => null)
+              return lines?.length ? loggedAs(lines, conversation) : plain
+            }
+          : plain
       )
     })
   }
@@ -181,7 +195,7 @@ export class Backups {
     project: Backed,
     conversationId: string | null,
     what: string,
-    message: string
+    message: string | ((files: string[]) => Promise<string>)
   ) {
     const branch = await this.branchOf(project.path, conversationId, what)
     const { commit } = await commitAll(this.deps.git, project.path, {

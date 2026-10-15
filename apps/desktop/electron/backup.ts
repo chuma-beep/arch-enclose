@@ -219,7 +219,15 @@ export async function commitAll(
     branch,
     message,
     author,
-  }: { branch: string; message: string; author: Author }
+  }: {
+    branch: string
+    /**
+     * What the commit says: as it is, or made from the files it holds, each as git has
+     * it changed ("M\tmodel.py"), once they are known
+     */
+    message: string | ((files: string[]) => Promise<string>)
+    author: Author
+  }
 ): Promise<Committed> {
   await moveTo(git, dir, branch)
   await bigOnes(git, dir)
@@ -227,6 +235,14 @@ export async function commitAll(
   const staged = await git(["diff", "--cached", "--quiet"], dir)
   if (staged.code === 0 && (await hasCommits(git, dir)))
     return { commit: null, branch }
+  const said =
+    typeof message === "string"
+      ? message
+      : await message(
+          (await run(git, ["diff", "--cached", "--name-status"], dir))
+            .split("\n")
+            .filter(Boolean)
+        )
   const env = {
     GIT_AUTHOR_NAME: author.name,
     GIT_AUTHOR_EMAIL: author.email,
@@ -235,7 +251,7 @@ export async function commitAll(
   }
   await run(
     git,
-    ["commit", "--quiet", "--allow-empty", "--no-verify", "--message", message],
+    ["commit", "--quiet", "--allow-empty", "--no-verify", "--message", said],
     dir,
     env
   )
@@ -243,11 +259,27 @@ export async function commitAll(
   return { commit, branch }
 }
 
-/** What a commit says: the first line of what was asked, and the conversation it was in. */
+/**
+ * What a commit says, where nothing better is had: the first line of what was asked, and
+ * the conversation it was in.
+ */
 export function messageOf(what: string, conversation: string | null): string {
   const line = what.replace(/\s+/g, " ").trim()
   const subject = line.length > 72 ? `${line.slice(0, 71)}…` : line || "Changes"
   return conversation && conversation !== line
     ? `${subject}\n\nConversation: ${conversation}`
     : subject
+}
+
+/**
+ * What a commit says of a turn whose changes have been logged (see gist.ts): the line
+ * that matters most, then the rest under it, then the conversation it was in.
+ */
+export function loggedAs(lines: string[], conversation: string | null): string {
+  const [subject, ...rest] = lines
+  return [
+    subject,
+    ...(rest.length > 0 ? ["", ...rest] : []),
+    ...(conversation ? ["", `Conversation: ${conversation}`] : []),
+  ].join("\n")
 }

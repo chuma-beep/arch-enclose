@@ -1,7 +1,8 @@
 // The conversation as it is drawn. What Claude does between saying things is not listed
 // thing by thing: each stretch of it is one line, which opens into its steps. What it
 // says on the way, before going on to the next step, is kept with them: its answer is
-// what it says last.
+// what it says last. While it is still at work, though, what it says on the way is how
+// it can be followed: then the stretch is spelled out (see `spelledOut`).
 
 import type { ThreadItem } from "@shared/api"
 
@@ -69,6 +70,31 @@ export function inBlocks(items: ThreadItem[]): Block[] {
     }
   }
   return blocks
+}
+
+/**
+ * A stretch of steps spelled out, as it is shown while Claude is still at it: what it
+ * said on the way stands in the conversation, each thing by itself, and the steps
+ * between are each a stretch of their own, which knows how long it took once something
+ * was said after it. Once the turn is over the stretch is one line again.
+ */
+export function spelledOut(stretch: Steps): (Steps | Aside)[] {
+  const out: (Steps | Aside)[] = []
+  // when the stretch that is last so far was set off: when what was said before it was
+  let from: number | null = null
+  for (const item of stretch.steps) {
+    const last = out.at(-1)
+    if (item.kind === "assistant") {
+      if (last?.kind === "steps" && from !== null) last.took = item.at - from
+      out.push(item)
+      from = item.at
+    } else if (last?.kind === "steps") last.steps.push(item)
+    else {
+      out.push({ kind: "steps", id: item.id, steps: [item], took: null })
+      from ??= item.at
+    }
+  }
+  return out
 }
 
 /**

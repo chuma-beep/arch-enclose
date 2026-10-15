@@ -4,6 +4,7 @@
 // items the window shows. A project can have had any number of conversations, and all of
 // them are kept; only one of them is carried on at a time.
 import { createHash } from "node:crypto"
+import fs from "node:fs"
 import path from "node:path"
 
 import {
@@ -32,7 +33,12 @@ import type {
   ViewportAsked,
 } from "../shared/api"
 import { ASSEMBLY_FOLDER, type GuideGiven } from "../shared/assembly-format"
-import { BOARD_FOLDER } from "../shared/board-format"
+import {
+  BOARD_FOLDER,
+  boardFileOf,
+  calledFrom,
+  readBoard,
+} from "../shared/board-format"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
@@ -58,6 +64,8 @@ import type { AppScene } from "./reference"
 import {
   ASSEMBLY,
   assemblyTools,
+  BOARDS,
+  boardTools,
   MODEL,
   modelTools,
   VERSIONS,
@@ -101,9 +109,30 @@ type Run = {
    * one: when the turn is over, a conversation is begun with it (see `goOn`).
    */
   goesOn: string | null
+  /**
+   * The circuit board the agent asked to have made in detail in the background, if it
+   * did, and its brief: when the turn is over, that is begun (see `startJob`).
+   */
+  boardJob: { board: string; brief: string } | null
 }
 
-/** What a turn is begun with, besides the words of what was said. */
+/**
+ * A circuit board being made in detail in the background, beside the conversation it was
+ * asked for in, by an agent of its own: what it does and says is kept in one card of that
+ * conversation (`item`), and the conversation goes on meanwhile, with the model locked.
+ */
+type Job = {
+  conversation: Conversation
+  item: Extract<ThreadItem, { kind: "job" }>
+  abort: AbortController
+  finish: () => void
+  pending: Map<string, (answer: PermissionAnswer) => void>
+  /** what is to be told it as soon as it can be, and what takes what is told */
+  notes: string[]
+  heard: (() => void) | null
+  /** it was asked for in a line, for its change and its commit */
+  what: string
+}
 type Asked = {
   content: Content | ((told: Told, provider: ProviderId) => Content)
   arrange?: Arranging
@@ -150,6 +179,8 @@ export type Arranging = (
 type Book = {
   conversations: Map<string, Conversation>
   run: Run | null
+  /** a circuit board being made in the background, beside the conversations */
+  job: Job | null
   /** what waits to be said, the first to go first: kept for as long as the app is open */
   waiting: Waiting[]
 }
@@ -211,20 +242,34 @@ export type ThreadsDeps = {
    * repository of somebody's own, say); local; or github, backed up there as well
    */
   history: (projectId: string) => "off" | "local" | "github"
-  /** a turn is over, and the folder as it left it: what was asked, in which conversation */
+  /**
+   * a turn is over, and the folder as it left it: what was asked, in which conversation,
+   * and what the agent said at the end of it, which says what came of it
+   */
   onTurned: (
     projectId: string,
     conversationId: string,
     what: string,
-    conversation: string | null
+    conversation: string | null,
+    said: string
   ) => void
 }
+
+/** Claude Code's tools that write files: not to be had while the project's files are locked. */
+const WRITING_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"]
+
+/** What an agent that asks something with nobody there to answer is told. */
+const NOBODY_TO_ASK =
+  "Nobody is here to answer: you are working in the background. Decide as someone who makes such things would, go on, and say what you decided in your reply."
 
 /** What one of the app's own tools goes by here, whichever agent calls on it. */
 const toolName = (set: string, name: string) => `mcp__${set}__${name}`
 const ARRANGE_TOOL = toolName(MODEL, "arrange")
 const GUIDE_TOOL = toolName(ASSEMBLY, "guide")
 const BEGIN_TOOL = toolName(VERSIONS, "begin")
+const MAKE_BOARD_TOOL = toolName(BOARDS, "make")
+const TELL_BOARD_TOOL = toolName(BOARDS, "tell")
+const STOP_BOARD_TOOL = toolName(BOARDS, "stop")
 
 /**
  * What an agent itself knows such a tool as, which is what it is told to call: Claude
@@ -316,6 +361,15 @@ function describeTool(name: string, input: unknown, root: string) {
       return { name: "Write", detail: "the assembly guide" }
     case BEGIN_TOOL:
       return { name: "Create", detail: "a new version" }
+    case MAKE_BOARD_TOOL:
+      return {
+        name: "Create",
+        detail: "the board in detail, in the background",
+      }
+    case TELL_BOARD_TOOL:
+      return { name: "Tell", detail: "the board's agent" }
+    case STOP_BOARD_TOOL:
+      return { name: "Stop", detail: "the board being made" }
   }
   const first = Object.values((input ?? {}) as Record<string, unknown>).find(
     (v) => typeof v === "string"
@@ -560,19 +614,61 @@ const BOARD_GUIDE = "pcb.md"
  * first (`canAsk`), and a rough one keeps the thing going meanwhile. How one is written,
  * built and fitted into the model is in a file it reads when it comes to make one.
  */
-export function wiring(kit: string, canAsk: boolean): string[] {
+export function wiring(
+  tool: (set: string, name: string) => string,
+  kit: string,
+  canAsk: boolean
+): string[] {
   const reference = path.join(path.dirname(kit), BOARD_GUIDE)
   const build = path.join(path.dirname(kit), BOARD_BUILD)
   return [
     `- The thing can have circuit boards of its own, designed with tscircuit, in ${BOARD_FOLDER}/ at the top of the project, and built with the app's script: node "${build}" ${BOARD_FOLDER}/<name>.circuit.tsx. The user finds them with the PCB button beside the view, each with a picture, and opens one in PCB mode, where it takes the model's place: drawn as it is made, as its schematic, or in 3D. A board only roughed out so far is listed as Unfinished. Before you make or change a board, read "${reference}": it says how one is written, built and checked, and fitted into the model.`,
     "- Make a board only when the user brings one up: a PCB, a circuit board, the electronics of the thing and how they are wired. Until then a board in the model is a plain part like any other, sized from what goes on it.",
     canAsk
-      ? '- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So when the user brings a board up and has not said which they want, ask before you start, with AskUserQuestion, whether they are ready for the detailed board now. Offer "Detailed board now" (every part chosen and wired, ready to order: this takes a while) and "Rough board for now" (its outline and the main parts where they go, to keep designing the thing: made in detail later).'
+      ? '- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So when the user brings a board up and has not said which they want, ask before you start, with AskUserQuestion, whether they are ready for the detailed board now. Offer "Detailed board now" (every part chosen and wired, ready to order: this takes a while, in the background) and "Rough board for now" (its outline and the main parts where they go, to keep designing the thing: made in detail later).'
       : "- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So unless the user asks for the detailed board, make a rough one, and say in the short reply that the detailed board can be asked for when they are ready for it.",
-    "- A rough board keeps the design of the thing going: its outline, cut to the room the thing has for it, its mounting holes, and the parts that decide the shape (connectors where they come through the case, buttons, lights that show, a display, the battery, a module) at their real sizes and where they go, with nothing routed. Make it quickly, mark it unfinished and fit it into the model, so that the case is shaped round it. When the user wants it in detail, make that same board in detail, and mark it finished.",
+    "- A rough board keeps the design of the thing going: its outline, cut to the room the thing has for it, its mounting holes, and the parts that decide the shape (connectors where they come through the case, buttons, lights that show, a display, the battery, a module) at their real sizes and where they go, with nothing routed. Make it quickly, mark it unfinished and fit it into the model, so that the case is shaped round it.",
+    `- A board in detail is not made in a turn of this conversation but in the background, by another agent, while the conversation goes on. When the user wants it, set the board up first where it has not been, as a rough board fitted into the model (read_board), so that the model takes the detailed one in when it is done; then hand it to ${tool(BOARDS, "make")}, with a brief that stands by itself, and end the turn: say in a few words that the detailed board is being made, in its own card in the conversation, and that the model is locked until it is done.`,
     `- A message that holds a <board> block was written with that board open in PCB mode, and is about it: the block's id is what its files are called (${BOARD_FOLDER}/<id>.circuit.tsx). Change the board, build it, and build the model again too where what you changed moves anything it is fitted to.`,
+    `- A message that begins with a <board-job> block is the app asking you to make that board in detail, in the background, while the user goes on in the conversation without you. Nobody is there to answer a question: decide as someone who makes such boards would, and say what you decided. Change only the board's own files (${BOARD_FOLDER}/<id>.*, and what it imports from ${BOARD_FOLDER}/), build it in steps as the reference says, and mark it finished when it is. Leave the model's files as they are: when the board is done, run the model's build command once, so that it takes the board in, and change nothing else. A message that begins "The user says, for the board:" is passed on to you from the conversation meanwhile: go by it. End with a short reply: what the board is now, and anything the model needs changed to fit it, which the conversation will see to.`,
   ]
 }
+
+/** What the turn that has a board made in detail is told, once that is asked for. */
+const JOB_ASKED =
+  "The board is to be made in detail in the background, beginning when this turn ends, in a card of its own in this conversation. Do nothing more in this turn: say in a few words that the detailed board is being made, that it can be followed in its card and in PCB mode, and that the model is locked until it is done."
+
+/**
+ * What the turns of a project's conversations are told while a circuit board is made in
+ * the background: that the model is locked meanwhile, what they can still do, and what
+ * they are to say when the user wants the model changed.
+ */
+export function locked(
+  tool: (set: string, name: string) => string,
+  board: string
+): string[] {
+  return [
+    `- "${board}" is being made in detail in the background, by another agent, in a card of its own in this conversation, and the project's files are its own until it is done: the model is locked. Meanwhile answer what the user asks, and look at the model and the board as you need to, but write, move or delete no file of the project's and build nothing.`,
+    `- What the user says that bears on the board (a part, a size, a choice), pass on to it with ${tool(BOARDS, "tell")}, and say that you did. When they want the model changed, say that it is locked while the board is made, and offer to stop the board (${tool(BOARDS, "stop")}, once they agree; what was made of it stays) or to make the change when it is done.`,
+  ]
+}
+
+/**
+ * What the agent that makes a board in detail in the background is asked: which board,
+ * and the brief it was given in the conversation it was asked for in.
+ */
+export function jobAsked(board: string, name: string, brief: string): string {
+  return [
+    `<board-job id="${board}" name="${name.replace(/"/g, "'").replace(/\s+/g, " ")}">`,
+    "Make this board in detail now, in the background, as your instructions say for a <board-job> block. What follows is the brief from the conversation it was asked for in.",
+    "</board-job>",
+    "",
+    brief,
+  ].join("\n")
+}
+
+/** What is passed on to the agent making a board, from the conversation meanwhile. */
+const passedOn = (note: string) => `The user says, for the board: ${note}`
 
 /**
  * What an agent is told of versions: that each conversation has the project its own
@@ -632,7 +728,7 @@ const MESHES = [
 function keepingHistory(history: "off" | "local" | "github"): string[] {
   if (history === "off") return []
   return [
-    `- The app keeps this project's history in git${history === "github" ? ", and backs it up to a private repository on the user's GitHub account" : ""}. After each of your turns it commits what the folder holds, with what was asked as the message, on a branch of this conversation's own where each conversation has its own version${history === "github" ? ", and pushes it" : ""}. Leave that to it: do not commit, push, make or switch branches, rewrite history or change the repository's settings yourself, unless the user asks you to. What the build writes is left out of it by .gitignore, which you may add to (never remove the app's lines); a file of 50 MB or more is kept with Git LFS by itself. Never put a password, a key or a token in the project's files.`,
+    `- The app keeps this project's history in git${history === "github" ? ", and backs it up to a private repository on the user's GitHub account" : ""}. After each of your turns it commits what the folder holds, with a log of what the turn changed as the message ("Added: a lid"), on a branch of this conversation's own where each conversation has its own version${history === "github" ? ", and pushes it" : ""}. Leave that to it: do not commit, push, make or switch branches, rewrite history or change the repository's settings yourself, unless the user asks you to. What the build writes is left out of it by .gitignore, which you may add to (never remove the app's lines); a file of 50 MB or more is kept with Git LFS by itself. Never put a password, a key or a token in the project's files.`,
   ]
 }
 
@@ -656,7 +752,9 @@ function guide(
   /** its model has parts made of a mesh */
   meshes = false,
   /** whether the app keeps its history in git, and backs that up to GitHub */
-  history: "off" | "local" | "github" = "off"
+  history: "off" | "local" | "github" = "off",
+  /** what the circuit board being made in the background is called, while one is */
+  job: string | null = null
 ): string {
   const tool = knownAs(provider)
   const lines = [
@@ -694,7 +792,8 @@ function guide(
     ...(trying ? tooling(tool, kit) : []),
     // (there is nothing to write a guide to until there is a model)
     ...(trying && manifest ? assembling(tool, kit) : []),
-    ...(trying ? wiring(kit, canAsk) : []),
+    ...(trying ? wiring(tool, kit, canAsk) : []),
+    ...(job ? locked(tool, job) : []),
     ...(trying ? versioning(tool) : []),
     ...keepingHistory(history),
     ...SIZES,
@@ -1021,6 +1120,12 @@ const printed = (text: string) =>
   // eslint-disable-next-line no-control-regex
   text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").trim()
 
+/** What the agent said last in a conversation, all of it: nothing, if it said nothing. */
+function saidLast(items: ThreadItem[]): string {
+  const last = items.findLast((item) => item.kind === "assistant")
+  return last?.kind === "assistant" ? last.text : ""
+}
+
 /** What a user's message says, for the places that show it in a line. */
 function wordsOf(item: Extract<ThreadItem, { kind: "user" | "assistant" }>) {
   // of what Claude said, the part it said outright: the rest is for whoever asks
@@ -1139,6 +1244,7 @@ export class Threads {
       book = {
         conversations: new Map(read.map((c) => [c.id, c])),
         run: null,
+        job: null,
         waiting: [],
       }
       this.books.set(projectId, book)
@@ -1198,7 +1304,7 @@ export class Threads {
 
   /** A project's conversations as the sidebar shows them, the latest first. */
   summaries(projectId: string): ConversationSummary[] {
-    const { conversations, run, waiting } = this.book(projectId)
+    const { conversations, run, waiting, job } = this.book(projectId)
     return [...conversations.values()]
       .sort(
         (a, b) =>
@@ -1234,6 +1340,14 @@ export class Threads {
             .filter((one) => one.conversation === conversation)
             .map((one) => one.item),
           versioning: running !== null && running.goesOn !== null,
+          job:
+            job?.conversation === conversation
+              ? {
+                  board: job.item.board,
+                  name: job.item.name,
+                  since: job.item.at,
+                }
+              : null,
         }
       })
   }
@@ -1279,7 +1393,10 @@ export class Threads {
   }
 
   answer(projectId: string, permissionId: string, answer: PermissionAnswer) {
-    this.book(projectId).run?.pending.get(permissionId)?.(answer)
+    const { run, job } = this.book(projectId)
+    ;(run?.pending.get(permissionId) ?? job?.pending.get(permissionId))?.(
+      answer
+    )
   }
 
   /** Answer what Claude asked: one thing said to each question, or null to leave them. */
@@ -1289,6 +1406,17 @@ export class Threads {
 
   stop(projectId: string) {
     this.book(projectId).run?.abort.abort()
+  }
+
+  /** Stop the circuit board being made in the background, if one is. */
+  stopJob(projectId: string) {
+    this.books.get(projectId)?.job?.abort.abort()
+  }
+
+  /** The circuit board being made in the background in a project: null if none is. */
+  jobOf(projectId: string): { board: string; name: string } | null {
+    const job = this.books.get(projectId)?.job
+    return job ? { board: job.item.board, name: job.item.name } : null
   }
 
   /**
@@ -1491,9 +1619,13 @@ export class Threads {
     return conversation.id
   }
 
-  /** Whether Claude is at work in a project: nothing else is done in its folder meanwhile. */
+  /**
+   * Whether Claude is at work in a project: on a turn, where nothing else is done in its
+   * folder meanwhile, or on a circuit board in the background.
+   */
   working(projectId: string): boolean {
-    return this.books.get(projectId)?.run != null
+    const book = this.books.get(projectId)
+    return book?.run != null || book?.job != null
   }
 
   /** Say something in a conversation that neither the user nor Claude said: the app did. */
@@ -1546,6 +1678,35 @@ export class Threads {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
     if (!project || book.run) return null
+    // While a board is made in the background the folder is its conversation's: what is
+    // said in another waits there until the board is done, or stopped.
+    const elsewhere =
+      book.job && book.job.conversation.id !== conversationId ? book.job : null
+    if (elsewhere) {
+      // (a new conversation is begun, with what was said in it waiting)
+      const waiting =
+        conversationId === null
+          ? newConversation(manner.provider)
+          : book.conversations.get(conversationId)
+      if (!waiting) return null
+      book.conversations.set(waiting.id, waiting)
+      const now = Date.now()
+      book.waiting.push({
+        conversation: waiting,
+        item: saidOf(
+          `queued-${++this.counter}-${now}`,
+          now,
+          text,
+          notes,
+          objects,
+          asked
+        ),
+        manner,
+        asked,
+      })
+      this.deps.onSummary()
+      return waiting.id
+    }
     let conversation: Conversation
     if (conversationId === null) {
       conversation = newConversation(manner.provider)
@@ -1612,6 +1773,7 @@ export class Threads {
       pictures,
       version: asked.version === true,
       goesOn: null,
+      boardJob: null,
     }
     book.run = run
     this.deps.onSummary()
@@ -1640,6 +1802,8 @@ export class Threads {
     const own = await this.deps
       .turnTo(projectId, conversation.id)
       .catch(() => false)
+    // a circuit board being made in the background has the project's files to itself
+    const busy = book.job?.item.name ?? null
     project = this.deps.projects.get(projectId) ?? project
     const told = guide(
       provider,
@@ -1655,7 +1819,8 @@ export class Threads {
       provider === "claude" && asked.arrange === undefined,
       asked.arrange === undefined,
       this.deps.projects.hasMeshes(projectId),
-      this.deps.history(projectId)
+      this.deps.history(projectId),
+      busy
     )
     const guided = createHash("sha1").update(told).digest("hex")
 
@@ -1690,6 +1855,41 @@ export class Threads {
             [VERSIONS]: versionTools((brief) =>
               this.wanted(projectId, run, brief)
             ),
+            [BOARDS]: boardTools({
+              make: async (board, brief) => {
+                if (book.job)
+                  throw new Error(
+                    `${book.job.item.name} is being made already: one board at a time.`
+                  )
+                const source = path.join(
+                  project.path,
+                  BOARD_FOLDER,
+                  `${board}.circuit.tsx`
+                )
+                if (!fs.existsSync(source))
+                  throw new Error(
+                    `There is no ${path.relative(project.path, source)}: set the board up first.`
+                  )
+                run.boardJob = { board, brief }
+                return JOB_ASKED
+              },
+              tell: async (note) => {
+                const { job } = book
+                if (!job) throw new Error("No board is being made.")
+                if (job.conversation.provider !== "claude")
+                  throw new Error(
+                    `${AGENTS[job.conversation.provider]} cannot be told anything while it makes the board: say it again when the board is done.`
+                  )
+                job.notes.push(note)
+                job.heard?.()
+                return "Passed on to the agent making the board."
+              },
+              stop: async () => {
+                if (!book.job) throw new Error("No board is being made.")
+                book.job.abort.abort()
+                return "The board is stopped: what was made of it so far stays in its files, and the model can be changed now."
+              },
+            }),
           }),
     }
 
@@ -1753,6 +1953,7 @@ export class Threads {
       tools,
       served: {},
       lookOver: arrange !== undefined,
+      readOnly: busy !== null,
       describe: (name, input) => describeTool(name, input, project.path),
       id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
     }
@@ -1796,7 +1997,7 @@ export class Threads {
       // What the turn did to the folder is kept as a change, before anything else can
       // be done there: a turn that was stopped part of the way has that much to take back.
       // (Not of a project that was taken off the list meanwhile: nothing of it is kept.)
-      if (pending && this.books.get(projectId) === book)
+      if (pending && this.books.get(projectId) === book && busy === null)
         await this.deps.changes
           .after(
             pending,
@@ -1810,6 +2011,15 @@ export class Threads {
       this.deps.projects.refresh(projectId)
       if (book.run === run) book.run = null
       this.write(projectId, conversation)
+      // a board it asked to have made in detail is begun now, in the background
+      if (run.boardJob && !abort.signal.aborted && !book.job)
+        void this.startJob(
+          projectId,
+          conversation,
+          run.boardJob.board,
+          run.boardJob.brief,
+          run.manner
+        )
       // What was said here meanwhile is said now, if the turn got through, or was stopped
       // to make way for it. After one that was stopped, or went wrong, it waits to be
       // sent by hand: what was wanted next may no longer be.
@@ -1832,8 +2042,236 @@ export class Threads {
           projectId,
           conversation.id,
           run.what,
-          conversation.name ?? null
+          conversation.name ?? null,
+          saidLast(conversation.items)
         )
+      this.deps.onSummary()
+    }
+  }
+
+  /**
+   * Make a circuit board in detail, in the background, beside the conversation it was
+   * asked for in: by an agent of the conversation's kind, in a session of its own, that
+   * is told what the board is to be (`brief`) and does nothing but make it. What it does
+   * and says is kept in one card of the conversation, which goes on meanwhile, with the
+   * model locked. What it changed is kept as one change, and committed, when it is over.
+   */
+  private async startJob(
+    projectId: string,
+    conversation: Conversation,
+    board: string,
+    brief: string,
+    manner: Manner
+  ) {
+    const book = this.book(projectId)
+    const project = this.deps.projects.get(projectId)
+    if (!project || book.job) return
+    let name = calledFrom(board)
+    try {
+      const said = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
+      name = readBoard(JSON.parse(fs.readFileSync(said, "utf8"))).name ?? name
+    } catch {
+      // nothing says what it is called: it goes by its file's name
+    }
+    const now = Date.now()
+    let finish = () => {}
+    const finished = new Promise<void>((resolve) => (finish = resolve))
+    const job: Job = {
+      conversation,
+      item: {
+        kind: "job",
+        id: `job-${++this.counter}-${now}`,
+        at: now,
+        board,
+        name,
+        state: "working",
+        items: [],
+        ended: null,
+      },
+      abort: new AbortController(),
+      finish,
+      pending: new Map(),
+      notes: [],
+      heard: null,
+      what: `Made ${name} in detail`,
+    }
+    book.job = job
+    const show = (item: Job["item"]) => {
+      job.item = item
+      this.put(projectId, conversation, item)
+    }
+    show(job.item)
+    this.deps.onSummary()
+    // what it does and says goes into its card, as a turn's goes into the conversation
+    const putIn = (inner: ThreadItem) => {
+      const items = [...job.item.items]
+      const index = items.findIndex((one) => one.id === inner.id)
+      if (index < 0) items.push(inner)
+      else items[index] = inner
+      show({ ...job.item, items })
+    }
+    // what the user says for it meanwhile, as it comes, until it is over
+    let over = false
+    async function* notes(): AsyncGenerator<string> {
+      while (!over) {
+        const note = job.notes.shift()
+        if (note !== undefined) yield passedOn(note)
+        else await new Promise<void>((resolve) => (job.heard = resolve))
+      }
+    }
+
+    const { provider } = conversation
+    const told = guide(
+      provider,
+      project.path,
+      project.manifest,
+      project.build,
+      this.deps.kit,
+      this.deps.scenes,
+      project.name ?? null,
+      false,
+      // nobody is there to answer what it asks
+      false,
+      true,
+      this.deps.projects.hasMeshes(projectId),
+      this.deps.history(projectId)
+    )
+    const tools: Record<string, AppTool[]> = {
+      [VIEWPORT]: viewportTools(
+        (wanted) => this.deps.viewport(projectId, wanted),
+        false
+      ),
+    }
+    const turn: Turn = {
+      cwd: project.path,
+      launch: this.deps.launch(provider) ?? { path: "", args: [], env: {} },
+      manner,
+      content: jobAsked(board, name, brief),
+      guide: told,
+      guideChanged: false,
+      sessionId: null,
+      session: () => {},
+      signal: job.abort.signal,
+      put: putIn,
+      notice: (tone, text) =>
+        putIn({
+          kind: "notice",
+          id: `note-${++this.counter}-${Date.now()}`,
+          at: Date.now(),
+          tone,
+          text,
+        }),
+      // what it wants leave for is put to the user in the conversation, as a turn's is
+      ask: (wanted, signal) =>
+        new Promise<PermissionAnswer>((resolve) => {
+          const id = `ask-${++this.counter}-${Date.now()}`
+          const item = {
+            kind: "permission" as const,
+            id,
+            at: Date.now(),
+            ...wanted,
+          }
+          const settle = (answer: PermissionAnswer) => {
+            if (!job.pending.delete(id)) return
+            this.put(projectId, conversation, {
+              ...item,
+              state: answer === "deny" ? "denied" : "allowed",
+            })
+            this.deps.onSummary()
+            resolve(answer)
+          }
+          job.pending.set(id, settle)
+          for (const ending of [job.abort.signal, signal])
+            ending?.addEventListener("abort", () => settle("deny"), {
+              once: true,
+            })
+          this.put(projectId, conversation, { ...item, state: "pending" })
+          this.deps.onSummary()
+        }),
+      touched: () => {
+        this.deps.projects.refresh(projectId)
+        this.deps.onSummary()
+      },
+      tools,
+      served: {},
+      lookOver: false,
+      noQuestions: true,
+      more: provider === "claude" ? notes() : undefined,
+      describe: (name, input) => describeTool(name, input, project.path),
+      id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
+    }
+
+    const pending = await this.deps.changes
+      .before(projectId, project.path)
+      .catch(() => null)
+    let serving: Serving | null = null
+    let failed = false
+    try {
+      if (job.abort.signal.aborted) throw new Error("Stopped.")
+      if (!this.deps.launch(provider))
+        throw new Error(
+          `${AGENTS[provider]} was not found on this machine, or is switched off in the settings.`
+        )
+      if (provider === "claude")
+        await this.claude(
+          turn,
+          projectId,
+          project.path,
+          { conversation, abort: job.abort, finish, asked: new Map() },
+          finished
+        )
+      else {
+        serving = await this.deps.tools.serve(tools)
+        const served = { ...turn, served: serving.urls }
+        await (provider === "codex" ? runCodex(served) : runGrok(served))
+      }
+    } catch (error) {
+      if (!job.abort.signal.aborted) {
+        failed = true
+        turn.notice(
+          "error",
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    } finally {
+      serving?.stop()
+      over = true
+      finish()
+      job.heard?.()
+      for (const settle of [...job.pending.values()]) settle("deny")
+      if (pending && this.books.get(projectId) === book)
+        await this.deps.changes
+          .after(pending, project.path, {
+            conversationId: conversation.id,
+            what: job.what,
+          })
+          .catch(() => this.deps.changes.discard(pending))
+      else if (pending) this.deps.changes.discard(pending)
+      show({
+        ...job.item,
+        state: job.abort.signal.aborted
+          ? "stopped"
+          : failed
+            ? "failed"
+            : "done",
+        ended: Date.now(),
+      })
+      if (book.job === job) book.job = null
+      this.deps.projects.refresh(projectId)
+      this.write(projectId, conversation)
+      if (this.books.get(projectId) === book) {
+        const said = job.item.items.findLast((one) => one.kind === "assistant")
+        this.deps.onTurned(
+          projectId,
+          conversation.id,
+          job.what,
+          conversation.name ?? null,
+          said?.kind === "assistant" ? said.text : ""
+        )
+        // what was said in another conversation meanwhile goes on now
+        const waited = book.waiting[0]
+        if (!book.run && waited) this.next(projectId, book, waited.conversation)
+      }
       this.deps.onSummary()
     }
   }
@@ -1897,10 +2335,10 @@ export class Threads {
     turn: Turn,
     projectId: string,
     root: string,
-    run: Run,
+    run: Pick<Run, "conversation" | "abort" | "finish" | "asked">,
     finished: Promise<void>
   ) {
-    const { conversation, abort, finish } = run
+    const { abort, finish } = run
     const { manner } = turn
     const session = turn.session
     // Keep the input open until the turn is over: approvals and viewport tools are
@@ -1911,6 +2349,14 @@ export class Threads {
         message: { role: "user", content: turn.content },
         parent_tool_use_id: null,
       }
+      // and what more is said to it while it is at work, as it comes
+      if (turn.more)
+        for await (const more of turn.more)
+          yield {
+            type: "user",
+            message: { role: "user", content: more },
+            parent_tool_use_id: null,
+          }
       await finished
     }
 
@@ -1938,9 +2384,7 @@ export class Threads {
           )
           // nothing said to any of them is their all being left
           const any = said.some(Boolean)
-          this.put(
-            projectId,
-            conversation,
+          turn.put(
             any
               ? { ...item, state: "answered", answers: said }
               : { ...item, state: "skipped", answers: [] }
@@ -1960,7 +2404,7 @@ export class Threads {
         }
         run.asked.set(item.id, settle)
         signal.addEventListener("abort", () => settle(null), { once: true })
-        this.put(projectId, conversation, {
+        turn.put({
           ...item,
           state: "pending",
           answers: [],
@@ -1988,10 +2432,12 @@ export class Threads {
           }
     }
 
-    const canUseTool: CanUseTool = (toolName, toolInput, options) =>
-      toolName === QUESTION_TOOL
-        ? asks(toolInput, options.signal)
-        : permits(toolName, toolInput, options)
+    const canUseTool: CanUseTool = async (toolName, toolInput, options) =>
+      toolName !== QUESTION_TOOL
+        ? permits(toolName, toolInput, options)
+        : turn.noQuestions
+          ? { behavior: "deny", message: NOBODY_TO_ASK }
+          : asks(toolInput, options.signal)
 
     // Claude Code is handed the app's tools in-process, each set as a server of its own.
     // There are few of them and they are the point of the app: no need to search for them.
@@ -2036,7 +2482,7 @@ export class Threads {
       ) {
         const text = printed(message.content)
         if (text)
-          this.put(projectId, conversation, {
+          turn.put({
             kind: "assistant",
             id: `said-${message.uuid}`,
             at: Date.now(),
@@ -2047,9 +2493,7 @@ export class Threads {
         return
       }
       if (message.type === "system" && message.subtype === "compact_boundary") {
-        this.notice(
-          projectId,
-          conversation,
+        turn.notice(
           "info",
           "What was said before this has been summed up, to make room."
         )
@@ -2076,13 +2520,13 @@ export class Threads {
           }
           item.text += event.delta.text
           live.set(id, item)
-          this.put(projectId, conversation, { ...item })
+          turn.put({ ...item })
         } else if (event.type === "content_block_stop" && messageId) {
           const id = `${messageId}:${event.index}`
           const item = live.get(id)
           if (item) {
             live.delete(id)
-            this.put(projectId, conversation, { ...item, streaming: false })
+            turn.put({ ...item, streaming: false })
             this.deps.onSummary()
           }
         }
@@ -2091,9 +2535,7 @@ export class Threads {
       if (message.type === "assistant") {
         if (message.parent_tool_use_id) return
         if (message.error)
-          this.notice(
-            projectId,
-            conversation,
+          turn.notice(
             "error",
             `Claude could not answer: ${message.error.replaceAll("_", " ")}.`
           )
@@ -2103,7 +2545,7 @@ export class Threads {
             block.text.trim() &&
             !streamed.has(message.message.id)
           ) {
-            this.put(projectId, conversation, {
+            turn.put({
               kind: "assistant",
               id: `${message.message.id}:${index}:whole`,
               at: Date.now(),
@@ -2122,7 +2564,7 @@ export class Threads {
               state: "running" as const,
             }
             tools.set(block.id, item)
-            this.put(projectId, conversation, item)
+            turn.put(item)
           }
         })
         return
@@ -2135,7 +2577,7 @@ export class Threads {
           const item = tools.get(block.tool_use_id)
           if (!item) continue
           tools.delete(block.tool_use_id)
-          this.put(projectId, conversation, {
+          turn.put({
             ...item,
             state: block.is_error ? "failed" : "done",
           })
@@ -2149,17 +2591,13 @@ export class Threads {
       if (message.type === "result") {
         session(message.session_id)
         if (message.subtype !== "success") {
-          this.notice(
-            projectId,
-            conversation,
+          turn.notice(
             "error",
             message.errors.join("\n") ||
               `Stopped: ${message.subtype.replaceAll("_", " ")}.`
           )
         } else if (message.is_error) {
-          this.notice(
-            projectId,
-            conversation,
+          turn.notice(
             "error",
             message.result || "Claude Code reported an error."
           )
@@ -2204,6 +2642,8 @@ export class Threads {
                 }
               : { permissionMode: ASKING[manner.access] }),
           canUseTool,
+          // while a board is made in the background, nothing here writes a file
+          ...(turn.readOnly ? { disallowedTools: WRITING_TOOLS } : {}),
           stderr: (data) => {
             stderr = (stderr + data).slice(-2000)
           },
@@ -2219,16 +2659,15 @@ export class Threads {
       })
     } finally {
       // what was in flight did not finish
-      for (const item of live.values())
-        this.put(projectId, conversation, { ...item, streaming: false })
-      for (const item of tools.values())
-        this.put(projectId, conversation, { ...item, state: "failed" })
+      for (const item of live.values()) turn.put({ ...item, streaming: false })
+      for (const item of tools.values()) turn.put({ ...item, state: "failed" })
     }
   }
 
   close() {
     for (const [projectId, book] of this.books) {
       book.run?.abort.abort()
+      book.job?.abort.abort()
       for (const conversation of book.conversations.values())
         if (this.saving.has(conversation.id))
           this.write(projectId, conversation)

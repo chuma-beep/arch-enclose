@@ -22,12 +22,61 @@ export const boardFileOf = (id: string) => `${id}.board.json`
 
 /**
  * What is built of a board, within the folder its file is in: the board as tscircuit
- * has it, and the board in 3D.
+ * has it, the board in 3D, as the view shows it and as a STEP file, and the files a
+ * board house makes it from; and, while it is being built, how far that has got.
  */
 export const builtOf = (id: string) => ({
   circuit: `${BUILT_FOLDER}/${id}.circuit.json`,
   model: `${BUILT_FOLDER}/${id}.glb`,
+  step: `${BUILT_FOLDER}/${id}.step`,
+  gerbers: `${BUILT_FOLDER}/${id}.gerbers.zip`,
+  building: `${BUILT_FOLDER}/${id}.building.json`,
+  // a quick look at it, unrouted, made by the app as its file is written (see previews.ts)
+  preview: `${BUILT_FOLDER}/${id}.preview.json`,
 })
+
+/** How long a build can go without saying how far it has got and still be at it, ms. */
+export const QUIET_BUILD_MS = 3 * 60_000
+
+/**
+ * How far a board's build has got, from what kit/board.mjs writes while it builds: or
+ * nothing, where that says nothing a build would, or has said nothing for so long that
+ * the build must be over without having cleared it away. `now` is the time, in ms.
+ */
+export function readBuilding(written: unknown, now: number): Building | null {
+  if (!isObject(written)) return null
+  const { since, at, stage } = written
+  if (typeof since !== "number" || typeof at !== "number") return null
+  if (stage !== "building" && stage !== "routing" && stage !== "finishing")
+    return null
+  if (now - at > QUIET_BUILD_MS) return null
+  const number = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? value : null
+  const progress = number(written.progress)
+  return {
+    since,
+    stage,
+    progress: progress === null ? null : Math.min(1, Math.max(0, progress)),
+    phase: number(written.phase),
+    phases: number(written.phases),
+    step: typeof written.step === "string" ? written.step : null,
+  }
+}
+
+/** How far a board's build has got (see `readBuilding`). */
+export type Building = {
+  /** when it began, in ms */
+  since: number
+  /** what it is at: laying the board out, routing it, or writing what was made */
+  stage: "building" | "routing" | "finishing"
+  /** how far the routing is, 0 to 1, while it is routing; null where there is no telling */
+  progress: number | null
+  /** which stage of the routing, of how many, where the board is routed in several */
+  phase: number | null
+  phases: number | null
+  /** what the router is at, as it names it ("topologyPlanningSolver") */
+  step: string | null
+}
 
 /** The most boards a project has shown, and the most that is read of what says what one is. */
 export const MOST_BOARDS = 24

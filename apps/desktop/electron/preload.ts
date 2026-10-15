@@ -64,6 +64,8 @@ const api: CadApi = {
   },
   boards: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.boardsRead, projectId),
+    save: (projectId, boardId, what, name) =>
+      ipcRenderer.invoke(CHANNEL.boardsSave, projectId, boardId, what, name),
   },
   assembly: {
     read: (projectId) => ipcRenderer.invoke(CHANNEL.assemblyRead, projectId),
@@ -129,6 +131,8 @@ const api: CadApi = {
     lookOver: (projectId, seen, manner) =>
       ipcRenderer.invoke(CHANNEL.threadLookOver, projectId, seen, manner),
     stop: (projectId) => ipcRenderer.invoke(CHANNEL.threadStop, projectId),
+    stopJob: (projectId) =>
+      ipcRenderer.invoke(CHANNEL.threadStopJob, projectId),
     sendNow: (projectId, queuedId) =>
       ipcRenderer.invoke(CHANNEL.threadSendNow, projectId, queuedId),
     unqueue: (projectId, queuedId) =>

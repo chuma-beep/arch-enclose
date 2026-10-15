@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { plain, tidy } from "./gist"
+import { logged, plain, tidy } from "./gist"
 
 describe("plain", () => {
   it("puts a message in one line", () => {
@@ -32,5 +32,29 @@ describe("tidy", () => {
   it("has none where nothing came back, or far too much", () => {
     expect(tidy("  ")).toBeNull()
     expect(tidy("word ".repeat(30))).toBeNull()
+  })
+})
+
+describe("logged", () => {
+  it("keeps the lines of a change log, and nothing said round them", () => {
+    expect(
+      logged(
+        [
+          "Here is the log:",
+          "- Added: a circuit board, and a USB-C socket in the wall.",
+          "Changed: the back cover's posts",
+          "Nothing else changed",
+        ].join("\n")
+      )
+    ).toEqual([
+      "Added: a circuit board, and a USB-C socket in the wall",
+      "Changed: the back cover's posts",
+    ])
+  })
+
+  it("keeps a line short, and the log to four of them", () => {
+    const long = `Added: ${"a part, ".repeat(20)}`
+    expect(logged(long)[0]).toHaveLength(72)
+    expect(logged(Array(6).fill("Fixed: a gap").join("\n"))).toHaveLength(4)
   })
 })

@@ -660,12 +660,22 @@ const KEYS: { title: string; rows: [string, string[], Drag?][] }[] = [
       ["Isolate the selection", ["I"]],
       ["Hide the selection, or show everything", ["H"]],
       ["Blueprint", ["B"]],
+      ["PCB", [SHIFT, "P"]],
       ["Assembly", ["A"]],
       ["Search", [CMD, "F"]],
       ["Tools", ["T"]],
       ["Undo", [CMD, "Z"]],
       ["Redo", [SHIFT, CMD, "Z"]],
       ["Close, or step back", ["Esc"]],
+    ],
+  },
+  {
+    title: "PCB mode",
+    rows: [
+      ["Technical view", ["1"]],
+      ["3D view", ["2"]],
+      ["Schematic", ["3"]],
+      ["Exit PCB mode", ["Esc"]],
     ],
   },
   {

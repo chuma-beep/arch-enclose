@@ -143,6 +143,9 @@ describe("saidOf", () => {
     expect(saidOf("undo", { ok: false, why: "busy", files: [] })).toBe(
       "Claude is at work: nothing can be undone until it is through"
     )
+    expect(saidOf("redo", { ok: false, why: "board", files: [] })).toBe(
+      "A board is being made: nothing can be redone until it is done"
+    )
     expect(
       saidOf("undo", { ok: false, why: "changed", files: ["model.py"] })
     ).toBe("Not undone: model.py changed since")

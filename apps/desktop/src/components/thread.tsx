@@ -6,10 +6,12 @@ import {
   BoxIcon,
   CircuitBoardIcon,
   ClockIcon,
+  EyeIcon,
   GitBranchPlusIcon,
   PanelRightCloseIcon,
   PlusIcon,
   QuoteIcon,
+  SquareIcon,
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react"
@@ -26,7 +28,7 @@ import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
 import { QUOTABLE, Quoting } from "@/components/quoting"
 import { Reply } from "@/components/reply"
-import { Steps } from "@/components/steps"
+import { LIVE, Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -45,7 +47,12 @@ import {
 import { stretches } from "@/lib/mentions"
 import { inLine } from "@/lib/quotes"
 import { answering, PROVIDER_WORDS, usable } from "@/lib/providers"
-import { inBlocks, type Block } from "@/lib/steps"
+import {
+  inBlocks,
+  spelledOut,
+  type Block,
+  type Steps as Stretch,
+} from "@/lib/steps"
 import {
   fitThread,
   goesBy,
@@ -54,7 +61,7 @@ import {
   useStore,
   VIEW_MIN,
 } from "@/lib/store"
-import { useNow } from "@/lib/time"
+import { duration, useNow } from "@/lib/time"
 import { atPictures, pictureName, pictureUrl } from "@shared/pictures"
 
 type Of<Kind extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: Kind }>
@@ -389,6 +396,29 @@ function PermissionCard({
   )
 }
 
+/**
+ * A stretch of steps of the turn Claude is on, while it is on it: what it has said on
+ * the way, in the conversation as it said it, with the steps between each a line of
+ * their own; the last of them the one it is at, where it is the latest thing in the
+ * conversation (`live`). When the turn is over the stretch goes back into one line.
+ */
+function AtWork({ stretch, live }: { stretch: Stretch; live: boolean }) {
+  const pieces = spelledOut(stretch)
+  const last = pieces.at(-1)
+  return pieces.map((piece) =>
+    piece.kind === "steps" ? (
+      <Steps
+        key={piece.id}
+        steps={piece.steps}
+        took={piece.took}
+        working={live && piece === last}
+      />
+    ) : (
+      <Reply key={piece.id} item={piece} />
+    )
+  )
+}
+
 function Item({
   item,
   project,
@@ -410,6 +440,8 @@ function Item({
       return <PermissionCard item={item} project={project} />
     case "question":
       return <QuestionCard item={item} project={project} />
+    case "job":
+      return <JobCard item={item} project={project} />
     case "notice":
       return item.tone === "error" ? (
         <Alert variant="destructive">
@@ -424,6 +456,120 @@ function Item({
         </div>
       )
   }
+}
+
+/**
+ * A circuit board made in detail in the background, beside the conversation: all of it in
+ * one card, which grows as the board is made. At its top, what it is at and how long it
+ * has been, with what stops it and what shows the board in PCB mode; under that, what
+ * was done and said in making it, spelled out as a turn is while Claude is at it, and
+ * folded away once it is over, under what came of it.
+ */
+function JobCard({
+  item,
+  project,
+}: {
+  item: Extract<ThreadItem, { kind: "job" }>
+  project: Project
+}) {
+  const now = useNow(1000)
+  const setView = useStore((state) => state.setView)
+  const working = item.state === "working"
+  const blocks = React.useMemo(() => inBlocks(item.items), [item.items])
+  const last = blocks.at(-1)
+  // what came of it: what was said last, once it is over
+  const said = !working && last?.kind === "assistant" ? last : null
+  const took = (item.ended ?? now) - item.at
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border bg-foreground/[0.025] px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2 text-sm">
+        <CircuitBoardIcon className="size-4 shrink-0" />
+        <span className={cn("min-w-0 truncate font-medium", working && LIVE)}>
+          {working
+            ? `Making ${item.name} in detail`
+            : item.state === "done"
+              ? `Made ${item.name} in detail`
+              : item.state === "stopped"
+                ? `Stopped making ${item.name}`
+                : `${item.name} could not be made`}
+        </span>
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {duration(took)}
+        </span>
+        {/* the board in PCB mode; and while it is being made, what stops it, as the
+            foot of the view has for a turn */}
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setView({ board: item.board })}
+                />
+              }
+            >
+              <EyeIcon />
+              <span className="sr-only">Show the board</span>
+            </TooltipTrigger>
+            <TooltipContent>Show the board</TooltipContent>
+          </Tooltip>
+          {working && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-sm"
+                    className="bg-destructive text-white hover:bg-destructive/80"
+                    onClick={() => void window.cad.thread.stopJob(project.id)}
+                  />
+                }
+              >
+                <SquareIcon className="size-3 fill-current" />
+                <span className="sr-only">Stop making the board</span>
+              </TooltipTrigger>
+              <TooltipContent>Stop making the board</TooltipContent>
+            </Tooltip>
+          )}
+        </span>
+      </div>
+      {blocks
+        .filter((block) => block !== said)
+        .map((block) =>
+          block.kind === "steps" ? (
+            working ? (
+              <AtWork key={block.id} stretch={block} live={block === last} />
+            ) : (
+              <Steps
+                key={block.id}
+                steps={block.steps}
+                took={block.took}
+                working={false}
+              />
+            )
+          ) : block.kind === "assistant" ? (
+            <Reply key={block.id} item={block} />
+          ) : block.kind === "notice" ? (
+            <div
+              key={block.id}
+              className={cn(
+                "text-xs",
+                block.tone === "error"
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              )}
+            >
+              {block.text}
+            </div>
+          ) : null
+        )}
+      {said && (
+        <div {...{ [QUOTABLE]: "" }}>
+          <Reply item={said} />
+        </div>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -660,6 +806,8 @@ export function Thread({ project }: { project: Project }) {
   )
   // a stretch of steps says for itself that there is more to come
   const latest = blocks.at(-1)
+  // where the turn Claude is on began: what it was asked
+  const asked = blocks.findLastIndex((block) => block.kind === "user")
   const quiet =
     versioning ||
     (working && latest?.kind !== "assistant" && latest?.kind !== "steps")
@@ -736,17 +884,24 @@ export function Thread({ project }: { project: Project }) {
         <ScrollArea className="min-h-0 flex-1">
           {/* everything said here breaks into lines of about one length */}
           <div className="flex flex-col gap-4 px-8 pt-2 pb-6 text-balance">
-            {blocks.map((block) =>
-              block.kind === "steps" ? (
+            {blocks.map((block, index) =>
+              block.kind !== "steps" ? (
+                <Item key={block.id} item={block} project={project} />
+              ) : working && !versioning && index > asked ? (
+                // a stretch of the turn Claude is on, spelled out: what it says on the
+                // way is how it is followed, and stays where it was said as it goes on
+                <AtWork
+                  key={block.id}
+                  stretch={block}
+                  live={block === latest}
+                />
+              ) : (
                 <Steps
                   key={block.id}
                   steps={block.steps}
                   took={block.took}
-                  // (what says so while a new version is made is the line below)
-                  working={working && !versioning && block === latest}
+                  working={false}
                 />
-              ) : (
-                <Item key={block.id} item={block} project={project} />
               )
             )}
             {quiet && (

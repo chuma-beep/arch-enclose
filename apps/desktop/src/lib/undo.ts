@@ -147,6 +147,8 @@ export function saidOf(way: "undo" | "redo", outcome: Undone): string | null {
   const done = way === "undo" ? "undone" : "redone"
   if (outcome.why === "busy")
     return `Claude is at work: nothing can be ${done} until it is through`
+  if (outcome.why === "board")
+    return `A board is being made: nothing can be ${done} until it is done`
   if (outcome.why === "changed") {
     const [first, ...rest] = outcome.files
     const more = rest.length > 0 ? ` and ${rest.length} more` : ""

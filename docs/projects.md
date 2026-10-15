@@ -38,8 +38,11 @@ Every project the app makes keeps its history in git, and so does a folder you o
 that was not a git repository already. A folder that was one is yours, kept your own way,
 and the app commits nothing in it.
 
-After each turn of Claude's, and each Cmd+Z, the app commits what the folder holds, with
-what was asked as the message. Each conversation that has [its own
+After each turn of Claude's, and each Cmd+Z, the app commits what the folder holds. A
+turn's commit says what it changed, as a change log written by Claude Code's quickest
+model from what was asked, what Claude said and the files that changed ("Added: a
+circuit board and a USB-C socket", "Changed: …", "Fixed: …", "Removed: …"); where that
+cannot be had, it says what was asked. Each conversation that has [its own
 version](working-with-claude.md#versions) of the project has a branch of its own: the
 first is `main`, and each after it `version/<what it began with>`, from where the project
 was when it began. With versions off, everything is on `main`. What the build writes

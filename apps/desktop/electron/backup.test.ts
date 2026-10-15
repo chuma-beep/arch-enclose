@@ -11,6 +11,7 @@ import {
   commitAll,
   ignoreText,
   managed,
+  loggedAs,
   messageOf,
   setUp,
   slugged,
@@ -75,6 +76,17 @@ describe("names", () => {
     )
     expect(messageOf("x".repeat(100), null)).toHaveLength(72)
   })
+
+  it("make one of a change log: the first line, then the rest under it", () => {
+    expect(
+      loggedAs(["Added: a circuit board", "Changed: the back cover"], "Clock")
+    ).toBe(
+      "Added: a circuit board\n\nChanged: the back cover\n\nConversation: Clock"
+    )
+    expect(loggedAs(["Fixed: the lid's gap"], null)).toBe(
+      "Fixed: the lid's gap"
+    )
+  })
 })
 
 describe("setUp", () => {
@@ -134,6 +146,25 @@ describe("commitAll", () => {
     await commitAll(git, dir, { ...by, message: "Again", branch: "main" })
     expect(await out("log", "--format=%s", "main")).toBe("Again\nBegin")
     expect(fs.readFileSync(path.join(dir, "model.py"), "utf8")).toBe("a = 3")
+  })
+
+  it("makes the message, where it is to be made, of the files it holds", async () => {
+    write("model.py", "a = 1")
+    await setUp(git, dir, "build")
+    await commitAll(git, dir, { ...by, branch: "main" })
+    write("model.py", "a = 2")
+    write("pcb/main.circuit.tsx", "board")
+    let seen: string[] = []
+    await commitAll(git, dir, {
+      ...by,
+      branch: "main",
+      message: async (files) => {
+        seen = files
+        return "Added: a circuit board"
+      },
+    })
+    expect(seen).toEqual(["M\tmodel.py", "A\tpcb/main.circuit.tsx"])
+    expect(await out("log", "-1", "--format=%s")).toBe("Added: a circuit board")
   })
 
   it("has Git LFS keep a file too big for a repository", async () => {

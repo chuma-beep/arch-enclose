@@ -132,18 +132,40 @@ goes.
 
 **PCB**, beside the view, lists the project's boards, each with a picture of it in 3D,
 its name and its size; with none yet, it says to ask for one. Pick one and the view is
-in PCB mode, on a green ground, with the board where the model was. The buttons down
-the right show it as it is made (**Technical view**), in **3D**, or as its
+in PCB mode, on a green ground, with the board where the model was: the buttons down the
+right change over to the board's, and the cards of the other projects are put away. The
+buttons, or 1, 2 and 3, show it as it is made (**Technical view**), in **3D**, or as its
 **Schematic**. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
-wheel, and a double click shows all of it again; the 3D turns as the model does. A
-message written in PCB mode is about the board on screen. **Exit PCB mode**, at the foot
-of the view, or Esc, brings the model back.
+wheel, and a double click shows all of it again. The 3D is looked round as the model is,
+with the same camera, in tscircuit's own colours with the edges drawn as the model's
+are. A message written in PCB mode is about the board on screen. **Exit PCB mode**, at
+the foot of the view, or Esc, brings the model back.
+
+A detailed board is made in the background, by another agent, while the conversation
+goes on: it has a card of its own in the conversation, which says what it is at as it
+goes, with **Show**, which opens the board in PCB mode, and **Stop**. Meanwhile the model
+is locked. Claude still answers what you ask, and passes on to the board's agent what you
+say of the board; asked to change the model, it offers to stop the board or to make the
+change when it is done. Cmd+Z waits for the board too, and so does what is said in
+another conversation, which goes on once the board is done or stopped. What was made
+of a stopped board stays in its files.
+
+When Claude builds a board, PCB mode opens on it, and a detailed board is built in steps:
+its parts placed, then joined, then routed. Each build shows as it comes
+in, and as Claude writes the board the app makes a quick look at it by itself, unrouted,
+so that its parts appear as they are put on it. While it is routed, the line under the
+board's name says how far that has got.
+
+The download button in PCB mode saves the board's **Gerbers**, the zip a board house makes
+it from, with its drill files, what goes on it and where each part goes; or the board in
+3D, as **STEP**. An unfinished board's Gerbers are for looking at, not for ordering.
 
 A board is kept in `pcb/` at the top of the project: its tscircuit file
 (`pcb/main.circuit.tsx`), a small file with its name and whether it is finished, and in
 `pcb/build/` what is built of it, which Claude builds with the app's
 [`kit/board.mjs`](../kit/board.mjs). That needs [Node.js](https://nodejs.org), and
-fetches tscircuit the first time. [`kit/pcb.md`](../kit/pcb.md) says how a board is
+fetches tscircuit the first time. The parts on it come with their makers' own 3D models,
+which the build fetches, so that the board in the model is the board as it will be made. [`kit/pcb.md`](../kit/pcb.md) says how a board is
 written and fitted into the model, and is what Claude reads before it makes one.
 
 ## Conversations

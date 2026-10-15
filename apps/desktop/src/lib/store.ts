@@ -138,8 +138,11 @@ export type View = {
   boardAs: BoardAs
 }
 
-/** The ways a circuit board is looked at, in PCB mode. */
-export const BOARD_AS = ["pcb", "schematic", "3d"] as const
+/**
+ * The ways a circuit board is looked at, in PCB mode, in the order their buttons stand
+ * in: which is the order of the keys that bring each up, 1, 2 and 3.
+ */
+export const BOARD_AS = ["pcb", "3d", "schematic"] as const
 export type BoardAs = (typeof BOARD_AS)[number]
 
 /**

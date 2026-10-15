@@ -16,7 +16,9 @@ import {
   MOST_BOARDS,
   MOST_CIRCUIT_BYTES,
   readBoard,
+  readBuilding,
   sizeOf,
+  type Building,
 } from "../shared/board-format"
 
 /** The boards in a folder's pcb/, by what each is known by, in the order of their files. */
@@ -51,7 +53,8 @@ export function boardsWritten(root: string): string {
   const folder = path.join(root, BOARD_FOLDER)
   return findBoards(root)
     .map((id) => {
-      const files = [boardFileOf(id), builtOf(id).circuit, builtOf(id).model]
+      const { circuit, model, building, preview } = builtOf(id)
+      const files = [boardFileOf(id), circuit, model, building, preview]
       const stamps = files.map((file) => {
         const stat = statOf(path.join(folder, file))
         return stat ? `${stat.mtimeMs}:${stat.size}` : "-"
@@ -59,6 +62,34 @@ export function boardsWritten(root: string): string {
       return [id, ...stamps].join(":")
     })
     .join("|")
+}
+
+/**
+ * How big a built board is, as `sizeOf` has it: read once for each time it is built,
+ * since the boards are read again as often as a build says how far it has got.
+ */
+const sizes = new Map<string, { at: number; size: [number, number] | null }>()
+function sizeAt(file: string, stat: fs.Stats): [number, number] | null {
+  const had = sizes.get(file)
+  if (had?.at === stat.mtimeMs) return had.size
+  let size: [number, number] | null = null
+  if (stat.size <= MOST_CIRCUIT_BYTES)
+    try {
+      size = sizeOf(JSON.parse(fs.readFileSync(file, "utf8")))
+    } catch {
+      // half written, or not tscircuit's: it is shown when it is built again
+    }
+  sizes.set(file, { at: stat.mtimeMs, size })
+  return size
+}
+
+/** How far a board's build has got, where it is being built (see kit/board.mjs). */
+function buildingAt(file: string): Building | null {
+  try {
+    return readBuilding(JSON.parse(fs.readFileSync(file, "utf8")), Date.now())
+  } catch {
+    return null
+  }
 }
 
 /** A folder's boards as the list of them has it, in the order of their files. */
@@ -80,24 +111,24 @@ export function boardsIn(root: string): BoardSummary[] {
       } catch (error) {
         trouble = error instanceof Error ? error.message : String(error)
       }
-    const { circuit, model } = builtOf(id)
-    const built = statOf(path.join(folder, circuit))
-    let size: [number, number] | null = null
-    if (built && built.size <= MOST_CIRCUIT_BYTES)
-      try {
-        size = sizeOf(
-          JSON.parse(fs.readFileSync(path.join(folder, circuit), "utf8"))
-        )
-      } catch {
-        // half written, or not tscircuit's: it is shown when it is built again
-      }
+    const files = builtOf(id)
+    const built = statOf(path.join(folder, files.circuit))
+    const there = (file: string) => statOf(path.join(folder, file)) !== null
+    const preview = statOf(path.join(folder, files.preview))
     return {
       id,
       name,
       finished,
       built: built ? Math.round(built.mtimeMs) : null,
-      size,
-      model: statOf(path.join(folder, model)) !== null,
+      size: built ? sizeAt(path.join(folder, files.circuit), built) : null,
+      model: there(files.model),
+      step: there(files.step),
+      gerbers: there(files.gerbers),
+      building: buildingAt(path.join(folder, files.building)),
+      preview:
+        preview && (!built || preview.mtimeMs > built.mtimeMs)
+          ? Math.round(preview.mtimeMs)
+          : null,
       trouble,
     }
   })

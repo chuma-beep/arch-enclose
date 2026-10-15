@@ -49,6 +49,7 @@ import { VIEWS } from "@/lib/orient"
 import { sceneFor, withFigure } from "@/lib/reference"
 import {
   allOf,
+  BOARD_AS,
   calledAs,
   calledScene,
   exploding,
@@ -759,7 +760,10 @@ function Model({ project }: { project: Project }) {
   // the user and by Claude, which looks at the view to check what it made.
   const ownScene = scenes?.find((scene) => scene.own)?.files.join() ?? null
   const ownSeen = React.useRef<string | null | undefined>(undefined)
-  const atWorkHere = project.conversations.some((c) => c.status !== "idle")
+  // (a board being made in the background is Claude at work as well)
+  const atWorkHere = project.conversations.some(
+    (c) => c.status !== "idle" || c.job !== null
+  )
   React.useEffect(() => {
     if (!scenes) return
     const was = ownSeen.current
@@ -868,6 +872,29 @@ function Model({ project }: { project: Project }) {
     if (!boards || view.board === null) return
     if (!boards.some((one) => one.id === view.board)) setView({ board: null })
   }, [boards])
+  // A board that Claude builds, at work in the project, is opened in PCB mode the first
+  // time it is built in that turn: what is made there is there to be watched, as each
+  // build of it comes in. Once PCB mode is left it is not opened again in the same turn.
+  const boardsBuilt = React.useRef<Map<string, number | null> | null>(null)
+  const openedInTurn = React.useRef(false)
+  React.useEffect(() => {
+    if (!boards) return
+    const was = boardsBuilt.current
+    boardsBuilt.current = new Map(boards.map((one) => [one.id, one.built]))
+    if (!atWorkHere) {
+      openedInTurn.current = false
+      return
+    }
+    // (as they were found when the project was opened is not their having been built)
+    if (!was || openedInTurn.current) return
+    const built = boards.find(
+      (one) => one.built !== null && one.built !== was.get(one.id)
+    )
+    if (!built) return
+    openedInTurn.current = true
+    const { view, setView } = useStore.getState()
+    if (view.board === null) setView({ board: built.id })
+  }, [boards, atWorkHere])
   // Meanwhile the view is Claude's: the camera goes round the model by itself, and
   // nothing in the view answers the hand or the keys. When it is through, the camera
   // goes back to where a model opens, as Cmd+1 would take it.
@@ -1244,10 +1271,17 @@ function Model({ project }: { project: Project }) {
         return
       }
       if (event.shiftKey) {
-        // the one key here that Shift goes with: and not a capital G being typed
+        // the keys here that Shift goes with: and not a capital letter being typed
         const alone = !event.metaKey && !event.ctrlKey && !event.repeat
-        if (!loaded || !alone || event.key.toLowerCase() !== "g") return
-        if (spokenFor(event.target)) return
+        if (!loaded || !alone || spokenFor(event.target)) return
+        if (event.key.toLowerCase() === "p") {
+          // the list of the project's circuit boards, which PCB mode is gone into from
+          const { boardsOpen, setBoardsOpen } = useStore.getState()
+          setBoardsOpen(!boardsOpen)
+          event.preventDefault()
+          return
+        }
+        if (event.key.toLowerCase() !== "g") return
         const { view, setView } = useStore.getState()
         // (the ground is the view's: there is none under a blueprint, the guides or a
         // board)
@@ -1290,6 +1324,9 @@ function Model({ project }: { project: Project }) {
         // nor any guide to putting it together
         if (loaded.standIn) return
         setView({ assembly: !view.assembly })
+      } else if (view.board !== null && /^[1-3]$/.test(letter)) {
+        // in PCB mode, the ways the board is looked at, in the order of their buttons
+        setView({ boardAs: BOARD_AS[Number(letter) - 1] })
       } else if (view.assembly || view.board !== null) {
         // every other key here is the view's, or the blueprint's: they wait until the
         // guides are put away, or PCB mode is left
@@ -1686,6 +1723,7 @@ function Model({ project }: { project: Project }) {
         projectId={project.id}
         locked={lookingOver}
         hasTools={hasTools}
+        board={board}
       />
       {loaded && partsOpen && !lookingOver && !assembly && !board && (
         <PartsPanel

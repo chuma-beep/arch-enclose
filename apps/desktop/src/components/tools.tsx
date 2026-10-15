@@ -40,7 +40,8 @@ import { oneFile, sizeOf } from "@/lib/model"
 import { MAC } from "@/lib/platform"
 import { usePreferences, type Format } from "@/lib/preferences"
 import { savedAs } from "@/lib/saved"
-import { SPREAD, useStore, type BoardAs } from "@/lib/store"
+import { BOARD_AS, SPREAD, useStore, type BoardAs } from "@/lib/store"
+import type { BoardSummary } from "@shared/api"
 import type { LoadedModel } from "./viewport/load"
 import { sectionFacing } from "./viewport/section-planes"
 
@@ -363,6 +364,85 @@ function Downloads({
   )
 }
 
+/** A name as a file of it is called: "Clock board" is clock-board. */
+const fileNamed = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || "board"
+
+/**
+ * In PCB mode, the board as files, to take elsewhere: what a board house makes it from,
+ * its Gerbers, with the drill files, what goes on it and where each part goes, all in
+ * one zip; or the board in 3D, as a STEP file, for CAD. A board only roughed out so far
+ * can be had too, and says that it is not one to order yet.
+ */
+function BoardDownloads({
+  board,
+  projectId,
+}: {
+  board: BoardSummary
+  projectId: string
+}) {
+  const [open, setOpen] = React.useState(false)
+  const say = useStore((state) => state.say)
+  const called = fileNamed(board.name)
+  const save = (what: "gerbers" | "step", name: string) =>
+    void window.cad.boards
+      .save(projectId, board.id, what, savedAs(name))
+      .then((saved) => {
+        if (saved && what === "gerbers")
+          say(`Saved the Gerbers of ${board.name}`)
+      })
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <Tooltip disableHoverablePopup>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon" className={ROUND} />}
+            />
+          }
+        >
+          <DownloadIcon />
+          <span className="sr-only">Download</span>
+        </TooltipTrigger>
+        {!open && <TooltipContent side="left">Download</TooltipContent>}
+      </Tooltip>
+      <DropdownMenuContent side="left" align="start" className="w-60">
+        {board.gerbers || board.step ? (
+          <DropdownMenuGroup>
+            {board.gerbers && (
+              <DropdownMenuItem
+                onClick={() => save("gerbers", `${called}-gerbers.zip`)}
+              >
+                Gerbers, to have it made
+                <Size kind="ZIP" />
+              </DropdownMenuItem>
+            )}
+            {board.step && (
+              <DropdownMenuItem onClick={() => save("step", `${called}.step`)}>
+                The board in 3D
+                <Size kind="STEP" />
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
+        ) : (
+          <p className="px-2 py-1.5 text-xs text-balance text-muted-foreground">
+            There is nothing of this board to save until it is built.
+          </p>
+        )}
+        {!board.finished && board.gerbers && (
+          <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
+            This board is unfinished: its Gerbers are for looking at, not for
+            ordering yet.
+          </p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /**
  * What kind of file a way of having the model is, and how big where that is known: at
  * the end of its row. (A mesh is made as it is saved, so how big is not known before.)
@@ -375,12 +455,101 @@ function Size({ kind, bytes }: { kind: string; bytes?: number }) {
   )
 }
 
+/** How long a button takes to go off the edge, or to come back, ms; and between one and the next. */
+const SHIFT_MS = 160
+const STAGGER_MS = 22
+
+/** Whoever has asked for less to move has the buttons changed at once. */
+const still = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+/**
+ * A button that goes off the edge of the view to the right, `away`, and comes back: after
+ * `delay` ms, either way.
+ */
+function Geared({
+  away,
+  delay,
+  children,
+}: {
+  away: boolean
+  delay: number
+  children: React.ReactNode
+}) {
+  const now = still()
+  return (
+    <div
+      inert={away}
+      className={cn(
+        "transition-[translate,opacity] ease-out",
+        away && "translate-x-[calc(100%+0.75rem)] opacity-0"
+      )}
+      style={{
+        transitionDuration: now ? "0ms" : `${SHIFT_MS}ms`,
+        transitionDelay: now ? "0ms" : `${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+/**
+ * The stack in the middle of the edge, of the one set of buttons or the other: the
+ * model's, or in PCB mode the board's. Going from one to the other is a change of gear:
+ * the buttons there go off the edge to the right, one after another from the top, and
+ * once they are gone the others come in, the same way. Both are there all the while,
+ * one of them out of sight and not to be pressed.
+ */
+function Gears({
+  onBoard,
+  model,
+  board,
+}: {
+  onBoard: boolean
+  model: React.ReactElement<{ children?: React.ReactNode }>
+  board: React.ReactElement<{ children?: React.ReactNode }>
+}) {
+  const sets = {
+    model: React.Children.toArray(model.props.children),
+    board: React.Children.toArray(board.props.children),
+  }
+  // the others come in once the last of these is on its way out
+  const leaving = (onBoard ? sets.model : sets.board).length
+  const coming = leaving * STAGGER_MS + SHIFT_MS * 0.5
+  const stack = (buttons: React.ReactNode[], away: boolean) => (
+    // (the set that is away is still where it stands, over the other: nothing in it is
+    // to be found by the pointer, or the buttons under it could not be pressed)
+    <Stack
+      inert={away}
+      style={away ? { pointerEvents: "none" } : undefined}
+      className="absolute top-1/2 right-3 -translate-y-1/2"
+    >
+      {buttons.map((button, index) => (
+        <Geared
+          key={React.isValidElement(button) ? button.key : index}
+          away={away}
+          delay={(away ? 0 : coming) + index * STAGGER_MS}
+        >
+          {button}
+        </Geared>
+      ))}
+    </Stack>
+  )
+  return (
+    <>
+      {stack(sets.model, onBoard)}
+      {stack(sets.board, !onBoard)}
+    </>
+  )
+}
+
 /** The ways a circuit board is looked at in PCB mode, as the buttons for them have it. */
-const BOARD_WAYS: { as: BoardAs; label: string; icon: React.ReactNode }[] = [
-  { as: "pcb", label: "Technical view", icon: <LayersIcon /> },
-  { as: "3d", label: "3D view", icon: <Rotate3dIcon /> },
-  { as: "schematic", label: "Schematic", icon: <WorkflowIcon /> },
-]
+const BOARD_WAYS: Record<BoardAs, { label: string; icon: React.ReactNode }> = {
+  pcb: { label: "Technical view", icon: <LayersIcon /> },
+  "3d": { label: "3D view", icon: <Rotate3dIcon /> },
+  schematic: { label: "Schematic", icon: <WorkflowIcon /> },
+}
 
 /**
  * The buttons down the right-hand edge. At the top, what leaves the view: the
@@ -406,6 +575,7 @@ export function Tools({
   projectId,
   locked = false,
   hasTools = false,
+  board = null,
 }: {
   loaded: LoadedModel | null
   projectId: string
@@ -413,6 +583,8 @@ export function Tools({
   locked?: boolean
   /** the project has tools of its own, made for its model */
   hasTools?: boolean
+  /** the circuit board PCB mode has, while it is in PCB mode */
+  board?: BoardSummary | null
 }) {
   const view = useStore((state) => state.view)
   const { blueprint, assembly } = view
@@ -463,203 +635,223 @@ export function Tools({
     </Switch>
   )
 
-  if (view.board !== null)
-    return (
-      <div className={EDGE} inert={bare} data-away={bare || undefined}>
-        <Stack className="absolute top-3 right-3">{conversation}</Stack>
-        {/* how the board is looked at: one way at a time, and always one */}
-        <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
-          {BOARD_WAYS.map((way) => (
-            <Switch
-              key={way.as}
-              label={way.label}
-              on={view.boardAs === way.as}
-              onChange={() => setView({ boardAs: way.as })}
-            >
-              {way.icon}
-            </Switch>
-          ))}
-        </Stack>
-      </div>
-    )
+  const onBoard = view.board !== null
+  // how a board is looked at, in PCB mode: one way at a time, and always one
+  const boardButtons = (
+    <>
+      {BOARD_AS.map((as, index) => (
+        <Switch
+          key={as}
+          label={BOARD_WAYS[as].label}
+          shortcut={String(index + 1)}
+          on={view.boardAs === as}
+          onChange={() => setView({ boardAs: as })}
+        >
+          {BOARD_WAYS[as].icon}
+        </Switch>
+      ))}
+    </>
+  )
 
   return (
     <div className={EDGE} inert={bare} data-away={bare || undefined}>
       <Stack className="absolute top-3 right-3">
         {conversation}
-        {loaded && <Downloads loaded={loaded} projectId={projectId} />}
-      </Stack>
-
-      {/* how the model is looked at */}
-      {loaded && !locked && (
-        <Stack className="absolute top-1/2 right-3 -translate-y-1/2">
-          {/* lit while the list is up, and while not all of the model is showing:
-              something picked in the list is all that is, or parts are out of sight.
-              Pressing it brings the list back, to pick again or to bring them back */}
-          <Switch
-            label="Parts"
-            shortcut="P"
-            opens="parts"
-            on={partsOpen || view.only !== null || view.hidden.length > 0}
-            disabled={assembly}
-            onChange={() => setPartsOpen(!partsOpen)}
-          >
-            <BoxesIcon />
-          </Switch>
-          {/* not the model but what it stands in: the ground, and the world's axes */}
-          <Switch
-            label="Grid"
-            shortcut={MAC ? "⇧G" : "Shift G"}
-            on={view.grid}
-            disabled={away}
-            onChange={(grid) => setView({ grid })}
-          >
-            <Grid3x3Icon />
-          </Switch>
+        {/* the model as files, or in PCB mode the board: the one changes over to the
+            other as the buttons in the middle do */}
+        {loaded && (
           <div className="relative">
-            {/* while the model is cut open, alongside: the cut put back to where it
-                starts from, and which half of the model to show */}
-            {section && (
-              <div className="absolute top-0 right-full mr-1.5 flex gap-1.5">
-                <Press
-                  label="Reset cut"
-                  side="top"
-                  onClick={() =>
-                    setView({ section: sectionFacing(loaded.box) })
-                  }
-                >
-                  <RotateCcwIcon />
-                </Press>
-                <Press
-                  label="Invert side"
-                  side="top"
-                  onClick={() =>
-                    setView({
-                      section: { ...section, flipped: !section.flipped },
-                    })
-                  }
-                >
-                  <FlipHorizontal2Icon />
-                </Press>
+            <Geared away={onBoard} delay={0}>
+              <Downloads loaded={loaded} projectId={projectId} />
+            </Geared>
+            {board && (
+              <div className="absolute inset-0">
+                <Geared away={!onBoard} delay={SHIFT_MS}>
+                  <BoardDownloads board={board} projectId={projectId} />
+                </Geared>
               </div>
             )}
-            <Switch
-              label="Section"
-              shortcut="S"
-              // its neighbours have the left: its name is on the far side of them
-              away={section ? BESIDE : undefined}
-              on={section !== null}
-              disabled={away}
-              // cut open again, it is as it was left
-              onChange={(on) =>
-                on
-                  ? cutOpen(() => sectionFacing(loaded.box))
-                  : setView({ section: null })
-              }
-            >
-              <SectionIcon />
-            </Switch>
           </div>
-          <Switch
-            label="Explode"
-            shortcut="E"
-            on={view.exploded}
-            disabled={assembly}
-            // (pulled apart afresh, it is into its pieces, by the model's own distances)
-            onChange={(exploded) =>
-              setView({
-                exploded,
-                spread: SPREAD.min,
-                ...(exploded && { alone: false }),
-              })
-            }
-          >
-            <UnfoldVerticalIcon />
-          </Switch>
-          {/* things of a known size for the model to be seen beside: the button brings
+        )}
+      </Stack>
+
+      {/* how the model is looked at, or in PCB mode how the board is */}
+      {loaded && !locked && (
+        <Gears
+          onBoard={onBoard}
+          board={boardButtons}
+          model={
+            <>
+              {/* lit while the list is up, and while not all of the model is showing:
+              something picked in the list is all that is, or parts are out of sight.
+              Pressing it brings the list back, to pick again or to bring them back */}
+              <Switch
+                label="Parts"
+                shortcut="P"
+                opens="parts"
+                on={partsOpen || view.only !== null || view.hidden.length > 0}
+                disabled={assembly}
+                onChange={() => setPartsOpen(!partsOpen)}
+              >
+                <BoxesIcon />
+              </Switch>
+              {/* not the model but what it stands in: the ground, and the world's axes */}
+              <Switch
+                label="Grid"
+                shortcut={MAC ? "⇧G" : "Shift G"}
+                on={view.grid}
+                disabled={away}
+                onChange={(grid) => setView({ grid })}
+              >
+                <Grid3x3Icon />
+              </Switch>
+              <div className="relative">
+                {/* while the model is cut open, alongside: the cut put back to where it
+                starts from, and which half of the model to show */}
+                {section && (
+                  <div className="absolute top-0 right-full mr-1.5 flex gap-1.5">
+                    <Press
+                      label="Reset cut"
+                      side="top"
+                      onClick={() =>
+                        setView({ section: sectionFacing(loaded.box) })
+                      }
+                    >
+                      <RotateCcwIcon />
+                    </Press>
+                    <Press
+                      label="Invert side"
+                      side="top"
+                      onClick={() =>
+                        setView({
+                          section: { ...section, flipped: !section.flipped },
+                        })
+                      }
+                    >
+                      <FlipHorizontal2Icon />
+                    </Press>
+                  </div>
+                )}
+                <Switch
+                  label="Section"
+                  shortcut="S"
+                  // its neighbours have the left: its name is on the far side of them
+                  away={section ? BESIDE : undefined}
+                  on={section !== null}
+                  disabled={away}
+                  // cut open again, it is as it was left
+                  onChange={(on) =>
+                    on
+                      ? cutOpen(() => sectionFacing(loaded.box))
+                      : setView({ section: null })
+                  }
+                >
+                  <SectionIcon />
+                </Switch>
+              </div>
+              <Switch
+                label="Explode"
+                shortcut="E"
+                on={view.exploded}
+                disabled={assembly}
+                // (pulled apart afresh, it is into its pieces, by the model's own distances)
+                onChange={(exploded) =>
+                  setView({
+                    exploded,
+                    spread: SPREAD.min,
+                    ...(exploded && { alone: false }),
+                  })
+                }
+              >
+                <UnfoldVerticalIcon />
+              </Switch>
+              {/* things of a known size for the model to be seen beside: the button brings
               up the scenes there are, and is lit while the list is up and while the
               model is set in one. (The key sets it in whichever suits it, at once.)
               There is none for the cube that stands in for a model */}
-          {!loaded.standIn && (
-            <Switch
-              label="Reference"
-              shortcut={MAC ? "⌘/" : "Ctrl /"}
-              opens="reference"
-              on={referenceOpen || (view.reference !== null && !away)}
-              disabled={away}
-              onChange={() => setReferenceOpen(!referenceOpen)}
-            >
-              <ReferenceIcon />
-            </Switch>
-          )}
-          {/* the circuit boards that go in the thing: the button brings up the list of
+              {!loaded.standIn && (
+                <Switch
+                  label="Reference"
+                  shortcut={MAC ? "⌘/" : "Ctrl /"}
+                  opens="reference"
+                  on={referenceOpen || (view.reference !== null && !away)}
+                  disabled={away}
+                  onChange={() => setReferenceOpen(!referenceOpen)}
+                >
+                  <ReferenceIcon />
+                </Switch>
+              )}
+              {/* the circuit boards that go in the thing: the button brings up the list of
               them, and a board picked there takes the view's place, in PCB mode. Where
               the project has none yet, the list says how one comes. Lit while it is up */}
-          <Switch
-            label="PCB"
-            opens="boards"
-            on={boardsOpen}
-            onChange={() => setBoardsOpen(!boardsOpen)}
-          >
-            <CircuitBoardIcon />
-          </Switch>
-          {/* the model drawn flat, from each of its sides and from its corners, on
+              <Switch
+                label="PCB"
+                shortcut={MAC ? "⇧P" : "Shift P"}
+                opens="boards"
+                on={boardsOpen}
+                onChange={() => setBoardsOpen(!boardsOpen)}
+              >
+                <CircuitBoardIcon />
+              </Switch>
+              {/* the model drawn flat, from each of its sides and from its corners, on
               sheets that take the view's place: there is nothing to draw of the cube
               that stands in for one */}
-          {!loaded.standIn && (
-            <Switch
-              label="Blueprint"
-              shortcut="B"
-              on={blueprint}
-              onChange={(blueprint) => setView({ blueprint })}
-            >
-              <DraftingCompassIcon />
-            </Switch>
-          )}
-          {/* how the thing is put together, a step at a time: the guides Claude has
+              {!loaded.standIn && (
+                <Switch
+                  label="Blueprint"
+                  shortcut="B"
+                  on={blueprint}
+                  onChange={(blueprint) => setView({ blueprint })}
+                >
+                  <DraftingCompassIcon />
+                </Switch>
+              )}
+              {/* how the thing is put together, a step at a time: the guides Claude has
               written to that, on covers that take the view's place as the sheets do */}
-          {!loaded.standIn && (
-            <Switch
-              label="Assembly"
-              shortcut="A"
-              on={assembly}
-              onChange={(assembly) => setView({ assembly })}
-            >
-              <BookOpenIcon />
-            </Switch>
-          )}
-          {/* parts and groups looked for by name, in a box at the top of the view: not
+              {!loaded.standIn && (
+                <Switch
+                  label="Assembly"
+                  shortcut="A"
+                  on={assembly}
+                  onChange={(assembly) => setView({ assembly })}
+                >
+                  <BookOpenIcon />
+                </Switch>
+              )}
+              {/* parts and groups looked for by name, in a box at the top of the view: not
               in the cube that stands in for a model, which has none to find */}
-          {!loaded.standIn && (
-            <Switch
-              label="Search"
-              shortcut={MAC ? "⌘F" : "Ctrl F"}
-              on={finding}
-              disabled={assembly}
-              onChange={(on) => find(on ? "" : null)}
-            >
-              <SearchIcon />
-            </Switch>
-          )}
-          {/* The project's own tools, made for its model and not the app's: so it is
+              {!loaded.standIn && (
+                <Switch
+                  label="Search"
+                  shortcut={MAC ? "⌘F" : "Ctrl F"}
+                  on={finding}
+                  disabled={assembly}
+                  onChange={(on) => find(on ? "" : null)}
+                >
+                  <SearchIcon />
+                </Switch>
+              )}
+              {/* The project's own tools, made for its model and not the app's: so it is
               the one button here that is painted, blue, off as on, and is there only
               where the project has some. On, it has a white line round it, which is
               while the tools are up: put away, they may be at work on the model
               still, and the button says nothing of that. */}
-          {!loaded.standIn && hasTools && (
-            <Switch
-              label="Tools"
-              shortcut="T"
-              opens="tools"
-              on={toolsOpen && !away}
-              disabled={away}
-              onChange={() => setToolsOpen(!toolsOpen)}
-              className="bg-tool text-white ring-tool hover:bg-tool/85 hover:text-white aria-pressed:bg-tool aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-white aria-pressed:hover:bg-tool/85 aria-pressed:hover:text-white"
-            >
-              <HammerIcon />
-            </Switch>
-          )}
-        </Stack>
+              {!loaded.standIn && hasTools && (
+                <Switch
+                  label="Tools"
+                  shortcut="T"
+                  opens="tools"
+                  on={toolsOpen && !away}
+                  disabled={away}
+                  onChange={() => setToolsOpen(!toolsOpen)}
+                  className="bg-tool text-white ring-tool hover:bg-tool/85 hover:text-white aria-pressed:bg-tool aria-pressed:text-white aria-pressed:ring-2 aria-pressed:ring-white aria-pressed:hover:bg-tool/85 aria-pressed:hover:text-white"
+                >
+                  <HammerIcon />
+                </Switch>
+              )}
+            </>
+          }
+        />
       )}
     </div>
   )

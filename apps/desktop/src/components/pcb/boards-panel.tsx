@@ -99,9 +99,14 @@ export function BoardsPanel({
               <span className="absolute inset-x-3 bottom-2.25 flex flex-col text-[11px] leading-4">
                 <span className="truncate font-medium">{board.name}</span>
                 <span className="truncate text-foreground/45">
-                  {board.built === null
-                    ? "Not built yet"
-                    : (sizeSaid(board) ?? " ")}
+                  {board.building
+                    ? board.building.stage === "routing" &&
+                      board.building.progress !== null
+                      ? `Routing · ${Math.round(board.building.progress * 100)}%`
+                      : "Building"
+                    : board.built === null
+                      ? "Not built yet"
+                      : (sizeSaid(board) ?? " ")}
                 </span>
               </span>
             </button>

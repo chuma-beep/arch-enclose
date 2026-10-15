@@ -1,6 +1,8 @@
 // What the Electron side and the window say to each other. Both import this file, so a
 // change here is checked on both ends.
 
+import type { Building } from "./board-format"
+
 export type Vec3 = [number, number, number]
 
 /**
@@ -42,6 +44,11 @@ export type ConversationSummary = {
    * the one carried on (see electron/versions.ts).
    */
   versioning: boolean
+  /**
+   * A circuit board being made in detail in the background, beside the conversation,
+   * which it was asked for in: the board, and when that began (ms). Null while none is.
+   */
+  job: { board: string; name: string; since: number } | null
 }
 
 /**
@@ -62,12 +69,17 @@ export type Undoable = { what: string; at: number }
 
 /**
  * What came of taking such a change back, or putting it back. busy: Claude is at work in
- * the project. changed: the files named have been written to since, and are not written
- * over.
+ * the project. board: a circuit board is being made in the background, which has the
+ * project's files until it is done. changed: the files named have been written to
+ * since, and are not written over.
  */
 export type Undone =
   | { ok: true; what: string }
-  | { ok: false; why: "nothing" | "busy" | "changed"; files: string[] }
+  | {
+      ok: false
+      why: "nothing" | "busy" | "board" | "changed"
+      files: string[]
+    }
 
 /**
  * A project's folder became another of its conversations': whose it was, whose it is,
@@ -281,6 +293,24 @@ export type ThreadItem =
       at: number
       tone: "error" | "info"
       text: string
+    }
+  | {
+      /**
+       * A circuit board made in detail in the background, beside the conversation,
+       * which goes on meanwhile: all of it in one card, which grows as it is made.
+       */
+      kind: "job"
+      id: string
+      at: number
+      /** the board, by what it is known by, and what it is called */
+      board: string
+      name: string
+      /** being made; or over: made, stopped, or gone wrong */
+      state: "working" | "done" | "stopped" | "failed"
+      /** what was done and said in making it, in order: what was said last is what came of it */
+      items: ThreadItem[]
+      /** when it was over (ms); null while it is being made */
+      ended: number | null
     }
 
 /**
@@ -526,6 +556,16 @@ export type BoardSummary = {
   size: [number, number] | null
   /** whether it has been built in 3D as well, to be shown so */
   model: boolean
+  /** whether there is a STEP file of it, and the files a board house makes it from */
+  step: boolean
+  gerbers: boolean
+  /** how far it has got, while it is being built; null while it is not */
+  building: Building | null
+  /**
+   * When a quick look at it was last made (ms), unrouted, as its file was being written:
+   * null where there is none newer than what was last built of it
+   */
+  preview: number | null
   /** why what says what it is did not read, in a line: null where it did, or there is none */
   trouble: string | null
 }
@@ -776,6 +816,18 @@ export type CadApi = {
      * built files come by the model's scheme, from <project id>.pcb.
      */
     read(projectId: string): Promise<BoardSummary[]>
+    /**
+     * Save a copy of what was built of a board, somewhere the user picks: the files a
+     * board house makes it from, as one zip, or the board in 3D as a STEP file. Resolves
+     * to whether it was saved.
+     */
+    save(
+      projectId: string,
+      boardId: string,
+      what: "gerbers" | "step",
+      /** what the copy is called, to begin with */
+      name: string
+    ): Promise<boolean>
   }
   assembly: {
     /** A project's assembly guides, the one written last first: none if it has none. */
@@ -857,6 +909,8 @@ export type CadApi = {
     ): Promise<string | null>
     /** stop whatever Claude is doing in the project */
     stop(projectId: string): Promise<void>
+    /** stop the circuit board being made in the background in the project, if one is */
+    stopJob(projectId: string): Promise<void>
     /**
      * Say at once something that is waiting its turn: what is being done in its
      * conversation is stopped for it.
@@ -981,6 +1035,7 @@ export const CHANNEL = {
   referenceScenes: "reference:scenes",
   toolsRead: "tools:read",
   boardsRead: "boards:read",
+  boardsSave: "boards:save",
   assemblyRead: "assembly:read",
   assemblyMake: "assembly:make",
   assemblyOpen: "assembly:open",
@@ -992,6 +1047,7 @@ export const CHANNEL = {
   threadSend: "thread:send",
   threadLookOver: "thread:look-over",
   threadStop: "thread:stop",
+  threadStopJob: "thread:stop-job",
   threadSendNow: "thread:send-now",
   threadUnqueue: "thread:unqueue",
   threadRename: "thread:rename",

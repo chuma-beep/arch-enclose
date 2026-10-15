@@ -6,27 +6,33 @@
 //
 // The drawings are moved about as the model is: fingers across a trackpad or a drag move
 // them, and a pinch or a mouse wheel zooms, on the place under the pointer. A double
-// click puts the whole of the board back in view. The 3D turns, as the model does.
+// click puts the whole of the board back in view. The 3D has the model's own camera, and
+// is turned and moved by the same hand.
 import * as React from "react"
+import { cn } from "cn"
 import * as THREE from "three"
-import { Canvas, useThree } from "@react-three/fiber"
-import {
-  CameraControls,
-  CameraControlsImpl,
-  ContactShadows,
-} from "@react-three/drei"
+import { Canvas } from "@react-three/fiber"
+import { LineMaterial } from "three/addons/lines/LineMaterial.js"
+import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
+import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js"
 import { XIcon } from "lucide-react"
 
 import type { BoardSummary } from "@shared/api"
+import type { Building } from "@shared/board-format"
+import { LIVE } from "@/components/steps"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useThemeColors } from "@/lib/css-color"
 import { usePreferences } from "@/lib/preferences"
-import { SCROLL_PAUSE, scrollSource } from "@/lib/scroll"
+import { scrollSource } from "@/lib/scroll"
 import { useStore, type BoardAs } from "@/lib/store"
 import { boardUrl, sizeSaid, useCircuit, type Circuit } from "./boards"
 import { DRAWN, GROUND } from "./ground"
-import { BOARD_FROM, disposeBoard, loadBoard } from "./pictures"
+import { contoursOf } from "@/components/viewport/contours"
+import { EDGE } from "@/components/viewport/paint"
+import { onlyWhereItTurns } from "@/components/viewport/scene"
+import { FOV, REACH, Rig } from "@/components/viewport/rig"
+import { disposeBoard, loadBoard } from "./pictures"
 
 /** How much of the view a drawing fills when the whole of it is shown. */
 const FIT = 0.86
@@ -217,122 +223,151 @@ function Drawing({ markup }: { markup: string }) {
 }
 
 /**
- * The board in 3D, lit as the model is, with its shadow on the ground under it, from
- * its front right corner. Fingers across a trackpad, or a drag, turn it round; a pinch
- * or a wheel goes nearer, a drag with the right button moves it.
+ * Two triangles that meet at more than this, in degrees, have an edge between them: as
+ * the model's parts made of a mesh have (viewport/load.ts).
  */
-function InThreeD({ url }: { url: string }) {
+const CREASE = 20
+/** How strong a line of an edge is, as the model's are in its solid look. */
+const LINE_OPACITY = 0.85
+
+/** A line drawn as the model's are: a pixel wide, whatever the distance, and dark. */
+const lineMaterial = () =>
+  new LineMaterial({
+    color: EDGE,
+    linewidth: 1,
+    transparent: true,
+    opacity: LINE_OPACITY,
+    depthWrite: false,
+  })
+
+/**
+ * A board in 3D as the view shows it: as tscircuit built it, in its own colours, with
+ * its lines drawn as the model's parts made of a mesh have theirs: wherever two of its
+ * triangles meet at an edge, and the outline of its curved faces, wherever that is
+ * seen from. It is turned half round, so that its own X and Y are the model's (as its
+ * STEP file has them) and the view's camera comes to it from its front right corner, as
+ * to a model. With the box round it, in the model's frame, which the camera goes by.
+ */
+function standing(board: THREE.Group) {
+  const holder = new THREE.Group()
+  holder.rotation.y = Math.PI
+  holder.add(board)
+  const made: { dispose(): void }[] = []
+  const slight = Math.cos((CREASE * Math.PI) / 180)
+  const meshes: THREE.Mesh[] = []
+  board.traverse((thing) => {
+    if (thing instanceof THREE.Mesh) meshes.push(thing)
+  })
+  for (const mesh of meshes) {
+    // the faces stand back a little, for the lines over them to be seen
+    for (const material of [mesh.material].flat())
+      Object.assign(material, {
+        polygonOffset: true,
+        polygonOffsetFactor: 1.5,
+        polygonOffsetUnits: 1.5,
+      })
+    const creases = new THREE.EdgesGeometry(mesh.geometry, CREASE)
+    const edges = new LineSegmentsGeometry().setPositions(
+      creases.attributes.position.array as Float32Array
+    )
+    creases.dispose()
+    const drawn = lineMaterial()
+    mesh.add(new LineSegments2(edges, drawn))
+    made.push(edges, drawn)
+    const { index, attributes } = mesh.geometry
+    if (!index) continue
+    const { ends, ways } = contoursOf(
+      attributes.position.array,
+      index.array,
+      (_, __, cos) => cos > slight
+    )
+    if (ends.length === 0) continue
+    const outline = new LineSegmentsGeometry().setPositions(ends)
+    const each = new THREE.InstancedInterleavedBuffer(
+      Float32Array.from(ways),
+      6,
+      1
+    )
+    outline.setAttribute(
+      "wayA",
+      new THREE.InterleavedBufferAttribute(each, 3, 0)
+    )
+    outline.setAttribute(
+      "wayB",
+      new THREE.InterleavedBufferAttribute(each, 3, 3)
+    )
+    const turning = lineMaterial()
+    turning.onBeforeCompile = onlyWhereItTurns
+    mesh.add(new LineSegments2(outline, turning))
+    made.push(outline, turning)
+  }
+  holder.updateMatrixWorld(true)
+  const { min, max } = new THREE.Box3().setFromObject(holder)
+  // (the world's Y is the model's Z, and its Z the model's -Y)
+  const box = new THREE.Box3(
+    new THREE.Vector3(min.x, -max.z, min.y),
+    new THREE.Vector3(max.x, -min.z, max.y)
+  )
+  return {
+    holder,
+    box,
+    dispose: () => {
+      for (const thing of made) thing.dispose()
+      disposeBoard(board)
+    },
+  }
+}
+
+/**
+ * The board in 3D, in a view of its own that is looked round as the model's is: the
+ * same camera, which the same hand moves, lit as the model is.
+ */
+function InThreeD({ url, id }: { url: string; id: string }) {
+  const [shown, setShown] = React.useState<ReturnType<typeof standing> | null>(
+    null
+  )
+  React.useEffect(() => {
+    let over = false
+    let had: ReturnType<typeof standing> | null = null
+    void loadBoard(url).then(
+      (loaded) => {
+        if (over) return disposeBoard(loaded)
+        had = standing(loaded)
+        setShown(had)
+      },
+      () => {
+        if (!over) setShown(null)
+      }
+    )
+    return () => {
+      over = true
+      had?.dispose()
+    }
+  }, [url])
+  if (!shown) return null
+  const radius = shown.box.getSize(new THREE.Vector3()).length() / 2 || 1
   return (
     <Canvas
       className="touch-none"
+      frameloop="demand"
+      resize={{ debounce: 0 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
-      camera={{ fov: 30, near: 0.1, far: 20000, position: [0, 0, 100] }}
+      camera={{
+        fov: FOV,
+        near: (radius * REACH.nearest) / 4,
+        far: radius * REACH.furthest * 2,
+        position: [radius * 3, radius * 3, radius * 3],
+      }}
     >
       <ambientLight intensity={0.55} />
       <hemisphereLight args={["#ffffff", "#7d828c", 0.7]} />
       <directionalLight position={[180, 320, 220]} intensity={1.7} />
       <directionalLight position={[-240, 160, -180]} intensity={0.55} />
-      <Board url={url} />
+      <primitive object={shown.holder} />
+      {/* (framed afresh for another board, and not for the same one built again) */}
+      <Rig box={shown.box} homeKey={`board:${id}`} bridged={false} />
     </Canvas>
-  )
-}
-
-/** The board itself, loaded, and the camera put where all of it is in view. */
-function Board({ url }: { url: string }) {
-  const [board, setBoard] = React.useState<THREE.Group | null>(null)
-  const controls = React.useRef<CameraControlsImpl>(null)
-  const dom = useThree((state) => state.gl.domElement)
-
-  React.useEffect(() => {
-    let over = false
-    let had: THREE.Group | null = null
-    void loadBoard(url).then(
-      (loaded) => {
-        if (over) return disposeBoard(loaded)
-        had = loaded
-        setBoard(loaded)
-      },
-      () => {
-        if (!over) setBoard(null)
-      }
-    )
-    return () => {
-      over = true
-      if (had) disposeBoard(had)
-    }
-  }, [url])
-
-  const box = React.useMemo(
-    () => (board ? new THREE.Box3().setFromObject(board) : null),
-    [board]
-  )
-  // from the corner the list pictures it from, as near as shows all of it
-  const framed = React.useRef<string | null>(null)
-  React.useEffect(() => {
-    const camera = controls.current
-    if (!camera || !box || framed.current === url.split("?")[0]) return
-    framed.current = url.split("?")[0]
-    const middle = box.getCenter(new THREE.Vector3())
-    const sphere = box.getBoundingSphere(new THREE.Sphere())
-    const eye = middle.clone().addScaledVector(BOARD_FROM, sphere.radius * 4)
-    void camera
-      .setLookAt(eye.x, eye.y, eye.z, middle.x, middle.y, middle.z, false)
-      .then(() => camera.fitToSphere(sphere, false))
-  }, [box, url])
-
-  // Fingers across a trackpad turn the board, as they turn the model: the controls
-  // would take them for a wheel, and go nearer. A pinch, or a wheel, is left to them.
-  React.useEffect(() => {
-    const source = scrollSource()
-    let last = -Infinity
-    const wheel = (event: WheelEvent) => {
-      const camera = controls.current
-      if (!camera || event.ctrlKey) return
-      const { scrolling, turnSpeed } = usePreferences.getState()
-      const now = performance.now()
-      const from =
-        scrolling === "auto"
-          ? source(event, now)
-          : scrolling === "trackpad"
-            ? "fingers"
-            : "wheel"
-      if (from !== "fingers") return
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      // a swipe that coasts on after a pinch is not a turn
-      if (now - last < SCROLL_PAUSE && Math.abs(event.deltaY) < 1) return
-      last = now
-      const rate = 0.006 * turnSpeed
-      void camera.rotate(-event.deltaX * rate, -event.deltaY * rate, true)
-    }
-    dom.addEventListener("wheel", wheel, { capture: true, passive: false })
-    return () => dom.removeEventListener("wheel", wheel, { capture: true })
-  }, [dom])
-
-  const size = box?.getSize(new THREE.Vector3())
-  return (
-    <>
-      {board && box && size && (
-        <>
-          <primitive object={board} />
-          <ContactShadows
-            position={[0, box.min.y - size.y * 0.02, 0]}
-            scale={Math.max(size.x, size.z) * 1.6}
-            far={Math.max(size.y * 4, 4)}
-            blur={2.4}
-            opacity={0.5}
-            frames={1}
-          />
-        </>
-      )}
-      <CameraControls
-        ref={controls}
-        makeDefault
-        dollyToCursor
-        smoothTime={0.12}
-      />
-    </>
   )
 }
 
@@ -404,11 +439,12 @@ export function BoardMode({
   const size = sizeSaid(board)
 
   return (
+    // (its ground comes in over the model as the buttons change over)
     <div
-      className="absolute inset-0 overflow-hidden"
+      className="absolute inset-0 animate-in overflow-hidden duration-300 fade-in motion-reduce:animate-none"
       style={{ background: dark ? GROUND.dark : GROUND.light }}
     >
-      {board.built === null ? (
+      {board.built === null && board.preview === null ? (
         <Nothing
           title="Not built yet"
           detail="There is nothing of this board to show until it is built. Ask Claude to build it."
@@ -416,7 +452,11 @@ export function BoardMode({
       ) : as === "3d" ? (
         board.model ? (
           // (keyed by the board, so that another one is framed afresh)
-          <InThreeD key={board.id} url={boardUrl(projectId, board, "model")} />
+          <InThreeD
+            key={board.id}
+            id={board.id}
+            url={boardUrl(projectId, board, "model")}
+          />
         ) : (
           <Nothing
             title="No 3D yet"
@@ -433,8 +473,9 @@ export function BoardMode({
         />
       ) : null}
 
-      {/* what it is, at the top: where the window is not dragged by */}
-      <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
+      {/* what it is, at the top: where the window is not dragged by; and under that,
+          while it is being built, how far that has got */}
+      <div className="pointer-events-none absolute inset-x-0 top-4 flex flex-col items-center gap-2">
         <div className="flex max-w-[50%] items-center gap-2 text-sm select-none">
           <span className="truncate font-medium">{board.name}</span>
           {size && (
@@ -448,7 +489,38 @@ export function BoardMode({
             </Badge>
           )}
         </div>
+        {board.building && <BuildingLine building={board.building} />}
       </div>
+    </div>
+  )
+}
+
+/**
+ * How far a board's build has got, in a line: what it is at, and while it is routing
+ * how far along that is, with a bar that fills as it goes. Each build of a board is
+ * shown as it comes in, so this is what is waited for meanwhile.
+ */
+function BuildingLine({ building }: { building: Building }) {
+  const { stage, progress, phase, phases } = building
+  const routing = stage === "routing"
+  const share = routing && progress !== null ? progress : null
+  return (
+    <div className="flex animate-in flex-col items-center gap-1.5 text-xs text-foreground/60 duration-200 fade-in">
+      <span className={cn("tabular-nums", LIVE)}>
+        {stage === "building"
+          ? "Building the board"
+          : stage === "finishing"
+            ? "Writing what was built"
+            : `Routing${phases && phases > 1 ? ` (${phase} of ${phases})` : ""}${share !== null ? ` · ${Math.round(share * 100)}%` : ""}`}
+      </span>
+      {routing && (
+        <div className="h-0.5 w-32 overflow-hidden rounded-full bg-foreground/10">
+          <div
+            className="h-full rounded-full bg-foreground/60 transition-[width] duration-300 ease-out"
+            style={{ width: `${Math.max(3, (share ?? 0) * 100)}%` }}
+          />
+        </div>
+      )}
     </div>
   )
 }

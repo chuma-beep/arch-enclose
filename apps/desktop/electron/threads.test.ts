@@ -21,6 +21,8 @@ import {
   versionAsked,
   versioning,
   wiring,
+  locked,
+  jobAsked,
   withNotes,
   type ThreadsDeps,
 } from "./threads"
@@ -517,20 +519,49 @@ describe("tooling", () => {
 })
 
 describe("wiring", () => {
+  const claude = (set: string, name: string) => `mcp__${set}__${name}`
+
+  it("has a detailed board handed to be made in the background", () => {
+    const told = wiring(claude, "/app/kit/enclose.py", true).join("\n")
+    expect(told).toContain("hand it to mcp__boards__make")
+    expect(told).toContain("<board-job> block")
+  })
+
   it("says where a board is built from, and where how to make one is said", () => {
-    const told = wiring("/app/kit/enclose.py", true).join("\n")
+    const told = wiring(claude, "/app/kit/enclose.py", true).join("\n")
     expect(told).toContain('node "/app/kit/board.mjs" pcb/<name>.circuit.tsx')
     expect(told).toContain('read "/app/kit/pcb.md"')
     expect(told).toContain("<board> block")
   })
 
   it("has whether the detailed board is wanted now asked, where there is a way to ask", () => {
-    const asking = wiring("/app/kit/enclose.py", true)
-    const telling = wiring("/app/kit/enclose.py", false)
+    const asking = wiring(claude, "/app/kit/enclose.py", true)
+    const telling = wiring(claude, "/app/kit/enclose.py", false)
     expect(asking.join("\n")).toContain("AskUserQuestion")
     expect(asking.join("\n")).toContain('"Rough board for now"')
     expect(telling.join("\n")).not.toContain("AskUserQuestion")
     expect(telling.join("\n")).toContain("make a rough one")
+  })
+})
+
+describe("locked", () => {
+  it("has the model left alone while a board is made, and the user offered a way on", () => {
+    const told = locked(
+      (set, name) => `mcp__${set}__${name}`,
+      "Clock board"
+    ).join("\n")
+    expect(told).toContain('"Clock board" is being made')
+    expect(told).toContain("write, move or delete no file")
+    expect(told).toContain("mcp__boards__tell")
+    expect(told).toContain("mcp__boards__stop")
+  })
+})
+
+describe("jobAsked", () => {
+  it("names the board, and gives the brief after", () => {
+    const asked = jobAsked("main", 'The "clock" board', "Drive a stepper.")
+    expect(asked).toContain('<board-job id="main" name="The \'clock\' board">')
+    expect(asked.endsWith("Drive a stepper.")).toBe(true)
   })
 })
 
@@ -710,8 +741,78 @@ on("turn/interrupt", () => {
       const tool = given[turn - 1].versions.find((one) => one.name === "begin")
       return tool!.run({ brief } as never)
     },
+    /** The agent asks for a board to be made in the background, as `begin` does. */
+    make: async (
+      board: string,
+      brief: string,
+      turn = 1
+    ): Promise<ToolResult> => {
+      await until(() => given.length >= turn)
+      const tool = given[turn - 1].boards.find((one) => one.name === "make")
+      return tool!.run({ board, brief } as never)
+    },
   }
 }
+
+describe("a board made in the background", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+    fs.mkdirSync(path.join(dir, "pcb"))
+    fs.writeFileSync(path.join(dir, "pcb", "main.circuit.tsx"), "")
+    fs.writeFileSync(
+      path.join(dir, "pcb", "main.board.json"),
+      '{ "name": "Main board", "finished": false }'
+    )
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const job = (threads: Threads, conversation: string) =>
+    threads.items(ID, conversation).find((item) => item.kind === "job")
+
+  it("is begun once the turn that asked for it is over, in a card of its own", async () => {
+    const { threads, say, go, hold, now, make } = talking(dir, { each: true })
+    const into = say("Make the board in detail", null) as string
+    expect((await make("main", "A clock board.")).isError).toBeFalsy()
+    // (and not for a board that has not been set up)
+    expect((await make("power", "Power.")).isError).toBe(true)
+    expect(threads.jobOf(ID)).toBeNull()
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    expect(threads.jobOf(ID)).toEqual({ board: "main", name: "Main board" })
+    expect(now().job).toMatchObject({ board: "main", name: "Main board" })
+    // the conversation is not at work while the board is made beside it
+    await until(() => now().status === "idle")
+    expect(job(threads, into)).toMatchObject({ state: "working" })
+    go()
+    await until(() => threads.jobOf(ID) === null)
+    const made = job(threads, into)
+    expect(made).toMatchObject({ state: "done", name: "Main board" })
+    expect(
+      made?.kind === "job" && made.items.some((one) => one.kind === "assistant")
+    ).toBe(true)
+    expect(now().job).toBeNull()
+    hold()
+  })
+
+  it("has what is said in another conversation wait until it is done", async () => {
+    const { threads, say, go, said, make } = talking(dir, { each: true })
+    say("Make the board in detail", null)
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    const other = say("Make a lid", null) as string
+    expect(
+      threads.summaries(ID).find((one) => one.id === other)?.queued
+    ).toHaveLength(1)
+    expect(said(other)).toEqual([])
+    go()
+    await until(() => said(other).length === 1)
+    expect(said(other)).toEqual(["Make a lid"])
+  })
+})
 
 describe("what is said while a conversation is being answered", () => {
   let dir: string

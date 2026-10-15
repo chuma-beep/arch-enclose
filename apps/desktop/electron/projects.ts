@@ -10,7 +10,11 @@ import { findTools } from "./custom-tools"
 import { findGuides } from "./assembly"
 import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
-import { BOARD_FOLDER, BUILT_FOLDER } from "../shared/board-format"
+import {
+  BOARD_FOLDER,
+  BOARD_SOURCE,
+  BUILT_FOLDER,
+} from "../shared/board-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 
 type Saved = {
@@ -294,9 +298,17 @@ export class Projects {
   /** how far the making of a model from files opened into a project has got */
   private bringing = new Map<string, BringingIn>()
 
-  constructor(file: string, onChange: () => void) {
+  /** one of a project's circuit boards was written: in its folder, by what it is known by */
+  private readonly onBoard: (id: string, root: string, board: string) => void
+
+  constructor(
+    file: string,
+    onChange: () => void,
+    onBoard: (id: string, root: string, board: string) => void = () => {}
+  ) {
     this.file = file
     this.onChange = onChange
+    this.onBoard = onBoard
     try {
       const state = JSON.parse(fs.readFileSync(file, "utf8")) as {
         projects?: Saved[]
@@ -546,7 +558,14 @@ export class Projects {
             if (changed === BOARD_FOLDER) again()
           })
         )
-        if (there) watchers.push(fs.watch(dir, { persistent: false }, again))
+        if (there)
+          watchers.push(
+            fs.watch(dir, { persistent: false }, (_, changed) => {
+              const board = BOARD_SOURCE.exec(String(changed ?? ""))?.[1]
+              if (board) this.onBoard(id, project.path, board)
+              again()
+            })
+          )
         if (builtThere)
           watchers.push(fs.watch(built, { persistent: false }, again))
       } catch {

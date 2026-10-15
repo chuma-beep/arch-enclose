@@ -123,8 +123,11 @@ const DRAG_ZOOM = 0.2
  * for what the camera looks at, which is what the controls turn it about themselves.
  */
 function turnedAbout(
-  at: { clientX: number; clientY: number } | null
+  at: { clientX: number; clientY: number } | null,
+  /** it is the model's view that is turned: what is picked out, and under the pointer, are its */
+  bridged = true
 ): THREE.Vector3 | null {
+  if (!bridged) return null
   const { pivot } = usePreferences.getState()
   if (pivot === "selection") {
     const box = bridge.picked?.()
@@ -170,6 +173,8 @@ function direct(stage: {
    */
   ground: () => number | null
   size: () => { width: number; height: number }
+  /** say which way the camera faces, for the axes in the corner: the model's view does */
+  publish: boolean
   /** draw with this camera from now on */
   show: (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera) => void
   redraw: () => void
@@ -967,12 +972,13 @@ function direct(stage: {
           lens.updateProjectionMatrix()
         }
       }
-      publishOrientation(
-        controls.camera.quaternion
-          .clone()
-          .invert()
-          .multiply(MODEL_TO_WORLD_TURN)
-      )
+      if (stage.publish)
+        publishOrientation(
+          controls.camera.quaternion
+            .clone()
+            .invert()
+            .multiply(MODEL_TO_WORLD_TURN)
+        )
     },
   }
 }
@@ -985,6 +991,7 @@ export function Rig({
   around = null,
   more = null,
   ground = null,
+  bridged = true,
 }: {
   /** all there is to see: the model, with whatever it is set in */
   box: THREE.Box3
@@ -1006,7 +1013,14 @@ export function Rig({
    * camera keeps above it. Null while the model is set in nothing.
    */
   ground?: number | null
+  /**
+   * It is the camera of the model's view: what the keys, the axes in the corner and the
+   * rest of the app move the camera with is this one's (see bridge.ts). Not so of another
+   * view that has a camera of the same kind, a circuit board's, which keeps to itself.
+   */
+  bridged?: boolean
 }) {
+  const bridging = React.useRef(bridged)
   const controls = React.useRef<CameraControls>(null)
   const director = React.useRef<ReturnType<typeof direct> | null>(null)
   const get = useThree((state) => state.get)
@@ -1057,6 +1071,7 @@ export function Rig({
       box: () => latest.current,
       ground: () => floor.current,
       size: () => get().size,
+      publish: bridging.current,
       show: (camera) => {
         set({ camera })
         invalidate()
@@ -1064,6 +1079,12 @@ export function Rig({
       redraw: invalidate,
     })
     director.current = made
+    if (!bridging.current)
+      return () => {
+        impl.update = update
+        impl.rotate = rotate
+        director.current = null
+      }
     // what the axis gizmo, the section planes and the keyboard move the camera with
     bridge.lookFrom = (axis, sign) => made.lookFrom(axis, sign)
     bridge.orbit = (dx, dy) =>
@@ -1228,7 +1249,7 @@ export function Rig({
       if (does === "zoom")
         zooming = { x: event.clientX, y: event.clientY, last: event.clientY }
       // a turn may go about the place the drag began on, or about what is picked out
-      else if (does === "turn") made.hold(turnedAbout(event))
+      else if (does === "turn") made.hold(turnedAbout(event, bridging.current))
     }
     const drag = (event: PointerEvent) => {
       const made = director.current
@@ -1256,7 +1277,7 @@ export function Rig({
       if (now - swipe.at > SCROLL_PAUSE) {
         swipe.travel = 0
         swipe.sends = made.sends()
-        swipe.about = turnedAbout(event)
+        swipe.about = turnedAbout(event, bridging.current)
       }
       swipe.at = now
       // Fingers drift as they pinch, and a swipe coasts on after they lift. Neither

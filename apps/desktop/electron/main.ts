@@ -50,13 +50,15 @@ import {
   type ViewportRequest,
   type ViewportResponse,
 } from "../shared/api"
-import { BOARD_FOLDER } from "../shared/board-format"
+import { BOARD_FOLDER, builtOf } from "../shared/board-format"
 import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { boardsIn } from "./boards"
+import { Previews } from "./previews"
+import { changeLog } from "./gist"
 import { Changes } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
@@ -226,6 +228,11 @@ const KIT = path.join(TOP, "kit", "enclose.py")
 const EXAMPLES_HERE = path.join(TOP, "examples")
 /** the reference scenes the app has of its own, for a model to be seen in */
 const SCENES = appScenes(path.join(TOP, "kit", "scenes"))
+/** quick looks at the boards an agent writes, as it writes them */
+const previews = new Previews({
+  script: path.join(TOP, "kit", "board.mjs"),
+  working: (projectId) => threads?.working(projectId) ?? false,
+})
 
 /**
  * The folder a file asked for is in, by the host it is asked of: a project's model, the
@@ -298,6 +305,8 @@ const list = (): Project[] =>
 async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   const project = projects.get(id)
   if (!project) return { ok: false, why: "nothing", files: [] }
+  // a board being made in the background has the files until it is done
+  if (threads.jobOf(id)) return { ok: false, why: "board", files: [] }
   if (threads.working(id) || builds.has(id) || versions.busy(id))
     return { ok: false, why: "busy", files: [] }
   // the manifest goes last: its being written is what the view loads the rest again for
@@ -1143,6 +1152,32 @@ function wire() {
     const project = projects.get(String(id))
     return project ? boardsIn(project.path) : []
   })
+  ipcMain.handle(
+    CHANNEL.boardsSave,
+    async (_, id: string, boardId: string, what: string, name: string) => {
+      const project = projects.get(String(id))
+      const board =
+        project && boardsIn(project.path).find((one) => one.id === boardId)
+      if (!win || !project || !board || (what !== "gerbers" && what !== "step"))
+        return false
+      const source = path.join(
+        project.path,
+        BOARD_FOLDER,
+        builtOf(board.id)[what]
+      )
+      if (!fs.existsSync(source)) return false
+      const picked = await dialog.showSaveDialog(win, {
+        defaultPath: path.join(
+          app.getPath("downloads"),
+          path.basename(String(name))
+        ),
+      })
+      if (picked.canceled || !picked.filePath) return false
+      await fs.promises.copyFile(source, picked.filePath)
+      analytics?.record("board saved", { as: what })
+      return true
+    }
+  )
   ipcMain.handle(CHANNEL.assemblyRead, (_, id: string): GuideSummary[] => {
     const project = projects.get(String(id))
     return project ? guidesIn(project.path) : []
@@ -1549,6 +1584,7 @@ function wire() {
       lookOver(String(id), seenFrom(seen), mannerFrom(manner))
   )
   ipcMain.handle(CHANNEL.threadStop, (_, id: string) => threads.stop(id))
+  ipcMain.handle(CHANNEL.threadStopJob, (_, id: string) => threads.stopJob(id))
   ipcMain.handle(CHANNEL.threadSendNow, (_, id: string, queued: string) =>
     threads.sendNow(String(id), String(queued))
   )
@@ -1759,7 +1795,11 @@ if (!app.requestSingleInstanceLock()) {
       },
       vault
     )
-    projects = new Projects(path.join(data, "projects.json"), broadcast)
+    projects = new Projects(
+      path.join(data, "projects.json"),
+      broadcast,
+      (id, root, board) => previews.written(id, root, board)
+    )
     changes = new Changes(path.join(data, "changes"))
     versions = new Versions(path.join(data, "versions"))
     pictures = new Pictures(path.join(data, "pictures"))
@@ -1836,8 +1876,16 @@ if (!app.requestSingleInstanceLock()) {
         const renamed = projects.list(() => []).find((one) => one.path === to)
         if (renamed) void backups.renamed(renamed.id)
       },
-      onTurned: (projectId, conversationId, what, conversation) =>
-        void backups.record(projectId, { what, conversation, conversationId }),
+      // (what the commit says is what came of the turn, as a change log, where Claude
+      // Code is there to write one; and what was asked, where it is not)
+      onTurned: (projectId, conversationId, what, conversation, said) =>
+        void backups.record(projectId, {
+          what,
+          conversation,
+          conversationId,
+          log: (files) =>
+            changeLog(providers.launch("claude"), what, said, files),
+        }),
       history: (projectId) => {
         const project = projects.get(projectId)
         if (!project || !managedNow(project.path)) return "off"
@@ -1953,6 +2001,7 @@ if (!app.requestSingleInstanceLock()) {
     toolServer.close()
     guideServer.close()
     projects?.close()
+    previews.close()
     updates?.close()
     analytics?.close()
   })

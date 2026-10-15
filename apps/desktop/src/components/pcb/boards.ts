@@ -23,7 +23,7 @@ export const boardUrl = (
   board: BoardSummary,
   file: keyof ReturnType<typeof builtOf>
 ) =>
-  `${MODEL_SCHEME}://${projectId}.${BOARD_HOST}/${builtOf(board.id)[file]}?r=${board.built ?? 0}`
+  `${MODEL_SCHEME}://${projectId}.${BOARD_HOST}/${builtOf(board.id)[file]}?r=${(file === "preview" ? board.preview : board.built) ?? 0}`
 
 /**
  * A project's boards, in the order of their files: none if it has none. Null until they
@@ -89,10 +89,18 @@ export function useCircuit(
   projectId: string,
   board: BoardSummary | null
 ): { circuit: Circuit | null; trouble: string | null } {
-  const url =
-    board && board.built !== null ? boardUrl(projectId, board, "circuit") : null
+  // a quick look at it as it is being written, where there is one newer than its build
+  const url = !board
+    ? null
+    : board.preview !== null
+      ? boardUrl(projectId, board, "preview")
+      : board.built !== null
+        ? boardUrl(projectId, board, "circuit")
+        : null
+  const id = board?.id ?? null
   const [had, setHad] = React.useState<{
     of: string
+    board: string | null
     circuit: Circuit | null
     trouble: string | null
   } | null>(null)
@@ -101,12 +109,13 @@ export function useCircuit(
     let over = false
     void loadCircuit(url).then(
       (circuit) => {
-        if (!over) setHad({ of: url, circuit, trouble: null })
+        if (!over) setHad({ of: url, board: id, circuit, trouble: null })
       },
       (error: unknown) => {
         if (!over)
           setHad({
             of: url,
+            board: id,
             circuit: null,
             trouble: error instanceof Error ? error.message : String(error),
           })
@@ -115,10 +124,11 @@ export function useCircuit(
     return () => {
       over = true
     }
-  }, [url])
+  }, [url, id])
   if (!url) return { circuit: null, trouble: null }
-  // the board built before, while it is built again: but not another board's
-  const same = had && had.of.split("?")[0] === url.split("?")[0]
+  // the board as it was before, while it is built again or looked at as it is being
+  // written: but not another board's
+  const same = had && had.board === id
   return same
     ? { circuit: had.circuit, trouble: had.of === url ? had.trouble : null }
     : { circuit: null, trouble: null }

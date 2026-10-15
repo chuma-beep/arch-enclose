@@ -23,6 +23,7 @@ const left = (
   updatedAt: NOW - days * DAY,
   queued: [],
   versioning: false,
+  job: null,
 })
 
 /** A layout by its ids: the card, what is under it, and what the panel shows. */

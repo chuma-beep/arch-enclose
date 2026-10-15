@@ -56,6 +56,11 @@ export function drawingOf(
       backgroundColor: ground,
       matchBoardAspectRatio: true,
       showSolderMask: true,
+      // a board with nothing routed yet has what is to be joined drawn straight across
+      // (drawn over a routed one, the lines would be there whether routed or not)
+      shouldDrawRatsNest: !elements.some(
+        (element) => element.type === "pcb_trace"
+      ),
       colorOverrides: {
         // a hole is a hole: the ground shows through it
         drill: ground,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ThreadItem } from "@shared/api"
-import { atWork, inBlocks } from "./steps"
+import { atWork, inBlocks, spelledOut, type Steps } from "./steps"
 
 const user = (id: string, at = 0): ThreadItem => ({
   kind: "user",
@@ -227,5 +227,48 @@ describe("atWork", () => {
       "Waiting for your answer in the conversation"
     )
     expect(atWork([user("u"), question("answered")])).toBeNull()
+  })
+})
+
+describe("spelledOut", () => {
+  const said = (id: string, at: number): ThreadItem => ({
+    kind: "assistant",
+    id,
+    at,
+    text: "Looking at the board.",
+    streaming: false,
+  })
+
+  it("has what was said on the way stand by itself, between stretches of their own", () => {
+    const [stretch] = inBlocks([
+      step("a", "done", 1000),
+      step("b", "done", 2000),
+      said("c", 5000),
+      step("d", "running", 6000),
+    ]) as [Steps]
+    const pieces = spelledOut(stretch)
+    expect(pieces.map((piece) => piece.kind)).toEqual([
+      "steps",
+      "assistant",
+      "steps",
+    ])
+    const [before, , after] = pieces as [Steps, unknown, Steps]
+    expect(before.steps.map((one) => one.id)).toEqual(["a", "b"])
+    // (from its first step to what was said after it)
+    expect(before.took).toBe(4000)
+    expect(after.steps.map((one) => one.id)).toEqual(["d"])
+    expect(after.took).toBeNull()
+  })
+
+  it("counts a stretch from what was said before it", () => {
+    const [stretch] = inBlocks([
+      said("a", 1000),
+      step("b", "done", 3000),
+      said("c", 9000),
+      step("d", "running", 9500),
+    ]) as [Steps]
+    const pieces = spelledOut(stretch)
+    expect(pieces.map((piece) => piece.id)).toEqual(["a", "b", "c", "d"])
+    expect((pieces[1] as Steps).took).toBe(8000)
   })
 })
