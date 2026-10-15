@@ -416,13 +416,13 @@ function BoardDownloads({
               <DropdownMenuItem
                 onClick={() => save("gerbers", `${called}-gerbers.zip`)}
               >
-                Gerbers, to have it made
-                <Size kind="ZIP" />
+                Manufacturing files
+                <Size kind="GERBERS" />
               </DropdownMenuItem>
             )}
             {board.step && (
               <DropdownMenuItem onClick={() => save("step", `${called}.step`)}>
-                The board in 3D
+                3D board
                 <Size kind="STEP" />
               </DropdownMenuItem>
             )}
@@ -432,15 +432,37 @@ function BoardDownloads({
             There is nothing of this board to save until it is built.
           </p>
         )}
+        {board.gerbers && board.outdated && (
+          <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
+            This board was changed after it was last built, so these Gerbers are
+            of the board before. Ask your agent to build it again.
+          </p>
+        )}
         {!board.finished && board.gerbers && (
           <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
             This board is unfinished: its Gerbers are for looking at, not for
             ordering yet.
           </p>
         )}
+        {board.finished && board.gerbers && board.unsourced.length > 0 && (
+          <p className="px-2 pt-1 pb-1.5 text-xs text-balance text-muted-foreground">
+            JLCPCB can’t assemble {partsSaid(board.unsourced)} from these
+            Gerbers: the BOM has no JLCPCB part number for{" "}
+            {board.unsourced.length === 1 ? "it" : "them"}. Ask your agent to
+            find {board.unsourced.length === 1 ? "one" : "them some"}.
+          </p>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+/** The parts on a board, by name, as a sentence has them: "U1, U2 and L1", "U1, U2 and 6 more". */
+function partsSaid(parts: string[]): string {
+  const shown = parts.length > 4 ? parts.slice(0, 3) : parts.slice(0, -1)
+  const last =
+    parts.length > 4 ? `${parts.length - 3} more` : parts[parts.length - 1]
+  return shown.length ? `${shown.join(", ")} and ${last}` : last
 }
 
 /**

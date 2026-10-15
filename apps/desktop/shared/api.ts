@@ -565,6 +565,16 @@ export type BoardSummary = {
   /** whether there is a STEP file of it, and the files a board house makes it from */
   step: boolean
   gerbers: boolean
+  /**
+   * whether its file was written after it was last built: what was built of it, the
+   * Gerbers too, is of the board as it was before
+   */
+  outdated: boolean
+  /**
+   * the parts that the BOM in its Gerbers lists with no JLCPCB part number (U1, L1), as
+   * it was last built: JLCPCB cannot assemble those from it
+   */
+  unsourced: string[]
   /** how far it has got, while it is being built; null while it is not */
   building: Building | null
   /**

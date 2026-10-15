@@ -154,3 +154,78 @@ export function sizeOf(circuit: unknown): [number, number] | null {
   if (x1 < x0 || y1 < y0) return null
   return [x1 - x0, y1 - y0]
 }
+
+/** The 3D models a part can have, any of which makes it more than a bare hole. */
+const MODELS = [
+  "model_obj_url",
+  "model_stl_url",
+  "model_3mf_url",
+  "model_gltf_url",
+  "model_glb_url",
+  "model_step_url",
+  "model_wrl_url",
+  "model_jscad",
+]
+
+/**
+ * The parts on a board, by name (U1, L1), that the BOM in its Gerbers' zip lists with no
+ * JLCPCB part number: which JLCPCB cannot assemble from that BOM. tscircuit gives one
+ * by itself to many resistors and capacitors, and to the rest only where the board says
+ * (`supplierPartNumbers`). It goes by the rule tscircuit's BOM is written by: every part
+ * that is placed, but for test points and holes with nothing else to them. kit/board.mjs
+ * goes by the same rule, to tell the agent that builds the board.
+ */
+export function unsourcedOf(circuit: unknown): string[] {
+  if (!Array.isArray(circuit)) return []
+  const elements = circuit.filter(isObject)
+  const sources = new Map(
+    elements
+      .filter((one) => one.type === "source_component")
+      .map((one) => [one.source_component_id, one])
+  )
+  const numbered = (numbers: unknown) =>
+    Array.isArray(numbers) &&
+    numbers.some((one) => typeof one === "string" && one.trim() !== "")
+  const unsourced: string[] = []
+  for (const placed of elements) {
+    if (placed.type !== "pcb_component" || placed.do_not_place) continue
+    const source = sources.get(placed.source_component_id)
+    if (!source || source.ftype === "simple_test_point") continue
+    const suppliers = isObject(source.supplier_part_numbers)
+      ? source.supplier_part_numbers
+      : {}
+    if (numbered(suppliers.jlcpcb) || numbered(suppliers.lcsc)) continue
+    const mine = (one: Record<string, unknown>) =>
+      one.pcb_component_id === placed.pcb_component_id
+    const bareHole =
+      source.ftype === "simple_chip" &&
+      !(
+        typeof source.manufacturer_part_number === "string" &&
+        source.manufacturer_part_number.trim()
+      ) &&
+      !Object.values(suppliers).some(numbered) &&
+      !elements.some(
+        (one) =>
+          one.type === "cad_component" &&
+          mine(one) &&
+          MODELS.some((model) => one[model])
+      ) &&
+      (() => {
+        const shape = elements.filter(
+          (one) =>
+            (one.type === "pcb_plated_hole" ||
+              one.type === "pcb_hole" ||
+              one.type === "pcb_smtpad") &&
+            mine(one)
+        )
+        return shape.length === 1 && shape[0].type !== "pcb_smtpad"
+      })()
+    if (bareHole) continue
+    const name =
+      typeof source.name === "string" && source.name.trim()
+        ? source.name.trim()
+        : String(placed.pcb_component_id)
+    if (!unsourced.includes(name)) unsourced.push(name)
+  }
+  return unsourced.sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
+}

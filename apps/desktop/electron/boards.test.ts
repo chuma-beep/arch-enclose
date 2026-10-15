@@ -74,6 +74,8 @@ describe("boardsIn", () => {
         model: false,
         step: false,
         gerbers: false,
+        outdated: false,
+        unsourced: [],
         building: null,
         preview: null,
         trouble: null,
@@ -115,6 +117,34 @@ describe("boardsIn", () => {
       latest
     )
     expect(boardsIn(root)[0].preview).toBeNull()
+  })
+
+  it("says when the board was changed after it was last built", () => {
+    write("pcb/main.circuit.tsx", "")
+    write("pcb/build/main.circuit.json", BOARD)
+    const earlier = new Date(Date.now() - 10_000)
+    fs.utimesSync(path.join(root, "pcb/main.circuit.tsx"), earlier, earlier)
+    expect(boardsIn(root)[0].outdated).toBe(false)
+    const later = new Date(Date.now() + 5000)
+    fs.utimesSync(path.join(root, "pcb/main.circuit.tsx"), later, later)
+    expect(boardsIn(root)[0].outdated).toBe(true)
+  })
+
+  it("names the parts its BOM has no JLCPCB number for", () => {
+    write("pcb/main.circuit.tsx", "")
+    write(
+      "pcb/build/main.circuit.json",
+      JSON.stringify([
+        ...JSON.parse(BOARD),
+        { type: "source_component", source_component_id: "s1", name: "U1" },
+        {
+          type: "pcb_component",
+          pcb_component_id: "p1",
+          source_component_id: "s1",
+        },
+      ])
+    )
+    expect(boardsIn(root)[0].unsourced).toEqual(["U1"])
   })
 
   it("says why what says what a board is did not read", () => {

@@ -18,6 +18,7 @@ import {
   readBoard,
   readBuilding,
   sizeOf,
+  unsourcedOf,
   type Building,
 } from "../shared/board-format"
 
@@ -54,7 +55,14 @@ export function boardsWritten(root: string): string {
   return findBoards(root)
     .map((id) => {
       const { circuit, model, building, preview } = builtOf(id)
-      const files = [boardFileOf(id), circuit, model, building, preview]
+      const files = [
+        `${id}.circuit.tsx`,
+        boardFileOf(id),
+        circuit,
+        model,
+        building,
+        preview,
+      ]
       const stamps = files.map((file) => {
         const stat = statOf(path.join(folder, file))
         return stat ? `${stat.mtimeMs}:${stat.size}` : "-"
@@ -65,22 +73,25 @@ export function boardsWritten(root: string): string {
 }
 
 /**
- * How big a built board is, as `sizeOf` has it: read once for each time it is built,
- * since the boards are read again as often as a build says how far it has got.
+ * How big a built board is, as `sizeOf` has it, and the parts its BOM has no JLCPCB
+ * number for (`unsourcedOf`): read once for each time it is built, since the boards are
+ * read again as often as a build says how far it has got.
  */
-const sizes = new Map<string, { at: number; size: [number, number] | null }>()
-function sizeAt(file: string, stat: fs.Stats): [number, number] | null {
-  const had = sizes.get(file)
-  if (had?.at === stat.mtimeMs) return had.size
-  let size: [number, number] | null = null
+type Read = { size: [number, number] | null; unsourced: string[] }
+const reads = new Map<string, { at: number; read: Read }>()
+function readAt(file: string, stat: fs.Stats): Read {
+  const had = reads.get(file)
+  if (had?.at === stat.mtimeMs) return had.read
+  let read: Read = { size: null, unsourced: [] }
   if (stat.size <= MOST_CIRCUIT_BYTES)
     try {
-      size = sizeOf(JSON.parse(fs.readFileSync(file, "utf8")))
+      const circuit: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
+      read = { size: sizeOf(circuit), unsourced: unsourcedOf(circuit) }
     } catch {
       // half written, or not tscircuit's: it is shown when it is built again
     }
-  sizes.set(file, { at: stat.mtimeMs, size })
-  return size
+  reads.set(file, { at: stat.mtimeMs, read })
+  return read
 }
 
 /** How far a board's build has got, where it is being built (see kit/board.mjs). */
@@ -115,15 +126,21 @@ export function boardsIn(root: string): BoardSummary[] {
     const built = statOf(path.join(folder, files.circuit))
     const there = (file: string) => statOf(path.join(folder, file)) !== null
     const preview = statOf(path.join(folder, files.preview))
+    const written = statOf(path.join(folder, `${id}.circuit.tsx`))
+    const read = built
+      ? readAt(path.join(folder, files.circuit), built)
+      : { size: null, unsourced: [] }
     return {
       id,
       name,
       finished,
       built: built ? Math.round(built.mtimeMs) : null,
-      size: built ? sizeAt(path.join(folder, files.circuit), built) : null,
+      size: read.size,
       model: there(files.model),
       step: there(files.step),
       gerbers: there(files.gerbers),
+      outdated: !!built && !!written && written.mtimeMs > built.mtimeMs,
+      unsourced: read.unsourced,
       building: buildingAt(path.join(folder, files.building)),
       preview:
         preview && (!built || preview.mtimeMs > built.mtimeMs)

@@ -73,6 +73,12 @@ built by itself: there is nothing to tell it. Do not copy the script into the pr
 Look at the three pictures in `pcb/build/` before you report a board, and mend what is
 wrong. Your screenshot tool shows the model's view, not PCB mode.
 
+Build again after every change to a board, however small, before you report it: a
+part number, a value, a footprint. The Gerbers' zip, with its BOM, and the STEP file
+are made only by a build. While you write the board, the app redraws it in PCB mode by
+itself, but that is a quick look and builds none of these. So a change made without a
+build shows in PCB mode while the user would still order the board as it was before.
+
 ## Writing a board
 
 A board is a default export that returns a `<board>`. Sizes are in millimetres. A part is
@@ -142,6 +148,33 @@ route and to solder:
 
 Take a finer part only where the thing needs it, and say why in your reply.
 
+## Parts that JLCPCB can assemble
+
+JLCPCB assembles a board from the BOM in its Gerbers' zip. A part with no JLCPCB part
+number there is left blank, and the user has to find each one by hand before they can
+order. tscircuit gives many resistors and capacitors a number by itself. Every other
+part gets one only if the board gives it, alongside the maker's own number:
+
+```tsx
+<chip
+  name="U2"
+  manufacturerPartNumber="AMS1117-3.3"
+  supplierPartNumbers={{ jlcpcb: ["C6186"] }}
+  footprint="sot223"
+  ...
+/>
+```
+
+- Look each part up with `tsci search --jlcpcb` (above), and take one that JLCPCB has
+  in stock, in the quantity the user is making. The search matches loosely, and can
+  give a different part from the one asked for: check that the part it gives is that
+  one, or does the same job in the same footprint.
+- Where the maker's part is not stocked, or is discontinued, take one that does the
+  same job in the same footprint, and say in your reply which part changed and why.
+- After each build, the build lists any part the BOM still has no JLCPCB number for. A
+  finished board has none. If no stocked part can be found for one, say which and
+  why, so the user knows to source it themselves.
+
 ## Routing
 
 Let the router try first. Draw a trace by hand (`pcbPath`) only where it fails, which is
@@ -169,11 +202,11 @@ Make it in minutes, build it, fit it into the model, and say in your reply that 
 rough and can be made in detail when they want.
 
 A detailed board (`"finished": true`) is the board to be made: every part a real one,
-named by its maker's part number or its JLCPCB number; every pin that is used labelled;
-every connection made, with traces and nets; routed by the build; and built without
-errors. Make it from the rough one, where there is one: keep its outline, holes and
-the parts the thing was shaped round where they were, unless the user agrees to move
-them, and say what moved.
+named by its maker's part number and by the JLCPCB number of a part in stock (see Parts
+that JLCPCB can assemble); every pin that is used labelled; every connection made, with
+traces and nets; routed by the build; and built without errors. Make it from the rough
+one, where there is one: keep its outline, holes and the parts the thing was shaped
+round where they were, unless the user agrees to move them, and say what moved.
 
 A detailed board takes a while, and the user watches it come together in PCB mode,
 which the app opens on the board when it is first built in a turn. So build it in

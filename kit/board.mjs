@@ -317,6 +317,78 @@ async function keep() {
     wrote.push(path.relative(process.cwd(), target))
   }
   console.log(`\nBuilt ${name}:\n${wrote.map((one) => `  ${one}`).join("\n")}`)
+  if (gerbers.status === 0) sourcing(board)
+}
+
+/**
+ * Says which parts the BOM in the Gerbers' zip has no JLCPCB part number for, which
+ * JLCPCB cannot assemble from it: tscircuit gives one by itself to many resistors and
+ * capacitors, and to the rest only where the board says. It goes by the rule tscircuit's
+ * BOM is written by, as the app does to warn the user (unsourcedOf, in
+ * shared/board-format.ts): every part placed, but for test points and bare holes.
+ */
+function sourcing(circuit) {
+  const MODELS = ["obj", "stl", "3mf", "gltf", "glb", "step", "wrl"]
+    .map((kind) => `model_${kind}_url`)
+    .concat("model_jscad")
+  const numbered = (numbers) =>
+    Array.isArray(numbers) && numbers.some((one) => String(one).trim())
+  const sources = new Map(
+    circuit
+      .filter((one) => one.type === "source_component")
+      .map((one) => [one.source_component_id, one])
+  )
+  const bareHole = (source, placed) => {
+    const mine = (one) => one.pcb_component_id === placed.pcb_component_id
+    if (
+      source.ftype !== "simple_chip" ||
+      source.manufacturer_part_number?.trim()
+    )
+      return false
+    if (Object.values(source.supplier_part_numbers ?? {}).some(numbered))
+      return false
+    if (
+      circuit.some(
+        (one) =>
+          one.type === "cad_component" &&
+          mine(one) &&
+          MODELS.some((model) => one[model])
+      )
+    )
+      return false
+    const shape = circuit.filter(
+      (one) =>
+        ["pcb_plated_hole", "pcb_hole", "pcb_smtpad"].includes(one.type) &&
+        mine(one)
+    )
+    return shape.length === 1 && shape[0].type !== "pcb_smtpad"
+  }
+  const unsourced = new Set()
+  for (const placed of circuit) {
+    if (placed.type !== "pcb_component" || placed.do_not_place) continue
+    const source = sources.get(placed.source_component_id)
+    if (!source || source.ftype === "simple_test_point") continue
+    const suppliers = source.supplier_part_numbers ?? {}
+    if (numbered(suppliers.jlcpcb) || numbered(suppliers.lcsc)) continue
+    if (bareHole(source, placed)) continue
+    unsourced.add(source.name || placed.pcb_component_id)
+  }
+  if (unsourced.size === 0) return
+  const parts = [...unsourced].sort((a, b) =>
+    a.localeCompare(b, "en", { numeric: true })
+  )
+  let finished = true
+  try {
+    const said = JSON.parse(
+      fs.readFileSync(path.join(folder, `${name}.board.json`), "utf8")
+    )
+    finished = said.finished !== false
+  } catch {
+    // none: a board that says nothing of itself is taken for finished, as the app has it
+  }
+  console.log(
+    `\n${finished ? "This board cannot be ordered assembled yet: the" : "The"} BOM has no JLCPCB part number for ${parts.join(", ")}. Give each one (supplierPartNumbers={{ jlcpcb: ["C…"] }}), of a part JLCPCB has in stock, and build again.`
+  )
 }
 
 /**
