@@ -73,10 +73,11 @@ export default function Privacy() {
       <h2>What goes to an agent’s provider</h2>
       <p>
         The app works through a coding agent you installed and signed in to yourself: Claude
-        Code, Codex or Grok. What you write, the pictures you attach and the project files
-        the agent reads go to that agent’s provider, as they would if you ran the agent in a
-        terminal. That is between you and the provider, under its privacy policy and your
-        subscription. None of it goes to the Enclose project.
+        Code, Codex, Grok or opencode. What you write, the pictures you attach and the project
+        files the agent reads go to the provider that agent uses (for opencode, the model
+        provider you set it up with), as they would if you ran the agent in a terminal. That
+        is between you and that provider, under its privacy policy and your own subscription
+        or account with it. None of it goes to the Enclose project.
       </p>
       <p>
         Where Claude Code is installed, the app also asks its quickest model to do a few

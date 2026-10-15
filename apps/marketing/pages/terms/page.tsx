@@ -41,10 +41,10 @@ export default function Terms() {
       <h2>Agents and their providers</h2>
       <p>
         Enclose works through coding agents that you install and sign in to yourself: Claude
-        Code, Codex or Grok. What you write, the pictures you attach and the files the agent
-        reads go to the provider of the agent you chose, on your own subscription and under
-        that provider’s terms. You pay them, not Enclose. Enclose is not affiliated with
-        those providers, and they do not endorse it.
+        Code, Codex, Grok or opencode. What you write, the pictures you attach and the files
+        the agent reads go to the provider that agent uses, on your own subscription or
+        account with it and under its terms. You pay them, not Enclose. Enclose is not
+        affiliated with those providers, and they do not endorse it.
       </p>
       <p>
         An agent edits files and runs commands on your machine, with the permissions you give
