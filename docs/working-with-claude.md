@@ -133,8 +133,8 @@ goes.
 **PCB**, beside the view, lists the project's boards, each with a picture of it in 3D,
 its name and its size; with none yet, it says to ask for one. Pick one and the view is
 in PCB mode, with the board where the model was (its copper in KiCad's colours): the buttons down the
-right change over to the board's, and the cards of the other projects are put away. The
-buttons, or 1, 2 and 3, show it as it is made (**Technical view**), in **3D**, or as its
+right change over to the board's, and the cards of the other projects are put away. A board opens in
+3D; the buttons, or 1, 2 and 3, show it as it is made (**Technical view**), in **3D**, or as its
 **Schematic**. Beside **Technical view**, **Bottom side** (S) turns the board over, to show its bottom as it is seen from under it. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
 wheel, and a double click shows all of it again. The 3D is looked round as the model is,
 with the same camera, in tscircuit's own colours with the edges drawn as the model's

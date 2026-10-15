@@ -234,7 +234,6 @@ const REFERENCE_KEY = "enclose:reference"
 const FIGURE_KEY = "enclose:figure"
 const WAITING_KEY = "enclose:waiting"
 const KEPT_MESHES_KEY = "enclose:kept-meshes"
-const BOARD_AS_KEY = "enclose:board-as"
 
 /** What is asked of the agent when a model made of a mesh is to be built again as code. */
 export const REBUILD = "Rebuild this model as an editable design."
@@ -482,7 +481,8 @@ const homeView = (): View => ({
   reference: null,
   tools: false,
   board: null,
-  boardAs: BOARD_AS.find((one) => one === saved(BOARD_AS_KEY)) ?? "pcb",
+  // a board is first seen in 3D, whichever way it was looked at before
+  boardAs: "3d",
   boardSide: "top",
 })
 
@@ -1093,7 +1093,6 @@ export const useStore = create<State>()((set, get) => ({
       localStorage.setItem(DIMENSIONS_KEY, patch.dimensions ? "on" : "off")
     if (patch.labels !== undefined)
       localStorage.setItem(LABELS_KEY, patch.labels ? "on" : "off")
-    if (patch.boardAs) localStorage.setItem(BOARD_AS_KEY, patch.boardAs)
     // a cut is kept as it is left, for the next time its project is cut open
     const { activeId, cuts } = get()
     const kept =
@@ -1113,6 +1112,12 @@ export const useStore = create<State>()((set, get) => ({
       } else if (patch.board) {
         view.blueprint = false
         view.assembly = false
+        // a board that is opened is first seen whole, in 3D, from above, unless it is
+        // asked for another way
+        if (patch.board !== state.view.board) {
+          view.boardAs = patch.boardAs ?? "3d"
+          view.boardSide = patch.boardSide ?? "top"
+        }
       }
       // (a sheet is shown by itself only while it is the blueprint that is looked at)
       if (!view.blueprint) view.sheet = null

@@ -132,6 +132,30 @@ describe("what the view is put into", () => {
   })
 })
 
+describe("a circuit board, in PCB mode", () => {
+  it("is first seen in 3D, from above, whichever way the last one was looked at", () => {
+    state().setView({ board: "main" })
+    expect(view()).toMatchObject({
+      board: "main",
+      boardAs: "3d",
+      boardSide: "top",
+    })
+    state().setView({ boardAs: "pcb", boardSide: "bottom" })
+    // another one opened from the list
+    state().setView({ board: "power" })
+    expect(view()).toMatchObject({ boardAs: "3d", boardSide: "top" })
+    // and the same one again, after the model
+    state().setView({ boardAs: "schematic" })
+    state().setView({ board: null })
+    state().setView({ board: "power" })
+    expect(view().boardAs).toBe("3d")
+    // unless it is opened to be seen another way
+    state().setView({ board: null })
+    state().setView({ board: "main", boardAs: "pcb" })
+    expect(view().boardAs).toBe("pcb")
+  })
+})
+
 describe("what Esc steps back through", () => {
   /** Press it, and say whether there was anything for it to do. */
   const esc = () => state().leave()
