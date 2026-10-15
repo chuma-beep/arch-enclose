@@ -1,6 +1,7 @@
 {
   "name": "enclose",
   "productName": "Enclose (Alpha)",
+  "desktopName": "enclose",
   "private": true,
   "version": "0.0.9",
   "description": "CAD workbench with a Claude handoff",
