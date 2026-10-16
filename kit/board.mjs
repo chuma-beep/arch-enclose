@@ -21,6 +21,11 @@
 //     main.schematic.png  its schematic,
 //     main.3d.png         and the board in 3D
 //
+// The BOM and the placement file in main.gerbers.zip are mended as JLCPCB reads them:
+// each part named by its maker's number and its package, and turned the way JLCPCB's
+// own footprint of it needs. A board that is finished is then checked as it would be
+// ordered (board-check.mjs, beside this), and what the checks found is said at the end.
+//
 // While it builds, main.building.json says how far it has got: the app shows that, and
 // the routing as it goes. It is gone when the build is over, however it ended.
 //
@@ -42,6 +47,8 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+
+import { checkBoard, mendOrder, passedAll, said } from "./board-check.mjs"
 
 /** The tscircuit it builds with: the one the app is known to work with. */
 const TSCIRCUIT = "tscircuit@0.0.2892"
@@ -162,9 +169,10 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"])
 
 /**
  * Run tscircuit's command line in the work folder: what it prints goes on to whoever
- * ran this, line by line, and to `each`. Resolves to how it ended.
+ * ran this, line by line, and to `each`; or only to `each`, `quiet`. Resolves to how it
+ * ended.
  */
-function tsci(args, each = () => {}) {
+function tsci(args, each = () => {}, quiet = false) {
   return new Promise((resolve) => {
     const child = spawn("npx", ["--yes", "-p", TSCIRCUIT, "tsci", ...args], {
       cwd: work,
@@ -178,7 +186,7 @@ function tsci(args, each = () => {}) {
     ]) {
       let left = ""
       stream.on("data", (chunk) => {
-        to.write(chunk)
+        if (!quiet) to.write(chunk)
         const lines = (left + chunk).split("\n")
         left = lines.pop() ?? ""
         for (const line of lines) each(line.replace(/\x1b\[[0-9;]*m/g, ""))
@@ -307,6 +315,7 @@ async function keep() {
   const board = JSON.parse(fs.readFileSync(circuit, "utf8"))
   await sharper(board, path.join(out, "3d.glb"))
   await parts(board)
+  if (gerbers.status === 0) await mend(board, path.join(out, "gerbers.zip"))
 
   const wrote = []
   for (const [from, to] of MADE) {
@@ -317,7 +326,86 @@ async function keep() {
     wrote.push(path.relative(process.cwd(), target))
   }
   console.log(`\nBuilt ${name}:\n${wrote.map((one) => `  ${one}`).join("\n")}`)
-  if (gerbers.status === 0) sourcing(board)
+  if (gerbers.status !== 0) return
+  // a finished board is checked as it would be ordered; a rough one only for its parts
+  if (finished()) await checked()
+  else sourcing(board)
+}
+
+/** Whether the board says it is finished: one that says nothing of itself is, as the app has it. */
+function finished() {
+  try {
+    const said = JSON.parse(
+      fs.readFileSync(path.join(folder, `${name}.board.json`), "utf8")
+    )
+    return said.finished !== false
+  } catch {
+    return true
+  }
+}
+
+/**
+ * The BOM and the placement file in the Gerbers' zip mended, as JLCPCB reads them (see
+ * board-check.mjs): where they cannot be, they are left as tscircuit wrote them.
+ */
+async function mend(board, zip) {
+  try {
+    const { turned, untold } = await mendOrder(board, zip)
+    if (turned.length)
+      console.log(
+        `\nThe placement file turns ${turned.map((one) => `${one.name} to ${one.to}° (tscircuit had ${one.from}°)`).join(", ")}, for JLCPCB's own footprint of each to sit on its pads.`
+      )
+    if (untold.length && finished())
+      console.log(
+        `\nThe rotation JLCPCB needs could not be told for ${untold.map((one) => one.name).join(", ")}: see the checks below.`
+      )
+  } catch (error) {
+    console.error(
+      `\nThe BOM and the placement file are as tscircuit wrote them: they could not be mended (${error.message}).`
+    )
+  }
+}
+
+/**
+ * The checks a board is ordered by, said: see board-check.mjs. And tscircuit's own, of
+ * the board as it was just built: no shorts between copper that is not one net, a
+ * netlist that is whole, and parts placed clear of each other and of the edge.
+ */
+async function checked() {
+  try {
+    const checks = await checkBoard(folder, name)
+    const own = []
+    let passed = true
+    for (const check of ["shorts", "netlist", "placement"]) {
+      const lines = []
+      const ran = await tsci(
+        ["check", check, path.basename(file)],
+        (line) => lines.push(line),
+        true
+      )
+      const said = lines.map((line) => line.trim()).filter(Boolean)
+      if (ran.status === 0) {
+        if (check === "shorts")
+          own.push(said.find((line) => /no shorts/i.test(line)) ?? "No shorts.")
+        continue
+      }
+      passed = false
+      // what it found: its summary and the issues it numbers, where it has them, and
+      // not its counting up of the rest of the board
+      const issues = said.filter((line) => /summary:|^\d+\. /.test(line))
+      const found = issues.length
+        ? issues
+        : said.filter((line) => !/^npm |^Could not save autorouting/.test(line))
+      own.push(`tsci check ${check}: ${found.slice(0, 8).join(" ") || `ended with ${ran.status}`}`)
+    }
+    // (before what the assembly costs, which is only for the user to know)
+    checks.splice(-1, 0, { title: "tscircuit's checks", passed, lines: own })
+    console.log(
+      `\n${passedAll(checks) ? "Ready to order" : "Not ready to order"} from JLCPCB:\n\n${said(checks)}`
+    )
+  } catch (error) {
+    console.error(`\nThe board could not be checked for ordering: ${error.message}`)
+  }
 }
 
 /**
@@ -377,17 +465,8 @@ function sourcing(circuit) {
   const parts = [...unsourced].sort((a, b) =>
     a.localeCompare(b, "en", { numeric: true })
   )
-  let finished = true
-  try {
-    const said = JSON.parse(
-      fs.readFileSync(path.join(folder, `${name}.board.json`), "utf8")
-    )
-    finished = said.finished !== false
-  } catch {
-    // none: a board that says nothing of itself is taken for finished, as the app has it
-  }
   console.log(
-    `\n${finished ? "This board cannot be ordered assembled yet: the" : "The"} BOM has no JLCPCB part number for ${parts.join(", ")}. Give each one (supplierPartNumbers={{ jlcpcb: ["C…"] }}), of a part JLCPCB has in stock, and build again.`
+    `\nThe BOM has no JLCPCB part number for ${parts.join(", ")}. Give each one (supplierPartNumbers={{ jlcpcb: ["C…"] }}), of a part JLCPCB has in stock, before the board is finished.`
   )
 }
 

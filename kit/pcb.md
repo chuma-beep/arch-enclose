@@ -68,6 +68,11 @@ built by itself: there is nothing to tell it. Do not copy the script into the pr
 - It prints tscircuit's errors and warnings. On an error the build fails and what was
   built before is left as it was. Warnings that no part number was given, or that a
   pin's use is not said, matter for a detailed board, not a rough one.
+- It mends the BOM and the placement file in the Gerbers' zip as JLCPCB reads them:
+  each part named by its maker's number and its package, and turned the way JLCPCB's own
+  footprint of it needs (see Before it is ordered). It says which parts it turned.
+- A finished board's build ends with the checks it is ordered by (see Before it is
+  ordered): read them.
 - Anything after the board's file goes to `tsci build` as it is.
 
 Look at the three pictures in `pcb/build/` before you report a board, and mend what is
@@ -148,6 +153,13 @@ route and to solder:
 
 Take a finer part only where the thing needs it, and say why in your reply.
 
+What JLCPCB charges to assemble a board goes by its parts too. Surface-mounted parts on
+the top are the cheapest. Parts through the board cost extra, and so does any part on
+the underside, which makes it two-sided assembly. So put every surface-mounted part on
+the top where the design allows, and where a part only comes through the board (a pin
+header, a terminal block, a big connector), list it in your reply, with its JLCPCB
+number, for the user to buy and solder by hand, or to pay for.
+
 ## Parts that JLCPCB can assemble
 
 JLCPCB assembles a board from the BOM in its Gerbers' zip. A part with no JLCPCB part
@@ -165,15 +177,60 @@ part gets one only if the board gives it, alongside the maker's own number:
 />
 ```
 
+- Give every part placed its JLCPCB number, not only its maker's: tscircuit fills one
+  in by itself for many resistors and capacitors, but leaves chips, connectors,
+  crystals and inductors blank, and JLCPCB then finds them "unmatched".
 - Look each part up with `tsci search --jlcpcb` (above), and take one that JLCPCB has
   in stock, in the quantity the user is making. The search matches loosely, and can
   give a different part from the one asked for: check that the part it gives is that
-  one, or does the same job in the same footprint.
+  one, or does the same job in the same footprint. To look a number up by itself:
+  https://jlcpcb.com/partdetail/C2040, or
+  https://jlcsearch.tscircuit.com/api/search?q=C2040.
 - Where the maker's part is not stocked, or is discontinued, take one that does the
-  same job in the same footprint, and say in your reply which part changed and why.
-- After each build, the build lists any part the BOM still has no JLCPCB number for. A
-  finished board has none. If no stocked part can be found for one, say which and
-  why, so the user knows to source it themselves.
+  same job in the same footprint, and say in your reply which part changed and why. A
+  part can be listed under one variant and not another (an encoder's 4225F and not its
+  4220F): look for the variants before giving up on it.
+- After each build of a rough board, the build lists any part the BOM still has no
+  JLCPCB number for; a finished board's checks say the same. A finished board has none.
+  If no stocked part can be found for one, say which and why, so the user knows to
+  source it themselves.
+
+## 3D models of parts
+
+Each part placed needs a 3D model, or the board in 3D, in PCB mode and in the model, has
+bare pads where it is. A footprint named as tscircuit names them (`soic8`, `0603`) and a
+part imported from JLCPCB come with one. A footprint written by hand in the board
+(`<footprint>…</footprint>`) has none: give the part a `cadModel`, from EasyEDA, whose
+library is JLCPCB's:
+
+```tsx
+<chip
+  name="SW1"
+  footprint={<footprint>...</footprint>}
+  cadModel={{
+    objUrl: "https://modelcdn.tscircuit.com/easyeda_models/download?uuid=<uuid>&pn=C<n>",
+    modelOriginPosition: { x: 0, y: 0, z: 0 },
+    rotationOffset: { x: 0, y: 0, z: 0 },
+  }}
+  ...
+/>
+```
+
+- The uuid is in EasyEDA's data for the part,
+  `https://easyeda.com/api/products/C<n>/components?version=6.4.19.5` (ask it as a
+  browser does, with a browser's User-Agent, or it turns you away): the `SVGNODE` entry
+  in `result.packageDetail.dataStr.shape`, `attrs.uuid`, beside `c_origin` and
+  `c_rotation`.
+- The OBJ is in mm, Z up. `modelOriginPosition` is the point of the model as it comes
+  that is to sit at the middle of the part's pads.
+- Work out its turn by matching the model's pins (its vertices below z = −1.5, in
+  clusters) to the board's holes or pads, not by what the conventions should be. A part
+  on the underside is where this goes wrong.
+- Check it in the board's GLB (`pcb/build/<name>.glb`, which is what PCB mode shows),
+  measuring where its pins or its body are: not in the STEP, which tscircuit turns
+  differently for a part on the underside. And check `cad_component` in
+  `pcb/build/<name>.circuit.json`, not in the preview, which can turn a part on the
+  underside otherwise than the build does.
 
 ## Routing
 
@@ -204,7 +261,8 @@ rough and can be made in detail when they want.
 A detailed board (`"finished": true`) is the board to be made: every part a real one,
 named by its maker's part number and by the JLCPCB number of a part in stock (see Parts
 that JLCPCB can assemble); every pin that is used labelled; every connection made, with
-traces and nets; routed by the build; and built without errors. Make it from the rough
+traces and nets; routed by the build; built without errors; and passing every check it
+is ordered by (see Before it is ordered). Make it from the rough
 one, where there is one: keep its outline, holes and the parts the thing was shaped
 round where they were, unless the user agrees to move them, and say what moved.
 
@@ -217,6 +275,35 @@ steps, and build after each one, rather than once at the end:
 3. routed.
 
 Say in a few words what you are at as you go: it is how the user follows the work.
+
+## Before it is ordered
+
+A finished board is one the user can order from JLCPCB as it is, assembled. The build of
+a finished board ends with the checks it is ordered by, which the app's script
+`board-check.mjs`, beside `board.mjs`, makes; it can be run by itself on a board that is
+built, the same way: `node "<the app's kit>/board-check.mjs" pcb/main.circuit.tsx`. Do
+not mark a board finished, or report it finished, until every check passes, and say in
+your reply how each came out:
+
+1. Part numbers: every part placed has a JLCPCB number, of a part JLCPCB lists and has
+   in stock, and the BOM names each by its maker's number and package.
+2. Rotations: JLCPCB turns its own footprint of a part by the placement file's rotation,
+   from that footprint's 0°, which is often not tscircuit's. The build sets each from
+   EasyEDA's footprint, pin on pin. Where it cannot tell (its pins are named otherwise,
+   or EasyEDA has none), say so: the user checks it by hand on JLCPCB's preview, which
+   can snap a part onto pads it does not fit, so a wrong turn can still look right.
+   Tell the user that the magenta dot of each part there must sit on its pin 1, and
+   where that is: the check says, part by part.
+3. 3D models: every part has one (see 3D models of parts).
+4. Up to date: the Gerbers' zip is of the board as its file is now. Only a build makes
+   it, so build again after any change; never edit the zip by hand, which the next
+   build writes over.
+5. tscircuit's checks: no shorts, a whole netlist, and parts placed clear of each other.
+6. What the assembly costs, for the user to know: the parts through the board and those
+   on the underside (see Choosing parts).
+
+A check that could not be run, offline or turned away, is not a pass: say which, and
+run the checks again (the script) before you call the board finished.
 
 ## Fitting it into the model
 

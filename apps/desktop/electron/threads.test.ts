@@ -562,6 +562,14 @@ describe("wiring", () => {
     expect(told).toContain("<board> block")
   })
 
+  it("has a board checked before it is ordered, with the app's script", () => {
+    const told = wiring(claude, "/app/kit/enclose.py", true).join("\n")
+    expect(told).toContain(
+      'node "/app/kit/board-check.mjs" pcb/<name>.circuit.tsx'
+    )
+    expect(told).toContain("when every check it is ordered by passes")
+  })
+
   it("has whether the detailed board is wanted now asked, where there is a way to ask", () => {
     const asking = wiring(claude, "/app/kit/enclose.py", true)
     const telling = wiring(claude, "/app/kit/enclose.py", false)

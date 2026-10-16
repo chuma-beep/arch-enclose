@@ -180,6 +180,19 @@ slowly in its place. When the light stops, the board is done.
 The download button in PCB mode saves the board's **Gerbers**, the zip a board house makes
 it from, with its drill files, what goes on it and where each part goes; or the board in
 3D, as **STEP**. An unfinished board's Gerbers are for looking at, not for ordering.
+Where the board was changed after it was last built, its Gerbers are outdated, and
+**Refresh Gerbers** there asks Claude to build it again.
+
+The BOM and the placement file in the zip are written as JLCPCB reads them: each part
+named by its maker's number and its package, and turned the way JLCPCB's own footprint of
+it needs. A finished board is checked as it would be ordered each time it is built, and
+Claude says how the checks came out: every part has a JLCPCB number of a part in stock,
+sits on its pads as JLCPCB turns it, and has a 3D model; the zip is of the board as it is
+now; tscircuit finds no shorts and no parts in each other's way; and which parts cost
+more to assemble, through the board or on its underside. Before you order, ask Claude
+whether the board is ready: it checks it again, with
+[`kit/board-check.mjs`](../kit/board-check.mjs), and says what to look at yourself on
+JLCPCB's site.
 
 A board is kept in `pcb/` at the top of the project: its tscircuit file
 (`pcb/main.circuit.tsx`), a small file with its name and whether it is finished, and in

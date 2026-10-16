@@ -603,8 +603,12 @@ export function assembling(
   ]
 }
 
-/** The app's script that builds a circuit board, and the reference for one, beside the exporter. */
+/**
+ * The app's script that builds a circuit board, the one that checks a board before it
+ * is ordered, and the reference for one, beside the exporter.
+ */
 const BOARD_BUILD = "board.mjs"
+const BOARD_CHECK = "board-check.mjs"
 const BOARD_GUIDE = "pcb.md"
 
 /**
@@ -622,6 +626,7 @@ export function wiring(
 ): string[] {
   const reference = path.join(path.dirname(kit), BOARD_GUIDE)
   const build = path.join(path.dirname(kit), BOARD_BUILD)
+  const check = path.join(path.dirname(kit), BOARD_CHECK)
   return [
     `- The thing can have circuit boards of its own, designed with tscircuit, in ${BOARD_FOLDER}/ at the top of the project, and built with the app's script: node "${build}" ${BOARD_FOLDER}/<name>.circuit.tsx. The user finds them with the PCB button beside the view, each with a picture, and opens one in PCB mode, where it takes the model's place: drawn as it is made, as its schematic, or in 3D. A board only roughed out so far is listed as Unfinished. Before you make or change a board, read "${reference}": it says how one is written, built and checked, and fitted into the model.`,
     "- Make a board only when the user brings one up: a PCB, a circuit board, the electronics of the thing and how they are wired. Until then a board in the model is a plain part like any other, sized from what goes on it.",
@@ -630,8 +635,9 @@ export function wiring(
       : "- A board in detail (every part chosen, wired and routed, ready to be made) is other work than the shape of the thing, and takes a good while. So unless the user asks for the detailed board, make a rough one, and say in the short reply that the detailed board can be asked for when they are ready for it.",
     "- A rough board keeps the design of the thing going: its outline, cut to the room the thing has for it, its mounting holes, and the parts that decide the shape (connectors where they come through the case, buttons, lights that show, a display, the battery, a module) at their real sizes and where they go, with nothing routed. Make it quickly, mark it unfinished and fit it into the model, so that the case is shaped round it.",
     `- A board in detail is not made in a turn of this conversation but in the background, by another agent, while the conversation goes on. When the user wants it, set the board up first where it has not been, as a rough board fitted into the model (read_board), so that the model takes the detailed one in when it is done; then hand it to ${tool(BOARDS, "make")}, with a brief that stands by itself, and end the turn: say in a few words that the detailed board is being made, in its own card in the conversation, and that the model is locked until it is done.`,
-    `- A message that holds a <board> block was written with that board open in PCB mode, and is about it: the block's id is what its files are called (${BOARD_FOLDER}/<id>.circuit.tsx). Change the board, build it, and build the model again too where what you changed moves anything it is fitted to.`,
-    `- A message that begins with a <board-job> block is the app asking you to make that board in detail, in the background, while the user goes on in the conversation without you. Nobody is there to answer a question: decide as someone who makes such boards would, and say what you decided. Change only the board's own files (${BOARD_FOLDER}/<id>.*, and what it imports from ${BOARD_FOLDER}/), build it in steps as the reference says, and mark it finished when it is. Leave the model's files as they are: when the board is done, run the model's build command once, so that it takes the board in, and change nothing else. A message that begins "The user says, for the board:" is passed on to you from the conversation meanwhile: go by it. End with a short reply: what the board is now, and anything the model needs changed to fit it, which the conversation will see to.`,
+    `- A message that holds a <board> block was written with that board open in PCB mode, and is about it: the block's id is what its files are called (${BOARD_FOLDER}/<id>.circuit.tsx). Change the board, build it, and build the model again too where what you changed moves anything it is fitted to. Where the board is finished, its build ends with the checks it is ordered by: say in the short reply how they came out.`,
+    `- When the user is about to order a board from JLCPCB, or asks whether one is ready to order, check it: build it, where it was changed since its last build, then run node "${check}" ${BOARD_FOLDER}/<name>.circuit.tsx, mend what fails as the reference says, and build again. Say how each check came out, and what the user is to look at themselves on JLCPCB's site (where each part's pin 1 is, for the parts the check could not tell). They save the files to order it with from PCB mode, with the download button.`,
+    `- A message that begins with a <board-job> block is the app asking you to make that board in detail, in the background, while the user goes on in the conversation without you. Nobody is there to answer a question: decide as someone who makes such boards would, and say what you decided. Change only the board's own files (${BOARD_FOLDER}/<id>.*, and what it imports from ${BOARD_FOLDER}/), build it in steps as the reference says, and mark it finished when it is: when every check it is ordered by passes, as the reference says. Leave the model's files as they are: when the board is done, run the model's build command once, so that it takes the board in, and change nothing else. A message that begins "The user says, for the board:" is passed on to you from the conversation meanwhile: go by it. End with a short reply: what the board is now, how each of its checks came out, and anything the model needs changed to fit it, which the conversation will see to.`,
   ]
 }
 

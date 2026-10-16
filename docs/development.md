@@ -299,5 +299,7 @@ GitHub, [`electron/github.ts`](../apps/desktop/electron/github.ts) and
   [`kit/assembly.md`](../kit/assembly.md) for how one is worked out.
 - A circuit board: [`shared/board-format.ts`](../apps/desktop/shared/board-format.ts),
   [`kit/pcb.md`](../kit/pcb.md) for how one is made, and
-  [`kit/board.mjs`](../kit/board.mjs), which builds it.
+  [`kit/board.mjs`](../kit/board.mjs), which builds it, and
+  [`kit/board-check.mjs`](../kit/board-check.mjs), which checks it before it is
+  ordered from JLCPCB and mends its BOM and placement file.
 - The exporter a project copies in: [`kit/enclose.py`](../kit/enclose.py).
