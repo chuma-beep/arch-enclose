@@ -478,13 +478,26 @@ async function publishMac() {
     ) !== "0"
   const commits = must(
     "git",
-    ["log", "--reverse", "--format=%H%x09%h%x09%s", `${before}..HEAD`],
+    // (a merge is listed by what it brings in, which is listed for itself)
+    [
+      "log",
+      "--reverse",
+      "--no-merges",
+      "--format=%H%x09%h%x09%s",
+      `${before}..HEAD`,
+    ],
     { quiet: true }
   )
     .split("\n")
     .filter(Boolean)
     .map((line) => {
       const [sha, short, subject] = line.split("\t")
+      return { sha, short, subject }
+    })
+    // The one that gave the app its version is left out before anyone is asked who it is
+    // by: it is on this machine only, and GitHub knows of no commit until it is pushed.
+    .filter(({ subject }) => subject !== `chore: ${next}`)
+    .map(({ sha, short, subject }) => {
       const login = authorOf(sha)
       return {
         short,
@@ -492,7 +505,6 @@ async function publishMac() {
         outside: login && !collaborators.has(login) ? login : "",
       }
     })
-    .filter(({ subject }) => subject !== `chore: ${next}`)
   const newcomers = new Map()
   for (const { short, subject, outside } of commits)
     if (outside && !newcomers.has(outside) && !hadCommits(outside))
