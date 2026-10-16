@@ -234,8 +234,7 @@ function Under({
   news: News | null
   onSpread: () => void
 }) {
-  const label =
-    count === 1 ? "1 earlier conversation" : `${count} earlier conversations`
+  const label = count === 1 ? "1 earlier version" : `${count} earlier versions`
   return (
     <Tooltip disableHoverablePopup>
       <TooltipTrigger
