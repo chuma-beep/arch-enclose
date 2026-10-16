@@ -204,6 +204,12 @@ try {
       publish: "never",
       config: {
         ...shared,
+        // The AppImage's own launcher. The one electron-builder uses unless told otherwise
+        // needs libfuse2, which Ubuntu 22.04 and later leave out, and on arm64 it is linked
+        // to an unversioned libz.so, which only the zlib development packages carry: on a
+        // stock Ubuntu, Debian or Fedora the arm64 AppImage would not start. This one is
+        // static, and needs neither: only the fusermount a desktop already has.
+        toolsets: { appimage: "1.0.3" },
         linux: {
           category: "Graphics",
           icon: "icons/icon-512.png",
