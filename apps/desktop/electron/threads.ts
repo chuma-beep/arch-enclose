@@ -39,12 +39,16 @@ import {
   boardFileOf,
   calledFrom,
   readBoard,
+  stepsTook,
+  type MadeOf,
+  type StepsTook,
 } from "../shared/board-format"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
 import { pictureMark, pictureName } from "../shared/pictures"
 import { replyOf } from "../shared/reply"
+import { Following } from "./boards"
 import type { Changes } from "./changes"
 import { followDoing, running } from "./claude"
 import { runCodex } from "./codex"
@@ -134,6 +138,25 @@ type Job = {
   notes: Saying
   /** it was asked for in a line, for its change and its commit */
   what: string
+}
+
+/** How the making of a board in the background went, once it is over. */
+export type BoardMade = {
+  /** how it was made: by which agent, and so on */
+  manner: Manner
+  outcome: "done" | "stopped" | "failed"
+  /** how long it took, in ms, and each step of it */
+  took: number
+  steps: StepsTook
+  /** how many things the agent did, and how many times the board was built */
+  did: number
+  builds: number
+  /** it was made in detail from a rough board already built */
+  rough: boolean
+  /** its own file says it is finished: every check it is ordered by passed */
+  finished: boolean
+  /** what it has on it, as it was last built: null where it never was */
+  made: MadeOf | null
 }
 type Asked = {
   content: Content | ((told: Told, provider: ProviderId) => Content)
@@ -239,6 +262,8 @@ export type ThreadsDeps = {
   ) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
+  /** a board made in the background is over: how that went */
+  onBoardMade: (projectId: string, made: BoardMade) => void
   /** an agent turned a message away for want of a sign-in: it is signed in no longer */
   onSignedOut: (provider: ProviderId) => void
   /**
@@ -2086,13 +2111,16 @@ export class Threads {
     const book = this.book(projectId)
     const project = this.deps.projects.get(projectId)
     if (!project || book.job) return
+    const boardFile = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
     let name = calledFrom(board)
     try {
-      const said = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
-      name = readBoard(JSON.parse(fs.readFileSync(said, "utf8"))).name ?? name
+      name =
+        readBoard(JSON.parse(fs.readFileSync(boardFile, "utf8"))).name ?? name
     } catch {
       // nothing says what it is called: it goes by its file's name
     }
+    // (how it comes along, for the count of how the app is used)
+    const following = new Following(project.path, board)
     const now = Date.now()
     let finish = () => {}
     const finished = new Promise<void>((resolve) => (finish = resolve))
@@ -2128,6 +2156,8 @@ export class Threads {
       if (index < 0) items.push(inner)
       else items[index] = inner
       show({ ...job.item, items })
+      // the board may have been built by what the agent has just done
+      if (inner.kind === "tool" && inner.state !== "running") following.look()
     }
     // what the user says for it meanwhile, as it comes, until it has given its result
     void finished.then(() => job.notes.end())
@@ -2260,15 +2290,23 @@ export class Threads {
           })
           .catch(() => this.deps.changes.discard(pending))
       else if (pending) this.deps.changes.discard(pending)
-      show({
-        ...job.item,
-        state: job.abort.signal.aborted
-          ? "stopped"
-          : failed
-            ? "failed"
-            : "done",
-        ended: Date.now(),
-      })
+      const outcome = job.abort.signal.aborted
+        ? "stopped"
+        : failed
+          ? "failed"
+          : "done"
+      const ended = Date.now()
+      show({ ...job.item, state: outcome, ended })
+      // as it was left
+      following.look()
+      let toBeMade = false
+      try {
+        toBeMade = readBoard(
+          JSON.parse(fs.readFileSync(boardFile, "utf8"))
+        ).finished
+      } catch {
+        // its file has gone, or does not read: it is not one to be made
+      }
       if (book.job === job) book.job = null
       this.deps.projects.refresh(projectId)
       this.write(projectId, conversation)
@@ -2286,6 +2324,18 @@ export class Threads {
         if (!book.run && waited) this.next(projectId, book, waited.conversation)
       }
       this.deps.onSummary()
+      // (last, so that nothing in counting it keeps the rest from being done)
+      this.deps.onBoardMade(projectId, {
+        manner,
+        outcome,
+        took: ended - now,
+        steps: stepsTook(now, following.reached, ended),
+        did: job.item.items.filter((one) => one.kind === "tool").length,
+        builds: following.builds,
+        rough: following.rough,
+        finished: toBeMade,
+        made: following.made,
+      })
     }
   }
 

@@ -630,21 +630,26 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   const projects = useStore((state) => state.projects)
   // While it is a model's blueprint that is looked at, the sheets have the window: the
   // card of the project they are of stays, at the top, and the rest are put away. And
-  // so it is while it is the model's assembly guides, whose covers have it likewise, and
-  // in PCB mode, where one of its circuit boards has it.
+  // so it is while it is the model's assembly guides, whose covers have it likewise, in
+  // PCB mode, where one of its circuit boards has it, and once Cmd+. has put the other
+  // projects away. (Cmd+. is of the project that is open: with none open there is no
+  // view, and the cards are what there is.)
   const activeId = useStore((state) => state.activeId)
-  const sheets = useStore(
+  const oneProject = useStore(
     (state) =>
-      state.view.blueprint || state.view.assembly || state.view.board !== null
+      state.view.blueprint ||
+      state.view.assembly ||
+      state.view.board !== null ||
+      (state.cleared !== null && state.activeId !== null)
   )
   // And while one sheet has the view to itself that card is gone too, and what is at
   // the foot with it: there is nothing over the sheet that is not the sheet's. They
-  // fade where they are, and come back the same way. So it is while the view has been
-  // given the window to itself (Cmd+.), which is of the project that is open: with
-  // none open there is no view, and the cards are what there is.
+  // fade where they are, and come back the same way. So it is once Cmd+. has given the
+  // view the window to itself.
   const alone = useStore(
     (state) =>
-      state.view.sheet !== null || (state.bare && state.activeId !== null)
+      state.view.sheet !== null ||
+      (state.cleared === "all" && state.activeId !== null)
   )
   const addProject = useStore((state) => state.addProject)
   const createProject = useStore((state) => state.createProject)
@@ -675,7 +680,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
         {projects.map((project) => (
           <Tucked
             key={project.id}
-            away={sheets && project.id !== activeId}
+            away={oneProject && project.id !== activeId}
             faded={alone}
           >
             <ProjectCard project={project} now={now} />
@@ -686,7 +691,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
             the two of them one over the other, and that stays at the foot of the list
             as the cards go by: over them, and over what shows from under a card. */}
         <div className="sticky bottom-0 z-20 flex shrink-0 grow flex-col justify-between gap-2 pb-4">
-          <Tucked away={sheets} faded={alone}>
+          <Tucked away={oneProject} faded={alone}>
             <DropdownMenu open={adding} onOpenChange={setAdding}>
               <Tooltip>
                 <TooltipTrigger

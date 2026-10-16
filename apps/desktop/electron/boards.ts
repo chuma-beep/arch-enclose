@@ -8,10 +8,12 @@ import type { BoardSummary } from "../shared/api"
 import {
   BOARD_FOLDER,
   BOARD_SOURCE,
+  BOARD_STEPS,
   boardFileOf,
   BUILT_FOLDER,
   builtOf,
   calledFrom,
+  madeOf,
   MOST_BOARD_BYTES,
   MOST_BOARDS,
   MOST_CIRCUIT_BYTES,
@@ -19,7 +21,9 @@ import {
   readBuilding,
   sizeOf,
   unsourcedOf,
+  type BoardStep,
   type Building,
+  type MadeOf,
 } from "../shared/board-format"
 
 /** The boards in a folder's pcb/, by what each is known by, in the order of their files. */
@@ -73,20 +77,24 @@ export function boardsWritten(root: string): string {
 }
 
 /**
- * How big a built board is, as `sizeOf` has it, and the parts its BOM has no JLCPCB
- * number for (`unsourcedOf`): read once for each time it is built, since the boards are
- * read again as often as a build says how far it has got.
+ * How big a built board is, as `sizeOf` has it, the parts its BOM has no JLCPCB number
+ * for (`unsourcedOf`), and what it has on it (`madeOf`): read once for each time it is
+ * built, since the boards are read again as often as a build says how far it has got.
  */
-type Read = { size: [number, number] | null; unsourced: string[] }
+type Read = { size: [number, number] | null; unsourced: string[]; made: MadeOf }
 const reads = new Map<string, { at: number; read: Read }>()
 function readAt(file: string, stat: fs.Stats): Read {
   const had = reads.get(file)
   if (had?.at === stat.mtimeMs) return had.read
-  let read: Read = { size: null, unsourced: [] }
+  let read: Read = { size: null, unsourced: [], made: madeOf(null) }
   if (stat.size <= MOST_CIRCUIT_BYTES)
     try {
       const circuit: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
-      read = { size: sizeOf(circuit), unsourced: unsourcedOf(circuit) }
+      read = {
+        size: sizeOf(circuit),
+        unsourced: unsourcedOf(circuit),
+        made: madeOf(circuit),
+      }
     } catch {
       // half written, or not tscircuit's: it is shown when it is built again
     }
@@ -154,3 +162,58 @@ export function boardsIn(root: string): BoardSummary[] {
 /** The folder in a project's pcb/ that what is built of its boards goes in. */
 export const builtFolder = (root: string) =>
   path.join(root, BOARD_FOLDER, BUILT_FOLDER)
+
+/**
+ * A board as it was last built: when (ms), and what it has on it. Null while it has not
+ * been built.
+ */
+function lastBuilt(
+  root: string,
+  id: string
+): { at: number; made: MadeOf } | null {
+  const file = path.join(root, BOARD_FOLDER, builtOf(id).circuit)
+  const built = statOf(file)
+  return built ? { at: built.mtimeMs, made: readAt(file, built).made } : null
+}
+
+/**
+ * A board an agent is making, followed as it goes: each time it is built, how far it has
+ * got (see `madeOf`). It is looked at after each thing the agent does, which is when a
+ * build of it would be over, and once more at the end.
+ */
+export class Following {
+  private readonly root: string
+  private readonly id: string
+  /** when it was last built (ms), as it was last looked at: null while it is not */
+  private last: number | null
+  /** it had been built before it was begun on: a rough board, made in detail from */
+  readonly rough: boolean
+  /** how many times it has been built since */
+  builds = 0
+  /** what it has on it, as it was last built: null while it has not been */
+  made: MadeOf | null
+  /** when it was first built as far as each step (ms) */
+  readonly reached: Partial<Record<BoardStep, number>> = {}
+
+  constructor(root: string, id: string) {
+    this.root = root
+    this.id = id
+    const built = lastBuilt(root, id)
+    this.last = built?.at ?? null
+    this.rough = built !== null
+    this.made = built?.made ?? null
+  }
+
+  look() {
+    const built = lastBuilt(this.root, this.id)
+    if (!built || built.at === this.last) return
+    this.last = built.at
+    this.builds += 1
+    this.made = built.made
+    const { step } = built.made
+    // (a build that got further than the step after the last one got to both at once)
+    if (step)
+      for (const one of BOARD_STEPS.slice(0, BOARD_STEPS.indexOf(step) + 1))
+        this.reached[one] ??= built.at
+  }
+}

@@ -4,7 +4,7 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { boardsIn, findBoards } from "./boards"
+import { boardsIn, findBoards, Following } from "./boards"
 import { Projects } from "./projects"
 
 let root: string
@@ -174,5 +174,58 @@ describe("a project's boards", () => {
     projects.refresh(id)
     expect(boards()).toBe(first! + 1)
     projects.close()
+  })
+})
+
+describe("Following", () => {
+  /** the board built as it is at `at` (s), with these on it */
+  const build = (at: number, ...types: string[]) => {
+    const file = "pcb/build/main.circuit.json"
+    write(file, JSON.stringify(types.map((type) => ({ type }))))
+    fs.utimesSync(path.join(root, file), at, at)
+  }
+
+  it("notes when each step was first got to, and how many times it was built", () => {
+    write("pcb/main.circuit.tsx", "")
+    const following = new Following(root, "main")
+    expect(following.rough).toBe(false)
+    expect(following.made).toBeNull()
+    following.look()
+    expect(following.builds).toBe(0)
+
+    build(1000, "source_component")
+    following.look()
+    // (looked at again with nothing built since: it is the same build)
+    following.look()
+    build(2000, "source_component", "source_trace")
+    following.look()
+    build(3000, "source_component", "source_trace")
+    following.look()
+    build(4000, "source_component", "source_trace", "pcb_trace")
+    following.look()
+    expect(following.builds).toBe(4)
+    expect(following.reached).toEqual({
+      placed: 1_000_000,
+      joined: 2_000_000,
+      routed: 4_000_000,
+    })
+    expect(following.made).toMatchObject({ step: "routed", parts: 1 })
+  })
+
+  it("has a board already built be a rough one, and its steps got to only once built again", () => {
+    build(1000, "source_component")
+    const following = new Following(root, "main")
+    expect(following.rough).toBe(true)
+    expect(following.made).toMatchObject({ step: "placed" })
+    following.look()
+    expect(following.reached).toEqual({})
+    // a build that got further than the step after it gets to both at once
+    build(2000, "source_component", "source_trace", "pcb_trace")
+    following.look()
+    expect(following.reached).toEqual({
+      placed: 2_000_000,
+      joined: 2_000_000,
+      routed: 2_000_000,
+    })
   })
 })

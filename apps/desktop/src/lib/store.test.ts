@@ -224,19 +224,22 @@ describe("what Esc steps back through", () => {
   })
 })
 
-describe("the view with the window to itself", () => {
-  it("has the cards and buttons put away, and leaves the conversation as it is", () => {
+describe("what is over the view, put away a step at a time", () => {
+  it("is the other projects, then all of it, then none, and leaves the conversation as it is", () => {
     state().setThreadOpen(true)
-    state().setBare(true)
-    expect(state()).toMatchObject({ bare: true, threadOpen: true })
-    state().setBare(false)
-    expect(state()).toMatchObject({ bare: false, threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: "others", threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: "all", threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: null, threadOpen: true })
   })
 
   it("is not what Esc gets out of", () => {
-    state().setBare(true)
+    state().clearView()
+    state().clearView()
     expect(state().leave()).toBe(false)
-    expect(state().bare).toBe(true)
+    expect(state().cleared).toBe("all")
   })
 })
 

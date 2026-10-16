@@ -229,3 +229,82 @@ export function unsourcedOf(circuit: unknown): string[] {
   }
   return unsourced.sort((a, b) => a.localeCompare(b, "en", { numeric: true }))
 }
+
+/**
+ * How far a build of a board has got with it, in the steps a detailed board is made in
+ * (kit/pcb.md): its parts placed, then joined (every connection made, still unrouted),
+ * then routed.
+ */
+export type BoardStep = "placed" | "joined" | "routed"
+export const BOARD_STEPS: readonly BoardStep[] = ["placed", "joined", "routed"]
+
+/** What a build of a board has on it: how far it has got, and how much there is of it. */
+export type MadeOf = {
+  /** null where it has no parts on it yet */
+  step: BoardStep | null
+  parts: number
+  nets: number
+  /** the connections between its parts' pins, routed or not */
+  connections: number
+  vias: number
+}
+
+/**
+ * What a board as tscircuit has it has on it (see `MadeOf`). It is joined once it has
+ * any connection, and routed once it has any trace: a board is built after each step,
+ * and not before it is done.
+ */
+export function madeOf(circuit: unknown): MadeOf {
+  const counts = new Map<unknown, number>()
+  if (Array.isArray(circuit))
+    for (const element of circuit)
+      if (isObject(element))
+        counts.set(element.type, (counts.get(element.type) ?? 0) + 1)
+  const count = (type: string) => counts.get(type) ?? 0
+  const parts = count("source_component")
+  const connections = count("source_trace")
+  return {
+    step:
+      count("pcb_trace") > 0
+        ? "routed"
+        : connections > 0
+          ? "joined"
+          : parts > 0
+            ? "placed"
+            : null,
+    parts,
+    nets: count("source_net"),
+    connections,
+    vias: count("pcb_via"),
+  }
+}
+
+/** How long each step of making a board took, in ms: null for one it did not get to. */
+export type StepsTook = {
+  placing: number | null
+  joining: number | null
+  routing: number | null
+  /** from when it was first routed until it was over: its checks, and what was put right for them */
+  checking: number | null
+}
+
+/**
+ * How long each step of making a board took (see `StepsTook`), from when it was begun
+ * on (`from`), when it was first built as far as each step (`reached`), and when it was
+ * over (`to`). Each is from when the one before it was reached.
+ */
+export function stepsTook(
+  from: number,
+  reached: Partial<Record<BoardStep, number>>,
+  to: number
+): StepsTook {
+  const { placed, joined, routed } = reached
+  const between = (start: number | undefined, end: number | undefined) =>
+    start === undefined || end === undefined ? null : Math.max(0, end - start)
+  return {
+    placing: between(from, placed),
+    joining: between(placed, joined),
+    routing: between(joined, routed),
+    checking: between(routed, to),
+  }
+}

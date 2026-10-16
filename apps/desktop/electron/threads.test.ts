@@ -24,6 +24,7 @@ import {
   locked,
   jobAsked,
   withNotes,
+  type BoardMade,
   type ThreadsDeps,
 } from "./threads"
 import type { AppTool, ToolResult } from "./tools"
@@ -720,6 +721,8 @@ on("turn/interrupt", () => {
   const given: Record<string, AppTool[]>[] = []
   /** the new versions that were begun: where each was asked for, and where it is */
   const begun: { from: string; to: string }[] = []
+  /** how each board made in the background went */
+  const made: BoardMade[] = []
   const threads = new Threads({
     dir: path.join(dir, "conversations"),
     projects: {
@@ -750,6 +753,7 @@ on("turn/interrupt", () => {
     onItem: () => {},
     onVersion: (_, from, to) => begun.push({ from, to }),
     onSummary: () => {},
+    onBoardMade: (_, how) => made.push(how),
     onSignedOut: () => {},
     onTurned: () => {},
     history: () => "off" as const,
@@ -759,6 +763,7 @@ on("turn/interrupt", () => {
     threads,
     now,
     begun,
+    made,
     say: (text: string, into: string | null) =>
       threads.send(ID, into, text, [], [], manner),
     /** what was said in it by the user, and in what order */
@@ -831,6 +836,61 @@ describe("a board made in the background", () => {
       made?.kind === "job" && made.items.some((one) => one.kind === "assistant")
     ).toBe(true)
     expect(now().job).toBeNull()
+    hold()
+  })
+
+  it("says how it went once it is over: how long, how far it got, and what is on it", async () => {
+    const { threads, say, go, hold, make, made } = talking(dir, { each: true })
+    say("Make the board in detail", null)
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    expect(made).toEqual([])
+    // built while it is made, routed and all
+    fs.mkdirSync(path.join(dir, "pcb", "build"))
+    fs.writeFileSync(
+      path.join(dir, "pcb", "build", "main.circuit.json"),
+      JSON.stringify([
+        { type: "source_component" },
+        { type: "source_component" },
+        { type: "source_net" },
+        { type: "source_trace" },
+        { type: "pcb_trace" },
+      ])
+    )
+    go()
+    await until(() => made.length === 1)
+    const [how] = made
+    expect(how).toMatchObject({
+      manner,
+      outcome: "done",
+      builds: 1,
+      rough: false,
+      finished: false,
+      made: { step: "routed", parts: 2, nets: 1, connections: 1, vias: 0 },
+    })
+    expect(how.took).toBeGreaterThanOrEqual(0)
+    // (built once, routed: every step but the last was got to at once)
+    expect(how.steps.joining).toBe(0)
+    expect(how.steps.routing).toBe(0)
+    expect(how.steps.checking).toBeGreaterThanOrEqual(0)
+    hold()
+  })
+
+  it("says so when it was stopped, with the steps it did not get to as none", async () => {
+    const { threads, say, go, hold, make, made } = talking(dir, { each: true })
+    say("Make the board in detail", null)
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    threads.stopJob(ID)
+    await until(() => made.length === 1)
+    expect(made[0]).toMatchObject({
+      outcome: "stopped",
+      builds: 0,
+      made: null,
+      steps: { placing: null, joining: null, routing: null, checking: null },
+    })
     hold()
   })
 

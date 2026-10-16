@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { calledFrom, readBoard, sizeOf, unsourcedOf } from "./board-format"
+import {
+  calledFrom,
+  madeOf,
+  readBoard,
+  sizeOf,
+  stepsTook,
+  unsourcedOf,
+} from "./board-format"
 
 describe("readBoard", () => {
   it("reads what a board is called, and whether it is finished", () => {
@@ -122,5 +129,65 @@ describe("unsourcedOf", () => {
   it("is nothing of what is not a board", () => {
     expect(unsourcedOf({})).toEqual([])
     expect(unsourcedOf([null, 3])).toEqual([])
+  })
+})
+
+describe("madeOf", () => {
+  const of = (...types: string[]) => madeOf(types.map((type) => ({ type })))
+
+  it("goes by what is on it: parts, then connections, then traces", () => {
+    expect(of("pcb_board").step).toBeNull()
+    expect(of("source_component").step).toBe("placed")
+    expect(of("source_component", "source_trace").step).toBe("joined")
+    expect(of("source_component", "source_trace", "pcb_trace").step).toBe(
+      "routed"
+    )
+  })
+
+  it("counts how much there is of it", () => {
+    expect(
+      of(
+        "source_component",
+        "source_component",
+        "source_net",
+        "source_trace",
+        "source_trace",
+        "source_trace",
+        "pcb_via"
+      )
+    ).toEqual({ step: "joined", parts: 2, nets: 1, connections: 3, vias: 1 })
+  })
+
+  it("is nothing of what is not a board", () => {
+    expect(madeOf({})).toEqual({
+      step: null,
+      parts: 0,
+      nets: 0,
+      connections: 0,
+      vias: 0,
+    })
+  })
+})
+
+describe("stepsTook", () => {
+  it("has each step from where the one before it was got to", () => {
+    expect(
+      stepsTook(1000, { placed: 4000, joined: 5000, routed: 9000 }, 10_000)
+    ).toEqual({ placing: 3000, joining: 1000, routing: 4000, checking: 1000 })
+  })
+
+  it("has none for a step not got to, nor for those after it", () => {
+    expect(stepsTook(1000, { placed: 4000 }, 10_000)).toEqual({
+      placing: 3000,
+      joining: null,
+      routing: null,
+      checking: null,
+    })
+    expect(stepsTook(1000, {}, 10_000)).toEqual({
+      placing: null,
+      joining: null,
+      routing: null,
+      checking: null,
+    })
   })
 })

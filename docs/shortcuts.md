@@ -56,7 +56,7 @@ is Ctrl off a Mac.
 | Cmd+N | [A new project](projects.md#new-projects) |
 | Cmd+O | Open a file or folder as [a project](projects.md) |
 | Cmd+B | The conversation |
-| Cmd+. | Clear the view: the project cards and the buttons down the right are put away, and brought back |
+| Cmd+. | Clear the view, a step at a time: the other projects' cards, then everything over the view, then all of it back |
 | Cmd+, | [Settings](settings.md) |
 | D | The light theme, or the dark |
 
@@ -110,11 +110,13 @@ whichever you went into last.
 
 ## With the view cleared
 
-Cmd+. leaves the model the window: the project cards, the settings button under them
-and the buttons down the right all go, and Cmd+. again brings them back. The
-conversation is not touched: open, it stays open. Nor is a list that is up, of parts or
-of reference scenes, nor the search. Every key still does what it did, so the parts
-list is still P and the settings still Cmd+,.
+Cmd+. clears the view a step at a time. The first press puts away the cards of the
+other projects, and the button that adds one, as a blueprint does: the open project's
+card is all there is at the left. The second leaves the model the window: that card,
+the settings button under it and the buttons down the right go too. The third brings
+everything back. Esc does not. The conversation is not touched: open, it stays open.
+Nor is a list that is up, of parts or of reference scenes, nor the search. Every key
+still does what it did, so the parts list is still P and the settings still Cmd+,.
 
 ## When a key does nothing
 
