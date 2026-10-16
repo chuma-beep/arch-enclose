@@ -5,14 +5,14 @@ request needs.
 
 ## Running it
 
-You need Node 22 or newer. macOS is the only system it has been tried on. The app is in
+You need Node 22 or newer. It is tried on macOS and on Arch Linux. The app is in
 [`apps/desktop`](../apps/desktop), and every command here is run from there.
 
 ```
 cd apps/desktop
 npm install
 npm run dev                      # open the app
-npm run dev -- path/to/project   # ...with that folder, or STEP file, opened as a project
+npm run dev -- path/to/project   # ...with that folder, or CAD file, opened as a project
 ```
 
 `npm run build && npm start` runs the production build instead of the dev loop.
@@ -84,7 +84,7 @@ examples: those it fetches.
 | `npm run scenes` | The app's reference scenes, from [`kit/scenes`](../kit/scenes) |
 | `npm run examples` | The examples' archives, from [`examples/`](../examples) |
 | `npm run build` | The window in `dist/` and the Electron side in `dist-electron/`, with `THIRD-PARTY-LICENSES.txt`: every package bundled into either or loaded as it runs, with its license ([`scripts/licenses.mjs`](../apps/desktop/scripts/licenses.mjs)) |
-| `npm run dist` | The app to install, a disk image for each kind of Mac, and what an installed app updates itself from, in `release/` |
+| `npm run dist` | The app to install: a disk image for each kind of Mac, or on Linux an AppImage, a deb, a pacman package and an rpm, and what an installed app updates itself from, in `release/` |
 
 ### The icon
 
@@ -142,8 +142,20 @@ your own machine say.
 silicon and one for Intel: `release/Enclose-<version>-arm64.dmg` and `-x64.dmg`. Beside
 them it writes what an installed app [updates itself](#updates) from: the app again as a
 zip archive for each kind of Mac, and `latest-mac.yml`. It needs a Mac.
-[`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and two things
-follow from it:
+
+On Linux it makes an AppImage, a deb, a pacman package and an rpm for the machine's own
+kind instead: `release/Enclose-<version>-x86_64.AppImage` and its kin (on an aarch64
+machine the AppImage and the deb end in `arm64`, and the pacman package and the rpm in
+`aarch64`), with `latest-linux.yml` beside them (`latest-linux-arm64.yml` on aarch64).
+One kind at a time can be made (`npm run dist -- --appimage`, and `--deb`, `--pacman`,
+`--rpm` likewise). A deb takes `dpkg-deb` and an rpm takes `rpmbuild`, from the system
+(`sudo pacman -S dpkg rpm-tools` on Arch); an AppImage and a pacman package need nothing
+but what npm installs. Only the AppImage [updates itself](#updates) in place: electron-
+builder writes a deb, pacman package or rpm so the app would update itself as that, and
+`scripts/dist.mjs` turns that off for all three.
+
+[`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and three
+things follow from it:
 
 - What the Electron side loads as it runs is a `dependency` in `package.json`, and goes
   into the app as it is. What the window is made of is bundled by Vite, and is a
@@ -151,6 +163,10 @@ follow from it:
   dependency, or the installed app does not start.
 - The kit goes in as files, beside the app's own archive
   (`Enclose (Alpha).app/Contents/Resources/kit`), where Python and an agent can read it.
+- The git a project's history is kept with, [dugite](https://github.com/desktop/dugite),
+  is fetched for the kind of machine being built for and left unpacked beside the app's
+  own archive, on Linux as on a Mac (`asarUnpack` and `beforePack` in
+  `scripts/dist.mjs`; `scripts/git.mjs` fetches it and takes out what is not wanted).
 
 A Mac opens an app that was downloaded only if it is signed by a developer Apple knows
 and has been notarized, which is Apple looking it over. The script signs with the
@@ -167,7 +183,10 @@ try the installed app out.
 
 ### A release
 
-Every command is run from `apps/desktop`. One of them does all of it:
+A release is made from a Mac, and the Linux files are then added to it. Every command is
+run from `apps/desktop`.
+
+On a Mac, one command does all of it:
 
 ```
 APPLE_KEYCHAIN_PROFILE=<profile> npm run release
@@ -175,12 +194,12 @@ APPLE_KEYCHAIN_PROFILE=<profile> npm run release
 
 [`scripts/release.mjs`](../apps/desktop/scripts/release.mjs) makes the next version
 (0.0.5 after 0.0.4; `npm run release -- 0.1.0` makes that one), having first seen that
-one can be made: nothing uncommitted, on main with all the remote has, the tests
-passing, and a project's tool shut in (`npm run sandbox`, under [Checks](#checks)). It
-asks before it goes on (`-- --yes` has it not ask), and publishes nothing
-until the app is built and a Mac has been seen to take it. `-- --dry` only sees that
-everything is ready. If it stops after the version was committed, run it again with that
-version and it goes on from there.
+one can be made: nothing uncommitted, on main with all the remote has, the version one
+nobody has, the tests passing, and a project's tool shut in (`npm run sandbox`, under
+[Checks](#checks)). It asks before it goes on (`-- --yes` has it not ask), and publishes
+nothing until the app is built and a Mac has been seen to take it. `-- --dry` only sees
+that everything is ready. If it stops after the version was committed, run it again with
+that version and it goes on from there.
 
 What it does, a step at a time, which can also be done by hand:
 
@@ -219,11 +238,32 @@ What it does, a step at a time, which can also be done by hand:
    contributors**: @login made their first contribution in #7"). (The script does both,
    and puts a link under them to where the two versions are set side by side.)
 
+Then, on Linux, one command puts the Linux installers on that release:
+
+```
+npm run release                    # onto the latest release the Mac made
+npm run release -- --tag v0.1.0    # ...onto that one instead
+```
+
+It builds the installers for the machine's own kind, sees that every one of them was
+made, and uploads them, with the update feed, to the tag the Mac released
+(`gh release upload <tag> … --clobber`). It gives the app no version, makes no tag,
+pushes nothing, and creates no release: a Mac release and a Linux release cannot share a
+version, and a release holding only the Linux files would become "latest", which would
+break the Mac download and the Mac updater. What it does need is the checks that still
+apply: nothing uncommitted, a checkout of the commit the Mac released (the version in
+`package.json` is the tag's), the tests passing, and a project's tool shut in. `-- --dry`
+sees that everything is ready, and builds nothing.
+
 The disk images are named for the kind of Mac and not for the version
 (`Enclose-arm64.dmg`, `Enclose-x64.dmg`), so that the newest is always at one address:
 `https://github.com/enclosedev/enclose/releases/latest/download/Enclose-arm64.dmg`. The
 site's download button and `enclose.dev/download` go there, so a release needs nothing
 changed on the site. They have to go up under exactly those names.
+
+The Linux installers keep their versions in their names
+(`Enclose-<version>-x86_64.AppImage` and its kin) and go on the same release as the disk
+images, so a download of the latest release finds them beside the disk images.
 
 The README sends people to the repository's latest release, which has to be the app's:
 the examples' release is made with `--latest=false`.
@@ -239,12 +279,25 @@ has to be the one made by a `npm run dist` for both kinds of Mac: made for one, 
 no archive for the other. The app has to be signed, or a Mac will not put the new
 version in. Run from a checkout, the app looks for nothing.
 
+On Linux it reads `latest-linux.yml` instead (or `latest-linux-arm64.yml` on aarch64),
+and fetches the AppImage it names. Only the AppImage is offered a new version:
+`scripts/dist.mjs` keeps the deb, pacman package and rpm out of that file, and keeps the
+app from treating itself as one of those, so a deb, pacman package or rpm is replaced by
+installing the newer one instead. Run from a checkout, the app looks for nothing.
+
 To try an update before there is a release of it, serve what `npm run dist` wrote and
 start an installed app that has an earlier version, telling it to look there:
 
 ```
 python3 -m http.server 8123 --bind 127.0.0.1 --directory release
 ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ "/Applications/Enclose (Alpha).app/Contents/MacOS/Enclose (Alpha)"
+```
+
+and on Linux, with the AppImage in place of the app:
+
+```
+python3 -m http.server 8123 --bind 127.0.0.1 --directory release
+ENCLOSE_UPDATES_URL=http://127.0.0.1:8123/ ./release/Enclose-<version>-x86_64.AppImage --no-sandbox
 ```
 
 [`electron/update.ts`](../apps/desktop/electron/update.ts) keeps where an update is, for
@@ -271,10 +324,11 @@ usage-data.md with it.
 
 A project's history is kept with the git the app brings,
 [dugite](https://github.com/desktop/dugite), which `npm install` fetches into
-`node_modules/dugite/git` for the Mac it runs on (its download script is allowed in
-`package.json`). `npm run dist` fetches it again for each kind of Mac as that one is
-made, and takes Git Credential Manager out of it
-([`scripts/git.mjs`](../apps/desktop/scripts/git.mjs)).
+`node_modules/dugite/git` for the machine it runs on (its download script is allowed in
+`package.json`). `npm run dist` fetches it again for each kind of Mac or Linux as that
+one is made, and takes Git Credential Manager out of it
+([`scripts/git.mjs`](../apps/desktop/scripts/git.mjs)); dugite ships git for Linux too,
+so this works the same on either system.
 
 Backing up goes through Enclose's GitHub App. Its client ID is in
 [`electron/github.ts`](../apps/desktop/electron/github.ts) (`GITHUB_APP`); a build with
