@@ -278,6 +278,13 @@ const hadCommits = (login) =>
     ],
     { quiet: true }
   ) !== "0"
+// (GitHub knows only of those pushed: one that is not yet, as the one that gave the app
+// its version is not, is by whoever is releasing it, who is not someone outside)
+const pushed = new Set(
+  must("git", ["rev-list", `${before}..origin/main`], { quiet: true }).split(
+    "\n"
+  )
+)
 const commits = must(
   "git",
   ["log", "--reverse", "--format=%H%x09%h%x09%s", `${before}..HEAD`],
@@ -285,16 +292,16 @@ const commits = must(
 )
   .split("\n")
   .filter(Boolean)
-  .map((line) => {
-    const [sha, short, subject] = line.split("\t")
-    const login = authorOf(sha)
+  .map((line) => line.split("\t"))
+  .filter(([, , subject]) => subject !== `chore: ${next}`)
+  .map(([sha, short, subject]) => {
+    const login = pushed.has(sha) ? authorOf(sha) : ""
     return {
       short,
       subject,
       outside: login && !collaborators.has(login) ? login : "",
     }
   })
-  .filter(({ subject }) => subject !== `chore: ${next}`)
 const newcomers = new Map()
 for (const { short, subject, outside } of commits)
   if (outside && !newcomers.has(outside) && !hadCommits(outside))
