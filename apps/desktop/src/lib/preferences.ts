@@ -37,6 +37,8 @@ export type Preferences = Buttons & {
   pivot: Pivot
   /** how many days a conversation is left alone before it goes under its project's card */
   settleDays: number
+  /** while Claude thinks, the conversation says about how many tokens it has thought */
+  thinkingTokens: boolean
   /** what the lengths written on a blueprint are in */
   units: Unit
   /** a file that is saved has the day before its name: 2026_10_11_table-clock.step */
@@ -58,6 +60,7 @@ const DEFAULTS: Preferences = {
   upright: false,
   pivot: "view",
   settleDays: SETTLE_DAYS.initial,
+  thinkingTokens: false,
   units: "mm",
   datedFiles: true,
   format: "step",
@@ -103,6 +106,7 @@ function saved(): Preferences {
           ? read.pivot
           : DEFAULTS.pivot,
       settleDays,
+      thinkingTokens: read.thinkingTokens === true,
       units: read.units === "in" ? "in" : DEFAULTS.units,
       datedFiles: read.datedFiles !== false,
       format:

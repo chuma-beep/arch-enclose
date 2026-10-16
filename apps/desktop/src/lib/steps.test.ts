@@ -228,6 +228,27 @@ describe("atWork", () => {
     )
     expect(atWork([user("u"), question("answered")])).toBeNull()
   })
+
+  it("says Claude is thinking between steps, but not before the first", () => {
+    const thinking = { kind: "thinking", since: 0, tokens: 3000 } as const
+    expect(atWork([user("u"), step("a")], thinking)).toBe("Thinking")
+    expect(atWork([user("u"), step("a"), says("s")], thinking)).toBe(
+      "Thinking"
+    )
+    // what it was asked says more of it then
+    expect(atWork([user("u")], thinking)).toBeNull()
+  })
+
+  it("says when the API is being tried again, whatever Claude was at", () => {
+    const retrying = { kind: "retrying", attempt: 2, of: 10 } as const
+    expect(atWork([user("u")], retrying)).toBe("Retrying, attempt 2 of 10")
+    expect(atWork([user("u"), step("a", "running")], retrying)).toBe(
+      "Retrying, attempt 2 of 10"
+    )
+    expect(atWork([user("u"), asked("p", "pending")], retrying)).toBe(
+      "Waiting for your answer in the conversation"
+    )
+  })
 })
 
 describe("spelledOut", () => {

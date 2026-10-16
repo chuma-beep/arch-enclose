@@ -17,6 +17,7 @@ import {
 
 import type {
   ConversationSummary,
+  Doing,
   Project,
   Said,
   ThreadItem,
@@ -27,7 +28,7 @@ import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
 import { QUOTABLE, Quoting } from "@/components/quoting"
 import { Reply } from "@/components/reply"
-import { LIVE, Steps } from "@/components/steps"
+import { LINE, LIVE, Meanwhile, Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -401,7 +402,16 @@ function PermissionCard({
  * their own; the last of them the one it is at, where it is the latest thing in the
  * conversation (`live`). When the turn is over the stretch goes back into one line.
  */
-function AtWork({ stretch, live }: { stretch: Stretch; live: boolean }) {
+function AtWork({
+  stretch,
+  live,
+  doing,
+}: {
+  stretch: Stretch
+  live: boolean
+  /** what Claude is at where nothing shows it, which the last of it says while live */
+  doing: Doing | null
+}) {
   const pieces = spelledOut(stretch)
   const last = pieces.at(-1)
   return pieces.map((piece) =>
@@ -411,6 +421,7 @@ function AtWork({ stretch, live }: { stretch: Stretch; live: boolean }) {
         steps={piece.steps}
         took={piece.took}
         working={live && piece === last}
+        doing={doing}
       />
     ) : (
       <Reply key={piece.id} item={piece} />
@@ -586,6 +597,7 @@ function JobCard({
                     key={block.id}
                     stretch={block}
                     live={block === last}
+                    doing={null}
                   />
                 ) : (
                   <Steps
@@ -862,13 +874,18 @@ export function Thread({ project }: { project: Project }) {
   const elsewhere = project.conversations.some(
     (c) => c.status !== "idle" && c.id !== openId
   )
-  // a stretch of steps says for itself that there is more to come
+  // what Claude is at where nothing it says or does shows it: thinking, mostly
+  const doing = working ? (open?.doing ?? null) : null
+  // A stretch of steps says for itself that there is more to come, and what Claude is
+  // at after them. So do words as they come; words that have come say it no more.
   const latest = blocks.at(-1)
   // where the turn Claude is on began: what it was asked
   const asked = blocks.findLastIndex((block) => block.kind === "user")
   const quiet =
     versioning ||
-    (working && latest?.kind !== "assistant" && latest?.kind !== "steps")
+    (working &&
+      latest?.kind !== "steps" &&
+      (latest?.kind !== "assistant" || doing !== null))
 
   // follow the conversation as it grows, to the very end of it: past the room left under
   // the last thing said, and the word that it is being worked on, which comes a moment
@@ -953,6 +970,7 @@ export function Thread({ project }: { project: Project }) {
                   key={block.id}
                   stretch={block}
                   live={block === latest}
+                  doing={doing}
                 />
               ) : (
                 <Steps
@@ -964,10 +982,14 @@ export function Thread({ project }: { project: Project }) {
               )
             )}
             {quiet && (
-              <div className="flex h-5 items-center text-xs text-muted-foreground">
-                <span className="shimmer shimmer-color-foreground">
-                  {versioning ? "Creating a new version" : "Working"}
-                </span>
+              <div className={LINE}>
+                {doing && !versioning ? (
+                  <Meanwhile doing={doing} />
+                ) : (
+                  <span className={LIVE}>
+                    {versioning ? "Creating a new version" : "Working"}
+                  </span>
+                )}
               </div>
             )}
             {queued.map((item) => (

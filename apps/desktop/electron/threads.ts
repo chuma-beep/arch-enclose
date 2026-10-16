@@ -20,6 +20,7 @@ import {
 import type {
   Attached,
   ConversationSummary,
+  Doing,
   Manner,
   ObjectRef,
   PartNote,
@@ -45,7 +46,7 @@ import { PALETTE_NAMES } from "../shared/palette"
 import { pictureMark, pictureName } from "../shared/pictures"
 import { replyOf } from "../shared/reply"
 import type { Changes } from "./changes"
-import { running } from "./claude"
+import { followDoing, running } from "./claude"
 import { runCodex } from "./codex"
 import { GIST_FROM, gistOf, plain } from "./gist"
 import { runGrok } from "./grok"
@@ -96,6 +97,8 @@ type Run = {
   assembly: boolean
   /** what was asked for in it, in a line: what it goes by if what it does is taken back */
   what: string
+  /** what the agent is at where nothing shows it, as it last said */
+  doing: Doing | null
   /** it was stopped to make way for what waits in its conversation, which is said at once */
   makingWay: boolean
   /** how it is being answered: a new version it asks for is gone on with in the same way */
@@ -1338,6 +1341,7 @@ export class Threads {
               ? "asking"
               : "working",
           since: running?.since ?? null,
+          doing: running?.doing ?? null,
           lastMessage: last ? plain(wordsOf(last)) : null,
           gist:
             last && conversation.gist?.of === last.id
@@ -1777,6 +1781,7 @@ export class Threads {
       lookOver: asked.arrange !== undefined,
       assembly: asked.assembly === true,
       what: firstLine(wordsOf(said)),
+      doing: null,
       makingWay: false,
       manner,
       pictures,
@@ -1931,6 +1936,10 @@ export class Threads {
       signal: abort.signal,
       put: (item) => this.put(projectId, conversation, item),
       notice: (tone, text) => this.notice(projectId, conversation, tone, text),
+      doing: (what) => {
+        run.doing = what
+        this.deps.onSummary()
+      },
       ask: (wanted, signal) =>
         new Promise<PermissionAnswer>((resolve) => {
           const id = `ask-${++this.counter}-${Date.now()}`
@@ -2164,6 +2173,8 @@ export class Threads {
           tone,
           text,
         }),
+      // (the card says how long it has been at the board, and what it did last)
+      doing: () => {},
       // what it wants leave for is put to the user in the conversation, as a turn's is
       ask: (wanted, signal) =>
         new Promise<PermissionAnswer>((resolve) => {
@@ -2473,8 +2484,11 @@ export class Threads {
     let messageId: string | null = null
     const tools = new Map<string, Extract<ThreadItem, { kind: "tool" }>>()
     const live = new Map<string, Extract<ThreadItem, { kind: "assistant" }>>()
+    // what it is at where nothing shows it: thinking, above all, which can go on for minutes
+    const doing = followDoing((what) => turn.doing(what))
 
     const handle = (message: SDKMessage) => {
+      doing(message)
       if (message.type === "system" && message.subtype === "init") {
         session(message.session_id)
         return

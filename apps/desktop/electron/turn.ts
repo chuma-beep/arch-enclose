@@ -6,7 +6,12 @@ import path from "node:path"
 
 import type { SDKUserMessage } from "@anthropic-ai/claude-agent-sdk"
 
-import type { Manner, PermissionAnswer, ThreadItem } from "../shared/api"
+import type {
+  Doing,
+  Manner,
+  PermissionAnswer,
+  ThreadItem,
+} from "../shared/api"
 import type { Launch } from "./providers"
 import type { AppTool } from "./tools"
 
@@ -44,6 +49,11 @@ export type Turn = {
   /** Add an item to the conversation, or replace the one with the same id. */
   put(item: ThreadItem): void
   notice(tone: "error" | "info", text: string): void
+  /**
+   * Say what the agent is at where nothing shows it, or null once something does. Said
+   * again only when that would be shown otherwise: not at every token thought.
+   */
+  doing(what: Doing | null): void
   /**
    * Put a question to the user, and wait for the answer. Stopping the turn answers no,
    * and so does `signal`, where the agent can take a question back.

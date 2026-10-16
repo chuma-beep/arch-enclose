@@ -11,6 +11,16 @@ export type Vec3 = [number, number, number]
  */
 export type ThreadStatus = "idle" | "working" | "asking"
 
+/**
+ * What an agent at work is at where nothing it says or does shows it. Thinking: since
+ * when (ms), and about how many tokens it has thought, to the thousand below, where it
+ * says (its words are kept from the app). Retrying: its maker's API did not answer, and
+ * it is trying again, the how-manyth time of how many it will.
+ */
+export type Doing =
+  | { kind: "thinking"; since: number; tokens: number | null }
+  | { kind: "retrying"; attempt: number; of: number }
+
 /** One conversation about a project, in as much as a card in the sidebar has room for. */
 export type ConversationSummary = {
   id: string
@@ -21,6 +31,11 @@ export type ConversationSummary = {
   status: ThreadStatus
   /** when the current turn started (ms), while one is running */
   since: number | null
+  /**
+   * What its agent is at just now, while it is on a turn and nothing shows it: null
+   * while it is saying or doing something, and from an agent that does not tell.
+   */
+  doing: Doing | null
   /**
    * What the card says: what was asked, while Claude is at work on it, and otherwise the
    * last thing said by either. In one line, as it was said.

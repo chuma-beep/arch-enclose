@@ -11,6 +11,7 @@ import {
   type AccountInfo,
   type ModelInfo,
   type Query,
+  type SDKMessage,
   type SDKUserMessage,
   type SettingSource,
   type SlashCommand,
@@ -20,6 +21,7 @@ import {
   EFFORTS,
   type Command,
   type Commands,
+  type Doing,
   type ModelChoice,
 } from "../shared/api"
 import type { Launch, Looked } from "./providers"
@@ -110,6 +112,71 @@ export function modelChoices(rows: ModelInfo[]): ModelChoice[] {
       efforts: [],
     })
   return choices
+}
+
+/** Whether two of what an agent is at would be shown alike. */
+function alike(a: Doing | null, b: Doing | null): boolean {
+  if (a?.kind === "thinking" && b?.kind === "thinking")
+    return a.since === b.since && a.tokens === b.tokens
+  if (a?.kind === "retrying" && b?.kind === "retrying")
+    return a.attempt === b.attempt && a.of === b.of
+  return a === b
+}
+
+/**
+ * Follows what Claude is at where nothing it says or does shows it, from the messages
+ * Claude Code sends: thinking, which comes as a block of its message with no words in
+ * it and an estimate of the tokens now and then; or trying the API again. `say` is
+ * told each time that would be shown otherwise, and null once Claude goes on.
+ */
+export function followDoing(
+  say: (doing: Doing | null) => void
+): (message: SDKMessage) => void {
+  let doing: Doing | null = null
+  // the block of Claude's message it is thinking in
+  let block: number | null = null
+  const tell = (now: Doing | null) => {
+    if (alike(doing, now)) return
+    doing = now
+    say(now)
+  }
+  return (message) => {
+    if (message.type === "stream_event") {
+      // a subagent's thinking is its own
+      if (message.parent_tool_use_id) return
+      const event = message.event
+      if (event.type === "message_start") tell(null)
+      else if (
+        event.type === "content_block_start" &&
+        (event.content_block.type === "thinking" ||
+          event.content_block.type === "redacted_thinking")
+      ) {
+        block = event.index
+        tell({ kind: "thinking", since: Date.now(), tokens: null })
+      } else if (event.type === "content_block_stop" && event.index === block) {
+        block = null
+        tell(null)
+      }
+    } else if (message.type === "system") {
+      // (counted by the thousand: it comes about once a second)
+      if (message.subtype === "thinking_tokens" && doing?.kind === "thinking")
+        tell({
+          ...doing,
+          tokens: Math.floor(message.estimated_tokens / 1000) * 1000,
+        })
+      else if (message.subtype === "api_retry") {
+        block = null
+        tell({
+          kind: "retrying",
+          attempt: message.attempt,
+          of: message.max_retries,
+        })
+      }
+    } else if (message.type === "result") {
+      block = null
+      tell(null)
+    }
+  }
 }
 
 /** How long Claude Code is given to say what it has. */

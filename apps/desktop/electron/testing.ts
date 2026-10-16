@@ -25,6 +25,7 @@ export function fakeTurn(given: Partial<Turn> & Pick<Turn, "launch" | "cwd">) {
     signal: abort.signal,
     put: (item) => items.set(item.id, item),
     notice: (tone, text) => notices.push(`${tone}: ${text}`),
+    doing: () => {},
     ask: async (wanted): Promise<PermissionAnswer> => {
       asked.push(wanted)
       return "allow"

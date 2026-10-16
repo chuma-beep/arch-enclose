@@ -4,7 +4,7 @@
 // what it says last. While it is still at work, though, what it says on the way is how
 // it can be followed: then the stretch is spelled out (see `spelledOut`).
 
-import type { ThreadItem } from "@shared/api"
+import type { Doing, ThreadItem } from "@shared/api"
 
 /** One thing Claude did: read a file, ran a command, looked at the viewport. */
 export type Step = Extract<ThreadItem, { kind: "tool" }>
@@ -99,19 +99,26 @@ export function spelledOut(stretch: Steps): (Steps | Aside)[] {
 
 /**
  * What Claude is at in a turn that is under way, in a line: the step it is on, in the
- * words the conversation has for it, or the last it took; that it is writing, once it is
- * saying what came of them; or that it is waiting on the user. Nothing, while it has done
- * none of these yet: it has only been asked.
+ * words the conversation has for it, or the last it took; that it is thinking, between
+ * them; that it is writing, once it is saying what came of them; or that it is waiting
+ * on the user, or on the API. Nothing, while it has done none of these yet: it has only
+ * been asked, and is thinking about that.
  */
-export function atWork(items: ThreadItem[]): string | null {
+export function atWork(
+  items: ThreadItem[],
+  doing: Doing | null = null
+): string | null {
   const last = items.at(-1)
   if (!last) return null
   if (last.kind === "permission" || last.kind === "question")
     return last.state === "pending"
       ? "Waiting for your answer in the conversation"
       : null
+  if (doing?.kind === "retrying")
+    return `Retrying, attempt ${doing.attempt} of ${doing.of}`
+  if (last.kind !== "assistant" && last.kind !== "tool") return null
+  if (doing?.kind === "thinking") return "Thinking"
   if (last.kind === "assistant") return "Writing what it found"
-  if (last.kind !== "tool") return null
   // the one it is on, if it is on more than one; and failing that the last it took
   const step =
     items.findLast(

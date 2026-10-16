@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest"
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { accountOf, commandChoices, extraArgs, modelChoices } from "./claude"
+import type { Doing } from "../shared/api"
+import {
+  accountOf,
+  commandChoices,
+  extraArgs,
+  followDoing,
+  modelChoices,
+} from "./claude"
 
 describe("modelChoices", () => {
   it("offers the models as Claude Code lists them", () => {
@@ -173,5 +181,87 @@ describe("accountOf", () => {
       signedIn: false,
       account: null,
     })
+  })
+})
+
+describe("followDoing", () => {
+  // the messages as Claude Code sends them, with no more in them than is looked at
+  const event = (said: object, parent: string | null = null) =>
+    ({
+      type: "stream_event",
+      event: said,
+      parent_tool_use_id: parent,
+    }) as unknown as SDKMessage
+  const system = (said: object) =>
+    ({ type: "system", ...said }) as unknown as SDKMessage
+  const followed = () => {
+    const said: (Doing | null)[] = []
+    return { said, follow: followDoing((doing) => said.push(doing)) }
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("says Claude is thinking from the block it thinks in, and how far it has got", () => {
+    vi.useFakeTimers({ now: 5000 })
+    const { said, follow } = followed()
+    for (const message of [
+      system({ subtype: "init" }),
+      event({ type: "message_start", message: { id: "m" } }),
+      event({
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "thinking", thinking: "" },
+      }),
+      system({ subtype: "thinking_tokens", estimated_tokens: 250 }),
+      system({ subtype: "thinking_tokens", estimated_tokens: 850 }),
+      system({ subtype: "thinking_tokens", estimated_tokens: 1200 }),
+      system({ subtype: "thinking_tokens", estimated_tokens: 1900 }),
+      event({ type: "content_block_stop", index: 0 }),
+      event({
+        type: "content_block_start",
+        index: 1,
+        content_block: { type: "text", text: "" },
+      }),
+      event({ type: "content_block_stop", index: 1 }),
+      { type: "result" } as unknown as SDKMessage,
+    ])
+      follow(message)
+    // the tokens by the thousand, which is all that is shown of them
+    expect(said).toEqual([
+      { kind: "thinking", since: 5000, tokens: null },
+      { kind: "thinking", since: 5000, tokens: 0 },
+      { kind: "thinking", since: 5000, tokens: 1000 },
+      null,
+    ])
+  })
+
+  it("leaves a subagent's thinking to the subagent", () => {
+    const { said, follow } = followed()
+    follow(
+      event(
+        {
+          type: "content_block_start",
+          index: 0,
+          content_block: { type: "thinking", thinking: "" },
+        },
+        "toolu_1"
+      )
+    )
+    follow(system({ subtype: "thinking_tokens", estimated_tokens: 4000 }))
+    expect(said).toEqual([])
+  })
+
+  it("says the API is being tried again, until it answers", () => {
+    const { said, follow } = followed()
+    follow(system({ subtype: "api_retry", attempt: 1, max_retries: 10 }))
+    follow(system({ subtype: "api_retry", attempt: 2, max_retries: 10 }))
+    follow(event({ type: "message_start", message: { id: "m" } }))
+    expect(said).toEqual([
+      { kind: "retrying", attempt: 1, of: 10 },
+      { kind: "retrying", attempt: 2, of: 10 },
+      null,
+    ])
   })
 })

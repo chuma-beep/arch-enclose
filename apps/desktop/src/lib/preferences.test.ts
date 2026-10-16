@@ -36,6 +36,7 @@ describe("the preferences", () => {
       upright: false,
       pivot: "view",
       settleDays: SETTLE_DAYS.initial,
+      thinkingTokens: false,
       units: "mm",
       datedFiles: true,
       format: "step",
@@ -52,6 +53,7 @@ describe("the preferences", () => {
       upright: true,
       pivot: "pointer",
       settleDays: 14,
+      thinkingTokens: true,
       units: "in",
       datedFiles: false,
       format: "obj",
@@ -71,6 +73,7 @@ describe("the preferences", () => {
         units: "cm",
         wheelReversed: "yes",
         datedFiles: 0,
+        thinkingTokens: "yes",
         format: "3mf",
       })
     ).getState()
@@ -84,6 +87,7 @@ describe("the preferences", () => {
       units: "mm",
       wheelReversed: false,
       datedFiles: true,
+      thinkingTokens: false,
       format: "step",
     })
   })

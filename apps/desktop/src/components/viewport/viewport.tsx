@@ -507,7 +507,7 @@ function AtWork({
   const [shown] = React.useState(() => Date.now())
   const now = useNow(1000)
   const taken = now - Math.min(shown, turn?.since ?? Infinity)
-  const doing = (items && atWork(items)) ?? meanwhile
+  const doing = (items && atWork(items, turn?.doing)) ?? meanwhile
   return (
     // the button is as far from the end it is at as from the top and the bottom, and
     // the words have a good deal more room than that at theirs

@@ -168,6 +168,7 @@ function General() {
   const access = useStore((state) => state.access)
   const setAccess = useStore((state) => state.setAccess)
   const settleDays = usePreferences((state) => state.settleDays)
+  const thinkingTokens = usePreferences((state) => state.thinkingTokens)
   const units = usePreferences((state) => state.units)
   const datedFiles = usePreferences((state) => state.datedFiles)
   const change = usePreferences((state) => state.change)
@@ -278,6 +279,16 @@ function General() {
             label="Days before a conversation settles"
             value={settleDays}
             onChange={(days) => change({ settleDays: days })}
+          />
+        </Row>
+        <Row
+          title="Token usage"
+          detail="While Claude thinks, shows about how many tokens it has used."
+        >
+          <Switch
+            aria-label="Show token usage while Claude thinks"
+            checked={thinkingTokens}
+            onCheckedChange={(on) => change({ thinkingTokens: on })}
           />
         </Row>
       </Group>

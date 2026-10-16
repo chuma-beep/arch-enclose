@@ -3,6 +3,7 @@ import { cn } from "cn"
 import {
   BookOpenIcon,
   BotIcon,
+  BrainIcon,
   ChevronDownIcon,
   EyeIcon,
   FilePlusIcon,
@@ -12,20 +13,23 @@ import {
   ListIcon,
   MousePointerClickIcon,
   PencilIcon,
+  RotateCwIcon,
   SearchIcon,
   TerminalIcon,
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react"
 
+import type { Doing } from "@shared/api"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Markdown } from "@/components/markdown"
+import { usePreferences } from "@/lib/preferences"
 import type { Aside, Step } from "@/lib/steps"
-import { duration } from "@/lib/time"
+import { duration, elapsed, useNow } from "@/lib/time"
 
 /** A line of the steps, whichever one; and of anything else that opens as they do. */
 export const LINE = "flex h-5 items-center gap-2 text-xs text-muted-foreground"
@@ -120,20 +124,60 @@ function StepLine({
 }
 
 /**
+ * What Claude is at where nothing it says or does shows it, in a line: thinking, and for
+ * how long (and about how much, where that was asked for in the settings); or trying the
+ * API again. Among steps, with a picture as each of them has, so that the words stay
+ * where theirs are.
+ */
+export function Meanwhile({
+  doing,
+  among = false,
+}: {
+  doing: Doing
+  among?: boolean
+}) {
+  const now = useNow(1000)
+  const tokens = usePreferences((state) => state.thinkingTokens)
+  const Icon = doing.kind === "thinking" ? BrainIcon : RotateCwIcon
+  return (
+    <>
+      {among && <Icon className="size-3.5 shrink-0" aria-hidden />}
+      <span className={cn("shrink-0", LIVE)}>
+        {doing.kind === "thinking" ? "Thinking" : "Retrying"}
+      </span>
+      <span className="min-w-0 truncate tabular-nums">
+        {doing.kind === "thinking"
+          ? [
+              elapsed(now - doing.since),
+              // (under a thousand it has hardly begun)
+              tokens && doing.tokens ? `${doing.tokens / 1000}k tokens` : null,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : `attempt ${doing.attempt} of ${doing.of}`}
+      </span>
+    </>
+  )
+}
+
+/**
  * What Claude did before it answered, as one line. While it is at it, the line is the
- * step it is on; afterwards, how long it was at them. It opens into all of them, with
- * what Claude said on the way between one and the next.
+ * step it is on, or what it is at between them; afterwards, how long it was at them. It
+ * opens into all of them, with what Claude said on the way between one and the next.
  */
 export function Steps({
   steps,
   took,
   working,
+  doing = null,
 }: {
   steps: (Step | Aside)[]
   /** how long Claude was at them, in ms, if they are over and that is known */
   took: number | null
   /** Claude is still on the turn these are the latest of, and may add to them */
   working: boolean
+  /** what Claude is at after them where nothing shows it, while it is working */
+  doing?: Doing | null
 }) {
   const [open, setOpen] = React.useState(false)
   const whole = useKeptInView<HTMLDivElement>(open)
@@ -142,9 +186,11 @@ export function Steps({
     taken.findLast((step) => step.state === "running") ?? taken.at(-1)
   if (!current) return null
   const busy = working || current.state === "running"
+  const meanwhile = working ? doing : null
 
-  // one step with no time to give is the whole of it: there is nothing to open
-  if (steps.length === 1 && (busy || took === null))
+  // one step with no time to give is the whole of it: there is nothing to open, unless
+  // something has taken its place in the line
+  if (steps.length === 1 && !meanwhile && (busy || took === null))
     return (
       <div className={LINE}>
         <StepLine step={current} live={busy} />
@@ -167,7 +213,11 @@ export function Steps({
         {busy && !open ? (
           // each step takes the place of the one before it, with no show made of it
           <span className="flex min-w-0 items-center gap-2">
-            <StepLine step={current} live />
+            {meanwhile ? (
+              <Meanwhile doing={meanwhile} among />
+            ) : (
+              <StepLine step={current} live />
+            )}
           </span>
         ) : busy || took === null ? (
           <span className={cn(busy && LIVE)}>
