@@ -22,6 +22,7 @@ import { atWork } from "@/lib/steps"
 import { duration, useNow } from "@/lib/time"
 import { PartsPanel } from "@/components/parts-panel"
 import { BoardMode } from "@/components/pcb/board-mode"
+import { BoardSteps } from "@/components/pcb/board-steps"
 import { useBoards } from "@/components/pcb/boards"
 import { BoardsPanel } from "@/components/pcb/boards-panel"
 import { ReferencePanel } from "@/components/reference-panel"
@@ -1880,8 +1881,11 @@ function Model({ project }: { project: Project }) {
               </div>
             )}
             {/* how far apart the parts are pulled: which a blueprint has beside its own
-              bar, with the rest of how its sheets show the model */}
-            {board ? null : blueprint ? (
+              bar, with the rest of how its sheets show the model; and for a board, the
+              steps it is made in, while an agent makes it */}
+            {board ? (
+              <BoardSteps projectId={project.id} board={board} />
+            ) : blueprint ? (
               <Options further={loaded.further} />
             ) : assembly ? (
               // and the guides have what asks for another of them

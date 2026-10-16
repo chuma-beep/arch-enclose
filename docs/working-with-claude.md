@@ -170,12 +170,18 @@ its parts placed, then joined, then routed. Each build shows as it comes
 in, and as Claude writes the board the app makes a quick look at it by itself, unrouted,
 so that its parts appear as they are put on it: even while what is written breaks
 tscircuit's rules, as a board half written does. While it is routed, the line under the
-board's name says how far that has got.
+board's name says how far that has got. A board made in detail in the background has
+its steps at the foot of PCB mode instead, in a row: **Parts placed**, **Joined**,
+**Routing** and **Checking**, each with how long it took, how long it has been going,
+or that it has not started yet. A step is done when the board is first built that far;
+checking is what comes after it is routed, until the board is done. While it is routed,
+how far that has got goes round the step.
 
 For as long as a board is still being made, it looks it: a light goes across it, over
-and over, in each of the three views and on its card in the list, and the line under its
-name says it is still being made. A board with nothing of it to show yet turns round
-slowly in its place. When the light stops, the board is done.
+and over, in each of the three views and on its card in the list; and **Working**
+stands in place of **Unfinished**, on its card and beside its name in PCB mode. A board with
+nothing of it to show yet turns round slowly in its place. When the light stops, the
+board is done.
 
 The download button in PCB mode saves the board's **Gerbers**, the zip a board house makes
 it from, with its drill files, what goes on it and where each part goes; or the board in

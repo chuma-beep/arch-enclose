@@ -138,6 +138,8 @@ type Job = {
   notes: Saying
   /** it was asked for in a line, for its change and its commit */
   what: string
+  /** how the board comes along: how far each build of it has got */
+  following: Following
 }
 
 /** How the making of a board in the background went, once it is over. */
@@ -1384,6 +1386,7 @@ export class Threads {
                   board: job.item.board,
                   name: job.item.name,
                   since: job.item.at,
+                  reached: { ...job.following.reached },
                 }
               : null,
         }
@@ -2119,7 +2122,7 @@ export class Threads {
     } catch {
       // nothing says what it is called: it goes by its file's name
     }
-    // (how it comes along, for the count of how the app is used)
+    // how it comes along, for the steps it is shown in and the count of how the app is used
     const following = new Following(project.path, board)
     const now = Date.now()
     let finish = () => {}
@@ -2141,6 +2144,7 @@ export class Threads {
       pending: new Map(),
       notes: new Saying(),
       what: `Made ${name} in detail`,
+      following,
     }
     book.job = job
     const show = (item: Job["item"]) => {
@@ -2156,8 +2160,14 @@ export class Threads {
       if (index < 0) items.push(inner)
       else items[index] = inner
       show({ ...job.item, items })
-      // the board may have been built by what the agent has just done
-      if (inner.kind === "tool" && inner.state !== "running") following.look()
+      // the board may have been built by what the agent has just done, and got a step
+      // further: which the window shows
+      if (
+        inner.kind === "tool" &&
+        inner.state !== "running" &&
+        following.look()
+      )
+        this.deps.onSummary()
     }
     // what the user says for it meanwhile, as it comes, until it has given its result
     void finished.then(() => job.notes.end())

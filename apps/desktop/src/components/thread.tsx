@@ -751,6 +751,62 @@ const NOTHING_QUEUED: Said[] = []
 /** How far an arrow key moves the conversation's edge, px. */
 const NUDGE = 16
 
+/** How near its end a conversation is scrolled to be at it, and followed, px. */
+const AT_END = 32
+
+/**
+ * Keeps a conversation at its very end as it grows, whatever makes it taller: a message,
+ * words as they come, a step taking the place of another, a picture come in, words laid
+ * out late. For as long as its end is in view: scrolled up to read, it is left there
+ * until it is scrolled back down to the end. What the user says (`said`, whenever it
+ * changes) is always gone to, from wherever they were. The ref is for what is in it,
+ * inside where it scrolls; `there` is whether that is there yet.
+ */
+function useFollowed<Inside extends HTMLElement>(
+  there: boolean,
+  said: unknown
+) {
+  const inside = React.useRef<Inside>(null)
+  const following = React.useRef(true)
+  const viewOf = (content: HTMLElement | null) =>
+    content?.closest<HTMLElement>("[data-slot=scroll-area-viewport]") ?? null
+
+  React.useEffect(() => {
+    const content = inside.current
+    const view = viewOf(content)
+    if (!content || !view) return
+    const toEnd = () => {
+      if (following.current) view.scrollTop = view.scrollHeight
+    }
+    // only going up leaves the end: going down to it comes back (what it does itself
+    // goes down, and by the time that is told it may have grown again)
+    let was = view.scrollTop
+    const scrolled = () => {
+      const at =
+        view.scrollHeight - view.scrollTop - view.clientHeight <= AT_END
+      if (at || view.scrollTop < was) following.current = at
+      was = view.scrollTop
+    }
+    // (it growing, and the room for it shrinking, as the window does)
+    const watch = new ResizeObserver(toEnd)
+    watch.observe(content)
+    watch.observe(view)
+    view.addEventListener("scroll", scrolled, { passive: true })
+    return () => {
+      watch.disconnect()
+      view.removeEventListener("scroll", scrolled)
+    }
+  }, [there])
+
+  React.useEffect(() => {
+    following.current = true
+    const view = viewOf(inside.current)
+    if (view) view.scrollTop = view.scrollHeight
+  }, [said])
+
+  return inside
+}
+
 /**
  * The edge between the view and the conversation: dragged, it makes the conversation
  * wider or narrower. Double-clicked, it goes back to where it started. The panel it is
@@ -855,7 +911,6 @@ export function Thread({ project }: { project: Project }) {
   const { cli } = PROVIDER_WORDS[answers]
   const setThreadOpen = useStore((state) => state.setThreadOpen)
   const width = useStore((state) => state.threadWidth)
-  const end = React.useRef<HTMLDivElement>(null)
   const panel = React.useRef<HTMLElement>(null)
 
   const openId = open?.id
@@ -889,13 +944,13 @@ export function Thread({ project }: { project: Project }) {
 
   // follow the conversation as it grows, to the very end of it: past the room left under
   // the last thing said, and the word that it is being worked on, which comes a moment
-  // after what was said to set it going
-  const last = items?.at(-1)
-  const tail = last && "text" in last ? last.text.length : 0
-  React.useEffect(() => {
-    const view = end.current?.closest("[data-slot=scroll-area-viewport]")
-    if (view) view.scrollTop = view.scrollHeight
-  }, [items?.length, tail, queued.length, quiet])
+  // after what was said to set it going. What was said last, and what waits to be, is
+  // gone to, and so is another conversation turned to.
+  const asking = items?.findLast((item) => item.kind === "user")?.id
+  const inside = useFollowed<HTMLDivElement>(
+    !!items?.length,
+    `${open?.id}:${asking}:${queued.length}`
+  )
 
   return (
     <aside
@@ -959,7 +1014,10 @@ export function Thread({ project }: { project: Project }) {
       {items?.length ? (
         <ScrollArea className="min-h-0 flex-1">
           {/* everything said here breaks into lines of about one length */}
-          <div className="flex flex-col gap-4 px-8 pt-2 pb-6 text-balance">
+          <div
+            ref={inside}
+            className="flex flex-col gap-4 px-8 pt-2 pb-6 text-balance"
+          >
             {blocks.map((block, index) =>
               block.kind !== "steps" ? (
                 <Item key={block.id} item={block} project={project} />
@@ -1000,7 +1058,6 @@ export function Thread({ project }: { project: Project }) {
                 elsewhere={elsewhere}
               />
             ))}
-            <div ref={end} />
           </div>
         </ScrollArea>
       ) : open ? (

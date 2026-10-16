@@ -29,6 +29,7 @@ import {
   sizeSaid,
   useBeingMade,
   useCircuit,
+  useJobOn,
   type Circuit,
 } from "./boards"
 import { DRAWN } from "./ground"
@@ -39,6 +40,7 @@ import { bridge } from "@/components/viewport/bridge"
 import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
+import { WorkingBadge } from "./board-steps"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -1036,6 +1038,8 @@ export function BoardMode({
   )
   const size = sizeSaid(board)
   const making = useBeingMade(projectId, board)
+  // (an agent making it in detail has the steps it is at shown at the foot of the view)
+  const job = useJobOn(projectId, board)
   const partsOpen = useStore((state) => state.boardPartsOpen)
 
   return (
@@ -1100,8 +1104,9 @@ export function BoardMode({
         />
       )}
 
-      {/* what it is, at the top: where the window is not dragged by; and under that,
-          while it is being built, how far that has got */}
+      {/* what it is, at the top: where the window is not dragged by, and that it is
+          being worked on while it is; and under that, while it is being built, how far
+          that has got, unless an agent is making it in detail, whose steps say that */}
       <div className="pointer-events-none absolute inset-x-0 top-4 flex flex-col items-center gap-2">
         <div className="flex max-w-[50%] items-center gap-2 text-sm select-none">
           <span className="truncate font-medium">{board.name}</span>
@@ -1110,10 +1115,14 @@ export function BoardMode({
               {size}
             </span>
           )}
-          {!board.finished && (
-            <Badge variant="outline" className="shrink-0">
-              Unfinished
-            </Badge>
+          {making ? (
+            <WorkingBadge className="shrink-0" />
+          ) : (
+            !board.finished && (
+              <Badge variant="outline" className="shrink-0">
+                Unfinished
+              </Badge>
+            )
           )}
           {turned && (
             <Badge variant="outline" className="shrink-0">
@@ -1121,22 +1130,7 @@ export function BoardMode({
             </Badge>
           )}
         </div>
-        {board.building ? (
-          <BuildingLine building={board.building} />
-        ) : (
-          // (and where there is nothing of it yet, the view says so in the middle)
-          making &&
-          (board.built !== null || board.preview !== null) && (
-            <span
-              className={cn(
-                "animate-in text-xs text-foreground/60 duration-200 fade-in",
-                LIVE
-              )}
-            >
-              Still being made
-            </span>
-          )
-        )}
+        {!job && board.building && <BuildingLine building={board.building} />}
       </div>
     </div>
   )

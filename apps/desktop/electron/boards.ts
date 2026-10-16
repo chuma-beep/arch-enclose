@@ -204,16 +204,22 @@ export class Following {
     this.made = built?.made ?? null
   }
 
-  look() {
+  /** Whether it has got to a step it had not got to before. */
+  look(): boolean {
     const built = lastBuilt(this.root, this.id)
-    if (!built || built.at === this.last) return
+    if (!built || built.at === this.last) return false
     this.last = built.at
     this.builds += 1
     this.made = built.made
     const { step } = built.made
+    if (!step) return false
+    let further = false
     // (a build that got further than the step after the last one got to both at once)
-    if (step)
-      for (const one of BOARD_STEPS.slice(0, BOARD_STEPS.indexOf(step) + 1))
-        this.reached[one] ??= built.at
+    for (const one of BOARD_STEPS.slice(0, BOARD_STEPS.indexOf(step) + 1))
+      if (this.reached[one] === undefined) {
+        this.reached[one] = built.at
+        further = true
+      }
+    return further
   }
 }

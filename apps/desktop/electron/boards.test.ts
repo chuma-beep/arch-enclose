@@ -194,15 +194,16 @@ describe("Following", () => {
     expect(following.builds).toBe(0)
 
     build(1000, "source_component")
-    following.look()
+    expect(following.look()).toBe(true)
     // (looked at again with nothing built since: it is the same build)
-    following.look()
+    expect(following.look()).toBe(false)
     build(2000, "source_component", "source_trace")
-    following.look()
+    expect(following.look()).toBe(true)
+    // (built again, and got no further)
     build(3000, "source_component", "source_trace")
-    following.look()
+    expect(following.look()).toBe(false)
     build(4000, "source_component", "source_trace", "pcb_trace")
-    following.look()
+    expect(following.look()).toBe(true)
     expect(following.builds).toBe(4)
     expect(following.reached).toEqual({
       placed: 1_000_000,

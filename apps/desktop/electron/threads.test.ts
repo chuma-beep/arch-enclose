@@ -824,7 +824,11 @@ describe("a board made in the background", () => {
     go()
     await until(() => threads.jobOf(ID) !== null)
     expect(threads.jobOf(ID)).toEqual({ board: "main", name: "Main board" })
-    expect(now().job).toMatchObject({ board: "main", name: "Main board" })
+    expect(now().job).toMatchObject({
+      board: "main",
+      name: "Main board",
+      reached: {},
+    })
     // the conversation is not at work while the board is made beside it
     await until(() => now().status === "idle")
     expect(job(threads, into)).toMatchObject({ state: "working" })
