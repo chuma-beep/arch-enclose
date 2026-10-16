@@ -4,10 +4,11 @@ Enclose is for macOS, 13 (Ventura) or newer, and for Linux (x86_64 and aarch64).
 
 ## What it needs
 
-- [Claude Code](https://code.claude.com/docs/en/overview), installed and signed in.
-  Enclose has no login of its own: the conversation is with the Claude Code on your
-  machine. Codex or Grok will do in its place: see
-  [Other agents](working-with-claude.md#other-agents).
+- An agent it can put your messages to: [Claude Code](https://code.claude.com/docs/en/overview),
+  installed and signed in. Enclose has no login of its own: the conversation is with
+  the agent on your machine. Codex, Grok or opencode will do in its place: see
+  [Other agents](working-with-claude.md#other-agents). opencode answers with an
+  account signed in or without one, on its free models.
 - Nothing for Python. Models are built with Python and
   [build123d](https://build123d.readthedocs.io): where the `python3` your terminal runs
   has build123d, Enclose uses it. Where it has not, Enclose makes a Python of its own with
