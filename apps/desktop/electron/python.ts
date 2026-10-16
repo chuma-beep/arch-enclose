@@ -16,7 +16,7 @@ const run = promisify(execFile)
 /** The Python that is made: one that build123d's wheels are built for. */
 const VERSION = "3.12"
 
-/** The uv fetched to make it, for each kind of Mac, as its release names it. */
+/** The uv fetched to make it, for each kind of Mac and of Linux, as its release names it. */
 const UV_VERSION = "0.13.1"
 const UV: Partial<Record<string, { name: string; sha256: string }>> = {
   "darwin-arm64": {
@@ -26,6 +26,14 @@ const UV: Partial<Record<string, { name: string; sha256: string }>> = {
   "darwin-x64": {
     name: "uv-x86_64-apple-darwin",
     sha256: "bb7b805bdcf3d0bc8c74ceb94569e6b3e8aa35bd492acdbb9d46bf46d9d4ff6b",
+  },
+  "linux-arm64": {
+    name: "uv-aarch64-unknown-linux-gnu",
+    sha256: "9041c73c99fdc5892cf128140beb354eca9231d502068cc36e6cb53a8e59ad14",
+  },
+  "linux-x64": {
+    name: "uv-x86_64-unknown-linux-gnu",
+    sha256: "eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220",
   },
 }
 
