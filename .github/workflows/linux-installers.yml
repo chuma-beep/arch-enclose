@@ -1,0 +1,68 @@
+name: Linux installers
+
+# The Linux installers, put on each release the Mac makes. A release is made from a Mac
+# (npm run release); once it is published, this builds the AppImage, deb, pacman package
+# and rpm on GitHub's own Linux machines, one of each kind of processor, and attaches them
+# and their update feeds to it. It runs the same Linux step a person would
+# (scripts/release.mjs on Linux): the tests, the check that a project's tool is shut in,
+# the build, and `gh release upload` onto the tag. It makes no release, tag or version.
+#
+# To run it again for a release: Actions > Linux installers > Run workflow, with the tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to attach to, as in v0.1.0
+        required: true
+
+concurrency:
+  group: linux-installers-${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  attach:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      # the commit the tag names, which is what the Linux step checks it is building
+      - name: Checkout the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      # rpmbuild for the rpm (dpkg-deb comes with Ubuntu), and a screen with no monitor for
+      # the check that runs the app. Ubuntu keeps an app from making the user namespaces
+      # Chromium's sandbox is made of, unless it has an AppArmor profile: let it here, so
+      # the check runs the app as a user's machine would, with its sandbox on.
+      - name: What the build and the check need
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm xvfb
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: npm ci
+
+      - name: Build and attach
+        run: xvfb-run -a npm run release -- --tag "$TAG" --yes
