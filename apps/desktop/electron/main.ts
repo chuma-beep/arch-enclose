@@ -493,6 +493,10 @@ function createWindow(openProject: string | null) {
     backgroundColor: "#171717",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 18, y: 18 },
+    // Elsewhere the menu a Mac keeps at the top of the screen is a bar across the top of
+    // the window, in the system's colours: kept out of sight, with its shortcuts still
+    // working, and shown while Alt is held.
+    autoHideMenuBar: process.platform !== "darwin",
     // what a taskbar shows for the window; a Mac shows the app's own icon, in its Dock
     icon: path.join(
       ICONS,
@@ -2045,8 +2049,15 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     // Run from a checkout, the app is whatever was last built there. It is the app made
-    // into a package that has newer versions of itself to look for.
-    if (app.isPackaged && !CAPTURE) {
+    // into a package that has newer versions of itself to look for. On Linux only the
+    // AppImage updates itself (its feed names nothing else): a deb, rpm or pacman install
+    // is replaced by installing the newer one, so it looks for none, rather than offer
+    // one it cannot fetch.
+    if (
+      app.isPackaged &&
+      !CAPTURE &&
+      (process.platform !== "linux" || process.env.APPIMAGE)
+    ) {
       const { autoUpdater } = electronUpdater
       if (UPDATES_FROM)
         autoUpdater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
