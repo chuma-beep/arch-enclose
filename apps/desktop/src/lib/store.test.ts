@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // The store is the window's: it keeps things in the window's storage, and tells the
 // app's own process what of the view is used. Both are stood in for here, before the
 // store is read, since it reads what was kept as it is made.
-const { kept, used, sent } = vi.hoisted(() => {
+const { kept, used, sent, turned } = vi.hoisted(() => {
   const kept = new Map<string, string>()
   const used: string[] = []
   vi.stubGlobal("localStorage", {
@@ -13,9 +13,16 @@ const { kept, used, sent } = vi.hoisted(() => {
   })
   vi.stubGlobal("location", { hash: "" })
   const sent: unknown[][] = []
+  // what of an agent's turns the app's process was asked to take back, or put back
+  const turned: string[][] = []
+  const turn = (way: string) => async (projectId: string) => {
+    turned.push([way, projectId])
+    return { ok: true, what: "Make it taller" }
+  }
   vi.stubGlobal("window", {
     cad: {
       analytics: { used: (name: string) => void used.push(name) },
+      changes: { undo: turn("undo"), redo: turn("redo") },
       thread: {
         send: async (...given: unknown[]) => {
           sent.push(given)
@@ -24,10 +31,10 @@ const { kept, used, sent } = vi.hoisted(() => {
       },
     },
   })
-  return { kept, used, sent }
+  return { kept, used, sent, turned }
 })
 
-import type { Vec3 } from "@shared/api"
+import type { Project, Vec3 } from "@shared/api"
 import { useStore, type Section } from "./store"
 
 const fresh = useStore.getState()
@@ -230,6 +237,79 @@ describe("the view with the window to itself", () => {
     state().setBare(true)
     expect(state().leave()).toBe(false)
     expect(state().bare).toBe(true)
+  })
+})
+
+describe("Cmd+Z", () => {
+  /** The open project, with a turn of an agent's that can be taken back. */
+  const undoable = (took: number | null = 120_000) =>
+    useStore.setState({
+      projects: [
+        {
+          id: "clock",
+          undo: { what: "Make it taller", at: 1000, took },
+          redo: null,
+        } as unknown as Project,
+      ],
+    })
+
+  beforeEach(() => {
+    state().letUndoGo()
+    turned.length = 0
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("takes back an agent's turn only at a second press, which the first asks for", async () => {
+    undoable()
+    await state().undo()
+    expect(turned).toEqual([])
+    expect(state().saying?.text).toMatch(
+      /again to undo 2 min of the agent's work: “Make it taller”$/
+    )
+    await state().undo()
+    expect(turned).toEqual([["undo", "clock"]])
+    expect(state().saying?.text).toMatch(
+      /^Undid “Make it taller”\. .* puts it back$/
+    )
+  })
+
+  it("asks again where something else was done in between, or the time ran out", async () => {
+    vi.useFakeTimers({ now: 10_000 })
+    undoable()
+    await state().undo()
+    state().letUndoGo()
+    // and what it said is no longer said
+    expect(state().saying).toBeNull()
+    await state().undo()
+    vi.advanceTimersByTime(5000)
+    await state().undo()
+    expect(turned).toEqual([])
+    await state().undo()
+    expect(turned).toEqual([["undo", "clock"]])
+  })
+
+  it("takes back parts put out of sight by hand at once, before an earlier turn", async () => {
+    undoable()
+    state().setHidden(["lid"])
+    expect(view().hidden).toEqual(["lid"])
+    await state().undo()
+    expect(view().hidden).toEqual([])
+    expect(state().saying?.text).toBe("Undid hiding a part")
+    await state().redo()
+    expect(view().hidden).toEqual(["lid"])
+    expect(turned).toEqual([])
+  })
+
+  it("can put back out of sight what Esc brought back", async () => {
+    undoable()
+    state().setHidden(["lid", "base"])
+    expect(state().leave()).toBe(true)
+    expect(view().hidden).toEqual([])
+    await state().undo()
+    expect(view().hidden).toEqual(["lid", "base"])
+    expect(state().saying?.text).toBe("Undid showing 2 parts")
   })
 })
 

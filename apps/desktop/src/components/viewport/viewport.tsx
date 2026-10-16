@@ -365,6 +365,8 @@ function useChanging(project: Project): string[] {
 
 /** How long the app's saying something stays at the foot of the view, ms. */
 const SAID_FOR_MS = 3200
+/** The keys that are only held, with another: pressed alone, nothing is done. */
+const HELD = new Set(["Meta", "Control", "Shift", "Alt", "CapsLock"])
 
 /**
  * At the foot of the view, for a moment: what the app has to say of something just done
@@ -380,7 +382,7 @@ function Saying() {
         useStore.setState((state) =>
           state.saying === saying ? { saying: null } : {}
         ),
-      SAID_FOR_MS
+      saying.ms ?? SAID_FOR_MS
     )
     return () => clearTimeout(over)
   }, [saying])
@@ -1224,10 +1226,33 @@ function Model({ project }: { project: Project }) {
   // some, and puts them away.
   //
   // Cmd+Z takes back the last thing done to the model, a colour given by hand, parts
-  // put into groups another way or what Claude did in a turn, and with Shift puts it
-  // back. In a box that is written in it is
+  // put into groups another way or out of sight, or what Claude did in a turn (at a
+  // second press), and with Shift puts it back. In a box that is written in it is
   // the writing's, as ever, for as long as there is any: with nothing written there,
   // which is how the message box is left by a message just sent, it is the model's.
+  //
+  // A first Cmd+Z that would take back a turn waits for the second: anything else done
+  // meanwhile, a key or a click, lets it go. (Not Cmd or Shift by itself: the hand may
+  // let go of Cmd between the two presses.)
+  React.useEffect(() => {
+    const other = (event: KeyboardEvent | PointerEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (HELD.has(event.key)) return
+        const again =
+          (MAC ? event.metaKey : event.ctrlKey) &&
+          !event.shiftKey &&
+          event.key.toLowerCase() === "z"
+        if (again) return
+      }
+      useStore.getState().letUndoGo()
+    }
+    window.addEventListener("keydown", other, true)
+    window.addEventListener("pointerdown", other, true)
+    return () => {
+      window.removeEventListener("keydown", other, true)
+      window.removeEventListener("pointerdown", other, true)
+    }
+  }, [])
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.altKey || lookingOver) return
@@ -1377,12 +1402,14 @@ function Model({ project }: { project: Project }) {
         else return
       } else if (letter === "h") {
         // what is picked out goes out of sight, with whatever is out of sight already,
-        // and is picked out no longer; with nothing picked out, all of it comes back
+        // and is picked out no longer; with nothing picked out, all of it comes back.
+        // Either is kept for Cmd+Z, which it is what a hand goes to after.
         const wanted = pickedOut()
+        const { select, setHidden } = useStore.getState()
         if (wanted.length > 0) {
-          useStore.getState().select(null)
-          setView({ hidden: [...new Set([...view.hidden, ...wanted])] })
-        } else if (view.hidden.length > 0) setView({ hidden: NO_PARTS })
+          select(null)
+          setHidden([...new Set([...view.hidden, ...wanted])])
+        } else if (view.hidden.length > 0) setHidden(NO_PARTS)
         else return
       } else if (letter === "p") {
         const { partsOpen, setPartsOpen } = useStore.getState()

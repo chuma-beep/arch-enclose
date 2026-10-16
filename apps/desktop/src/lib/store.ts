@@ -17,17 +17,23 @@ import { callingOn, notCalledOn } from "@/lib/mentions"
 import { fitted } from "@/lib/pictures"
 import { usePreferences } from "@/lib/preferences"
 import {
+  askedAgain,
   back,
   coloured,
   forth,
+  hiddenWith,
+  hidingSaid,
   later,
   NO_HISTORY,
   rearranged,
   record,
   recolour,
+  rehidden,
   saidOf,
+  type Change,
   type History,
 } from "@/lib/undo"
+import { MAC } from "@/lib/platform"
 import { PALETTE, type PaletteName } from "@shared/palette"
 import { MOST_AT_ONCE, PICTURE_TYPES, withoutMark } from "@shared/pictures"
 
@@ -711,16 +717,16 @@ type State = {
   naming: string[]
   /**
    * What has been done by hand to each project's model, and can be taken back with
-   * Cmd+Z: the colours given to its parts, and how they are put into groups. Kept for
-   * as long as the window is up.
+   * Cmd+Z: the colours given to its parts, how they are put into groups, and which are
+   * out of sight. Kept for as long as the window is up.
    */
   history: Record<string, History>
   /**
    * What the app has to say of something just done that would otherwise go unsaid: what
    * Cmd+Z took back, or why it could not. It is shown at the foot of the view for a
-   * moment. `key` tells one such thing from the next.
+   * moment, or as long as `ms` says. `key` tells one such thing from the next.
    */
-  saying: { text: string; key: number } | null
+  saying: { text: string; key: number; ms?: number } | null
   /** bumps to ask the viewport to return to its home view */
   homeRequests: number
   /** bumps to ask the message box to take the typing, after what is written in it */
@@ -813,14 +819,22 @@ type State = {
   /** The name Claude has come up with for a group that was made by hand. */
   nameGroup(projectId: string, groupId: string, name: string): void
   /**
-   * Take back the last thing done to the open project's model: a colour given by hand
-   * or the parts put into groups another way, or what Claude did to its files in a
-   * turn, whichever was later.
+   * Put these parts of the open project's model out of sight, and bring back the rest,
+   * by hand: kept, so that Cmd+Z can take it back.
+   */
+  setHidden(hidden: string[]): void
+  /**
+   * Take back the last thing done to the open project's model: a colour given by hand,
+   * the parts put into groups another way or out of sight, or what an agent did to its
+   * files in a turn, whichever was later. A turn is taken back only at a second press
+   * soon after the first, which says so: by then it is no habit of the hand's.
    */
   undo(): Promise<void>
   /** Put back what was last taken back. */
   redo(): Promise<void>
-  say(text: string): void
+  /** Something else was done since a first Cmd+Z: a second one asks again. */
+  letUndoGo(): void
+  say(text: string, ms?: number): void
   setThreadOpen(open: boolean): void
   setThreadWidth(width: number): void
   setPartsOpen(open: boolean): void
@@ -902,6 +916,18 @@ type State = {
 let said = 0
 /** What Claude did is being taken back, or put back: one at a time. */
 let turning = false
+/**
+ * A first Cmd+Z, where it would take back a turn: of which project, the turn by when it
+ * was done, until when a second press takes it back, and what was said of it.
+ */
+let asked: {
+  projectId: string
+  at: number
+  until: number
+  said: number
+} | null = null
+/** How long a second Cmd+Z has, after the first, to take back a turn, ms. */
+const AGAIN_MS = 4000
 /** When a part picked out, shown in its own colour for a change to be seen, is to stop being. */
 let seen: ReturnType<typeof setTimeout> | undefined
 /** How long that is, ms: as long as a colour just given is seen for. */
@@ -954,10 +980,42 @@ function regroup(projectId: string, next: Arrangement, history: History) {
 async function turnBack(projectId: string, way: "undo" | "redo") {
   turning = true
   try {
-    const saying = saidOf(way, await window.cad.changes[way](projectId))
+    const saying = saidOf(way, await window.cad.changes[way](projectId), MAC)
     if (saying) useStore.getState().say(saying)
   } finally {
     turning = false
+  }
+}
+
+/**
+ * Put a project's model as it was on one side of something done to it by hand, which
+ * has been taken back (`undo`) or put back, and say so.
+ */
+function byHand(
+  projectId: string,
+  change: Change,
+  history: History,
+  way: "undo" | "redo"
+) {
+  const state = useStore.getState()
+  const did = way === "undo" ? "Undid" : "Redid"
+  if (change.kind === "colour") {
+    repaint(
+      projectId,
+      way === "undo" ? change.before : change.after,
+      history,
+      true
+    )
+    state.say(`${did} a colour`)
+  } else if (change.kind === "arrangement") {
+    regroup(projectId, way === "undo" ? change.before : change.after, history)
+    state.say(`${did} ${change.said}`)
+  } else {
+    // (what is out of sight is the view's, which is the open project's)
+    const hidden = hiddenWith(state.view.hidden, change, way === "undo")
+    state.setView({ hidden: hidden.length > 0 ? hidden : NONE })
+    useStore.setState({ history: { ...state.history, [projectId]: history } })
+    state.say(`${did} ${hidingSaid(change)}`)
   }
 }
 
@@ -1561,6 +1619,20 @@ export const useStore = create<State>()((set, get) => ({
     set({ named: next })
   },
 
+  setHidden(hidden) {
+    const { activeId, view, history, setView } = get()
+    const change = rehidden(view.hidden, hidden, Date.now())
+    if (!change) return
+    setView({ hidden: hidden.length > 0 ? hidden : NONE })
+    if (activeId)
+      set({
+        history: {
+          ...history,
+          [activeId]: record(history[activeId] ?? NO_HISTORY, change),
+        },
+      })
+  },
+
   async undo() {
     const { activeId, projects, history } = get()
     const project = projects.find((p) => p.id === activeId)
@@ -1570,15 +1642,23 @@ export const useStore = create<State>()((set, get) => ({
     if (which === "mine") {
       const taken = back(kept, Date.now())
       if (!taken) return
-      const { change } = taken
-      if (change.kind === "colour") {
-        repaint(project.id, change.before, taken.history, true)
-        get().say("Undid a colour")
-      } else {
-        regroup(project.id, change.before, taken.history)
-        get().say(`Undid ${change.said}`)
-      }
-    } else if (which === "claudes") await turnBack(project.id, "undo")
+      byHand(project.id, taken.change, taken.history, "undo")
+      return
+    }
+    const turn = project.undo
+    if (which !== "claudes" || !turn) return
+    const now = Date.now()
+    if (
+      asked?.projectId === project.id &&
+      asked.at === turn.at &&
+      now < asked.until
+    ) {
+      get().letUndoGo()
+      await turnBack(project.id, "undo")
+      return
+    }
+    get().say(askedAgain(turn, MAC), AGAIN_MS)
+    asked = { projectId: project.id, at: turn.at, until: now + AGAIN_MS, said }
   },
 
   async redo() {
@@ -1593,19 +1673,20 @@ export const useStore = create<State>()((set, get) => ({
     if (which === "mine") {
       const put = forth(kept)
       if (!put) return
-      const { change } = put
-      if (change.kind === "colour") {
-        repaint(project.id, change.after, put.history, true)
-        get().say("Redid a colour")
-      } else {
-        regroup(project.id, change.after, put.history)
-        get().say(`Redid ${change.said}`)
-      }
+      byHand(project.id, put.change, put.history, "redo")
     } else if (which === "claudes") await turnBack(project.id, "redo")
   },
 
-  say(text) {
-    set({ saying: { text, key: ++said } })
+  letUndoGo() {
+    if (!asked) return
+    const { said: key } = asked
+    asked = null
+    // what it said is no longer so
+    set((state) => (state.saying?.key === key ? { saying: null } : {}))
+  },
+
+  say(text, ms) {
+    set({ saying: { text, key: ++said, ...(ms ? { ms } : {}) } })
   },
 
   setThreadOpen(threadOpen) {
@@ -1842,7 +1923,7 @@ export const useStore = create<State>()((set, get) => ({
     const last = entered.at(-1)
     if (!last) return false
     if (last === "section") setView({ section: null })
-    else if (last === "hidden") setView({ hidden: NONE })
+    else if (last === "hidden") get().setHidden(NONE)
     else if (last === "blueprint") setView({ blueprint: false })
     else if (last === "assembly") setView({ assembly: false })
     else if (last === "reference") setView({ reference: null })

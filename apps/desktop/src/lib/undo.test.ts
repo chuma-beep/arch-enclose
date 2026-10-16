@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  askedAgain,
   back,
+  briefly,
   coloured,
   forth,
+  hiddenWith,
+  hidingSaid,
   later,
   NO_HISTORY,
   rearranged,
   record,
   recolour,
+  rehidden,
   saidOf,
   type Colours,
 } from "./undo"
@@ -131,34 +136,99 @@ describe("later", () => {
 
 describe("saidOf", () => {
   it("says what was taken back, and what was put back", () => {
-    expect(saidOf("undo", { ok: true, what: "Make it taller" })).toBe(
-      "Undid: Make it taller"
+    expect(saidOf("undo", { ok: true, what: "Make it taller" }, true)).toBe(
+      "Undid “Make it taller”. ⇧⌘Z puts it back"
     )
-    expect(saidOf("redo", { ok: true, what: "Make it taller" })).toBe(
-      "Redid: Make it taller"
+    expect(saidOf("redo", { ok: true, what: "Make it taller" }, true)).toBe(
+      "Redid “Make it taller”"
+    )
+    // and off a Mac, in its keys
+    expect(saidOf("undo", { ok: true, what: "Make it taller" }, false)).toBe(
+      "Undid “Make it taller”. Shift Ctrl Z puts it back"
     )
   })
 
   it("says why not, where it could not be", () => {
-    expect(saidOf("undo", { ok: false, why: "busy", files: [] })).toBe(
+    expect(saidOf("undo", { ok: false, why: "busy", files: [] }, true)).toBe(
       "Claude is at work: nothing can be undone until it is through"
     )
-    expect(saidOf("redo", { ok: false, why: "board", files: [] })).toBe(
+    expect(saidOf("redo", { ok: false, why: "board", files: [] }, true)).toBe(
       "A board is being made: nothing can be redone until it is done"
     )
     expect(
-      saidOf("undo", { ok: false, why: "changed", files: ["model.py"] })
+      saidOf("undo", { ok: false, why: "changed", files: ["model.py"] }, true)
     ).toBe("Not undone: model.py changed since")
     expect(
-      saidOf("redo", {
-        ok: false,
-        why: "changed",
-        files: ["model.py", "a.glb", "b.glb"],
-      })
+      saidOf(
+        "redo",
+        {
+          ok: false,
+          why: "changed",
+          files: ["model.py", "a.glb", "b.glb"],
+        },
+        true
+      )
     ).toBe("Not redone: model.py and 2 more changed since")
   })
 
   it("says nothing where there was nothing to do", () => {
-    expect(saidOf("undo", { ok: false, why: "nothing", files: [] })).toBeNull()
+    expect(
+      saidOf("undo", { ok: false, why: "nothing", files: [] }, true)
+    ).toBeNull()
+  })
+})
+
+describe("parts put out of sight by hand", () => {
+  it("are the parts that went, and the ones that came back", () => {
+    expect(rehidden(["lid"], ["lid", "screw", "nut"], 5)).toEqual({
+      kind: "hidden",
+      at: 5,
+      undoneAt: null,
+      hid: ["screw", "nut"],
+      shown: [],
+    })
+    expect(rehidden(["lid", "screw"], [], 5)).toMatchObject({
+      hid: [],
+      shown: ["lid", "screw"],
+    })
+    expect(rehidden(["lid"], ["lid"], 5)).toBeNull()
+  })
+
+  it("are taken back and put back for those parts alone", () => {
+    const hid = rehidden([], ["screw"], 5)!
+    // a part hidden since stays hidden
+    expect(hiddenWith(["screw", "lid"], hid, true)).toEqual(["lid"])
+    expect(hiddenWith(["lid"], hid, false)).toEqual(["lid", "screw"])
+    const shown = rehidden(["screw", "nut"], [], 5)!
+    expect(hiddenWith([], shown, true)).toEqual(["screw", "nut"])
+    expect(hiddenWith(["screw", "nut"], shown, false)).toEqual([])
+  })
+
+  it("are said as what was done to them", () => {
+    expect(hidingSaid(rehidden([], ["screw"], 5)!)).toBe("hiding a part")
+    expect(hidingSaid(rehidden(["a", "b"], [], 5)!)).toBe("showing 2 parts")
+  })
+})
+
+describe("what a first Cmd+Z says of a turn", () => {
+  it("says to press again, how long the turn took and what it was asked", () => {
+    expect(
+      askedAgain({ what: "Make it taller", at: 0, took: 58 * 60_000 }, true)
+    ).toBe(
+      "Press ⌘Z again to undo 58 min of the agent's work: “Make it taller”"
+    )
+    expect(
+      askedAgain({ what: "Make it taller", at: 0, took: null }, false)
+    ).toBe("Press Ctrl Z again to undo the agent's last turn: “Make it taller”")
+  })
+
+  it("cuts what was asked short at a word", () => {
+    expect(
+      briefly(
+        "I want to work on a new idea. [Image 1] It’s a wall art installation"
+      )
+    ).toBe("I want to work on a new idea. It’s a…")
+    expect(briefly("Make it taller")).toBe("Make it taller")
+    expect(briefly("Make it taller.")).toBe("Make it taller")
   })
 })

@@ -319,15 +319,21 @@ Claude starts out with full access and never asks leave.
 ## Taking a change back
 
 Cmd+Z takes back the last thing done to the model, and Cmd+Shift+Z puts it back. That is
-a colour you gave a part, a group you made, broke up or renamed, or what Claude did in a
-turn, whichever was done later; press it again for the one before.
+a colour you gave a part, a group you made, broke up or renamed, parts you
+[hid or brought back](selecting.md#on-its-own-close-to-out-of-sight), or what Claude did
+in a turn, whichever was done later; press it again for the one before.
+
+What Claude did takes a second press. The first leaves everything as it is and says, at
+the foot of the view, how long that turn was at work and what it was asked: Cmd+Z again
+within a few seconds takes it back. Anything else done in between, a key or a click,
+and the next Cmd+Z asks again. What you did yourself goes at the first press.
 
 What Claude did is taken back whole and at once, without asking it for anything and
 without building anything: before each turn the app puts the project's files aside, and
 keeps of them whatever the turn then wrote to, made or took away, the built model with
 the rest. A turn you stopped part of the way is taken back like any other. The
-conversation says that it was done, and Claude is told with your next message, so that
-it does not go on as though its change were still there.
+conversation says that it was done, and how to put it back, and Claude is told with
+your next message, so that it does not go on as though its change were still there.
 
 Nothing of Claude's is taken back while Claude is at work, or over a file that has been
 changed since the turn, by you in an editor say: the app names the file that is in the way and

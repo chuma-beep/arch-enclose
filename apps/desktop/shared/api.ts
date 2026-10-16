@@ -83,10 +83,11 @@ export type BringingIn =
 
 /**
  * Something Claude did to a project's files in one turn, which can be taken back, or
- * has been and can be put back: what was asked for in that turn, and when it was done
- * (or, of one taken back, when it was taken back).
+ * has been and can be put back: what was asked for in that turn, when it was done (or,
+ * of one taken back, when it was taken back), and how long the turn took, ms, where
+ * that is known.
  */
-export type Undoable = { what: string; at: number }
+export type Undoable = { what: string; at: number; took: number | null }
 
 /**
  * What came of taking such a change back, or putting it back. busy: Claude is at work in

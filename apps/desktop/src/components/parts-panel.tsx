@@ -183,6 +183,7 @@ export function PartsPanel({
   const only = useStore((state) => state.view.only)
   const hidden = useStore((state) => state.view.hidden)
   const setView = useStore((state) => state.setView)
+  const setHidden = useStore((state) => state.setHidden)
   const hoveredId = useStore((state) => state.hoveredId)
   const hover = useStore((state) => state.hover)
   const setPartsOpen = useStore((state) => state.setPartsOpen)
@@ -247,9 +248,9 @@ export function PartsPanel({
     sweep.current = next.sweep
     showAlone(next.ids)
   }
-  /** Bring back parts that were put out of sight. */
+  /** Bring back parts that were put out of sight: as Cmd+Z can take back. */
   const show = (ids: string[]) =>
-    setView({ hidden: hidden.filter((id) => !ids.includes(id)) })
+    setHidden(hidden.filter((id) => !ids.includes(id)))
 
   React.useEffect(() => {
     const away = (event: PointerEvent) => {

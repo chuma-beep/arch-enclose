@@ -33,7 +33,7 @@ is Ctrl off a Mac.
 | Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
 | Cmd+F | [Search](parts.md#search) |
 | T | [Tools of the project's own](project-tools.md) |
-| Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model |
+| Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model, or what was hidden or shown. What an agent did takes a second press |
 | Cmd+Shift+Z | Put it back |
 | Esc | Close, or step back |
 

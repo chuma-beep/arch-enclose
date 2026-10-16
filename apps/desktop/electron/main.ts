@@ -61,7 +61,7 @@ import { boardsIn } from "./boards"
 import { Drafts } from "./drafts"
 import { Previews } from "./previews"
 import { changeLog } from "./gist"
-import { Changes } from "./changes"
+import { Changes, tookOf } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
 import { managedNow } from "./backup"
@@ -308,10 +308,17 @@ const list = (): Project[] =>
         // (the model as an agent writes it is loaded as one built again is)
         revision: project.revision + drafts.stamp(project.id),
         assembling: threads.assembling(project.id),
-        undo: undo && { what: undo.what, at: undo.at },
-        redo: redo && { what: redo.what, at: redo.undoneAt ?? redo.at },
+        undo: undo && { what: undo.what, at: undo.at, took: tookOf(undo) },
+        redo: redo && {
+          what: redo.what,
+          at: redo.undoneAt ?? redo.at,
+          took: tookOf(redo),
+        },
       }
     })
+
+/** The key that puts back what was taken back, as this system writes it. */
+const REDO_KEY = process.platform === "darwin" ? "⇧⌘Z" : "Shift Ctrl Z"
 
 /**
  * Take back what the latest turn did to a project's files, or put back what was last
@@ -332,12 +339,14 @@ async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   const outcome = await changes[way](id, project.path, manifest, whose(id))
   if (!outcome.ok) return outcome
   const { change } = outcome
+  // (what was asked, without the stop it may end in: the line has its own)
+  const what = change.what.replace(/[\s.,;:!?…]+$/, "")
   threads.noted(
     id,
     change.conversationId,
     way === "undo"
-      ? `Undid “${change.what}”: the project’s files are as they were before it.`
-      : `Redid “${change.what}”: the project’s files are as it left them.`
+      ? `Undid “${what}”. ${REDO_KEY} puts it back.`
+      : `Redid “${what}”.`
   )
   // the model may be somewhere else now, or nowhere; and if its manifest was not one of
   // the files, nothing has said that the rest of them changed

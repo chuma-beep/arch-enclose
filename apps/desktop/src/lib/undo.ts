@@ -1,11 +1,13 @@
 // What is done to a model by hand in the app, kept so that Cmd+Z can take it back: the
-// colours given to parts, and how the parts are put into groups. (What Claude does to a
-// project's files is kept by the app's own process, a turn at a time: see
-// electron/changes.ts. Cmd+Z takes back whichever was done last.)
+// colours given to parts, how the parts are put into groups, and which are out of
+// sight. (What Claude does to a project's files is kept by the app's own process, a
+// turn at a time: see electron/changes.ts. Cmd+Z takes back whichever was done last,
+// and a turn only at a second press.)
 
-import type { Undone } from "@shared/api"
+import type { Undoable, Undone } from "@shared/api"
 import type { PaletteName } from "@shared/palette"
 import type { Arrangement } from "./arrange"
+import { elapsed } from "./time"
 
 /** The colours parts have been given, by part: those that have been given one. */
 export type Colours = Record<string, PaletteName>
@@ -36,8 +38,21 @@ export type Rearranged = {
   said: string
 }
 
+/**
+ * Parts put out of sight by hand, or brought back: which went, and which came back.
+ * Taken back, it does the opposite to those parts alone, whatever has been done since
+ * to the rest, or to them by the way (a part that is picked out is brought back).
+ */
+export type Rehidden = {
+  kind: "hidden"
+  at: number
+  undoneAt: number | null
+  hid: string[]
+  shown: string[]
+}
+
 /** One thing done by hand. */
-export type Change = Recolour | Rearranged
+export type Change = Recolour | Rearranged | Rehidden
 
 /** What has been done, the latest last; and what of it is taken back, the latest last. */
 export type History = { done: Change[]; undone: Change[] }
@@ -86,6 +101,43 @@ export function rearranged(
   at: number
 ): Rearranged {
   return { kind: "arrangement", at, undoneAt: null, before, after, said }
+}
+
+/**
+ * What putting the parts that are out of sight to others changes: the ones that go, and
+ * the ones that come back. Null where it changes nothing.
+ */
+export function rehidden(
+  hidden: string[],
+  next: string[],
+  at: number
+): Rehidden | null {
+  const hid = next.filter((id) => !hidden.includes(id))
+  const shown = hidden.filter((id) => !next.includes(id))
+  if (hid.length === 0 && shown.length === 0) return null
+  return { kind: "hidden", at, undoneAt: null, hid, shown }
+}
+
+/** The parts out of sight, with such a change taken back (`back`), or done again. */
+export function hiddenWith(
+  hidden: string[],
+  change: Rehidden,
+  back: boolean
+): string[] {
+  const [going, coming] = back
+    ? [change.hid, change.shown]
+    : [change.shown, change.hid]
+  return [
+    ...new Set([...hidden.filter((id) => !going.includes(id)), ...coming]),
+  ]
+}
+
+/** Such a change in words that follow "Undid" and "Redid": "hiding 2 parts". */
+export function hidingSaid(change: Rehidden): string {
+  const parts = (count: number) => (count === 1 ? "a part" : `${count} parts`)
+  return change.hid.length > 0
+    ? `hiding ${parts(change.hid.length)}`
+    : `showing ${parts(change.shown.length)}`
 }
 
 /** Something was done: it is the latest, and what was taken back cannot be put back over it. */
@@ -138,12 +190,47 @@ export function later(
 }
 
 /**
- * What the app says of taking back something Claude did, or putting it back, once it
- * has tried to: null where there was nothing to do, which needs no saying.
+ * What was asked for in a turn, cut short at a word to be said in a line with more:
+ * without the marks of its pictures, which are no words, nor the stop it may end in,
+ * since the line has its own.
  */
-export function saidOf(way: "undo" | "redo", outcome: Undone): string | null {
+export function briefly(asked: string, most = 36): string {
+  const what = asked
+    .replace(/\s*\[Image \d+\]/g, "")
+    .replace(/[\s.,;:!?…]+$/, "")
+  if (what.length <= most) return what
+  const cut = what.slice(0, most + 1)
+  const word = cut.lastIndexOf(" ")
+  return `${(word > most / 2 ? cut.slice(0, word) : cut.slice(0, most)).replace(/[\s.,;:]+$/, "")}…`
+}
+
+/**
+ * What a first Cmd+Z says where it would take back what an agent did in a turn, which
+ * only a second press does: how much work that was, where that is known, and what the
+ * turn was asked.
+ */
+export function askedAgain(turn: Undoable, mac: boolean): string {
+  const work =
+    turn.took === null
+      ? "the agent's last turn"
+      : `${elapsed(turn.took)} of the agent's work`
+  return `Press ${mac ? "⌘Z" : "Ctrl Z"} again to undo ${work}: “${briefly(turn.what)}”`
+}
+
+/**
+ * What the app says of taking back something Claude did, or putting it back, once it
+ * has tried to: null where there was nothing to do, which needs no saying. What was
+ * taken back says how it is put back.
+ */
+export function saidOf(
+  way: "undo" | "redo",
+  outcome: Undone,
+  mac: boolean
+): string | null {
   if (outcome.ok)
-    return `${way === "undo" ? "Undid" : "Redid"}: ${outcome.what}`
+    return way === "undo"
+      ? `Undid “${briefly(outcome.what)}”. ${mac ? "⇧⌘Z" : "Shift Ctrl Z"} puts it back`
+      : `Redid “${briefly(outcome.what)}”`
   const done = way === "undo" ? "undone" : "redone"
   if (outcome.why === "busy")
     return `Claude is at work: nothing can be ${done} until it is through`

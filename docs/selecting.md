@@ -62,7 +62,8 @@ and changes nothing else: the rest stays on show, and Cmd+1 is all of the model 
 **H** is the other way about from I: it puts what is picked out, one part or several,
 out of sight and leaves the rest. Pick out more and H hides those too; H with nothing
 picked out, or Esc, brings back all that was hidden, and the list of parts brings them
-back one at a time.
+back one at a time. Cmd+Z takes back any of these, as it does
+[a change to the model](working-with-claude.md#taking-a-change-back).
 
 ## A box
 

@@ -2,9 +2,9 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { Changes } from "./changes"
+import { Changes, tookOf } from "./changes"
 
 let dir: string
 let folder: string
@@ -75,6 +75,22 @@ describe("Changes", () => {
     ])
     expect(changes.last("p1").undo?.id).toBe(change?.id)
     expect(changes.last("p1").redo).toBeNull()
+  })
+
+  it("knows how long the turn took, from the folder being put aside to the end", async () => {
+    const changes = new Changes(kept)
+    const pending = await changes.before("p1", folder)
+    vi.useFakeTimers({ now: Date.now() + 90_000, toFake: ["Date"] })
+    try {
+      write("model.py", "box(20)")
+      const change = await changes.after(pending!, folder, about("Taller"))
+      expect(tookOf(change!)).toBeGreaterThanOrEqual(90_000)
+      expect(tookOf(change!)).toBeLessThan(100_000)
+    } finally {
+      vi.useRealTimers()
+    }
+    // and of one kept before it was, it does not know
+    expect(tookOf({ ...changes.last("p1").undo!, since: undefined })).toBeNull()
   })
 
   it("takes a change back, and puts it back again", async () => {

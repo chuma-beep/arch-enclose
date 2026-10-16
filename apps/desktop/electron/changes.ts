@@ -31,6 +31,8 @@ export type Change = {
   conversationId: string
   /** what was asked for in it, in a line */
   what: string
+  /** when the folder was put aside, as the turn began (not kept of the oldest changes) */
+  since?: number
   /** when the turn was over */
   at: number
   /** when it was taken back, while it is */
@@ -40,10 +42,16 @@ export type Change = {
   told: "undone" | "redone" | null
 }
 
+/** How long the turn of a change took, ms: null for one too old to have kept it. */
+export const tookOf = (change: Change): number | null =>
+  typeof change.since === "number" ? change.at - change.since : null
+
 /** A folder copied aside before a turn: what there was in it, and how each file stood. */
 export type Pending = {
   projectId: string
   id: string
+  /** when it was put aside */
+  since: number
   files: Map<string, { size: number; mtimeMs: number }>
 }
 
@@ -239,7 +247,8 @@ export class Changes {
     return this.queued(projectId, async () => {
       const standing = await filesOf(folder)
       if (!standing) return null
-      const id = `${Date.now()}-${randomBytes(3).toString("hex")}`
+      const since = Date.now()
+      const id = `${since}-${randomBytes(3).toString("hex")}`
       const aside = path.join(this.root(projectId, id), "before")
       const files: Pending["files"] = new Map()
       this.pending.add(id)
@@ -254,7 +263,7 @@ export class Changes {
         this.drop(projectId, id)
         return null
       }
-      return { projectId, id, files }
+      return { projectId, id, since, files }
     })
   }
 
@@ -269,7 +278,7 @@ export class Changes {
     /** the conversation the folder is as only it has it, where it is so */
     of?: string
   ): Promise<Change | null> {
-    const { projectId, id } = pending
+    const { projectId, id, since } = pending
     return this.queued(projectId, async () => {
       const root = this.root(projectId, id)
       const standing = await filesOf(folder)
@@ -316,6 +325,7 @@ export class Changes {
         id,
         conversationId: about.conversationId,
         what: about.what,
+        since,
         at: Date.now(),
         undoneAt: null,
         files,
