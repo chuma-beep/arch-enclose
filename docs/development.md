@@ -206,8 +206,11 @@ What it does, a step at a time, which can also be done by hand:
    ```
 
    What the release says has changed is the commits since the version before, a line to
-   each, without the one that only gave the app its version. (The script puts a link
-   under them to where the two versions are set side by side.)
+   each, without the one that only gave the app its version. A commit by someone who is
+   not a collaborator on the repository ends with who it is by (", by @login"), and
+   anyone whose first contribution it is is named under the list ("**New
+   contributors**: @login made their first contribution in #7"). (The script does both,
+   and puts a link under them to where the two versions are set side by side.)
 
 The disk images are named for the kind of Mac and not for the version
 (`Enclose-arm64.dmg`, `Enclose-x64.dmg`), so that the newest is always at one address:

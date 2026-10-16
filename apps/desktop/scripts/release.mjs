@@ -236,25 +236,90 @@ if (missing.length > 0)
 
 // What the release says has changed: the commits since the version before, a line to
 // each with what it is known by, the oldest first. The one that only gave the app its
-// version is not among them. Under them is where the two versions are set side by side.
+// version is not among them. A commit by someone who is not a collaborator on the
+// repository says who it is by, and someone whose first it is is named under the list,
+// as GitHub's own notes do. Under them is where the two versions are set side by side.
 // (Worked out before anything is pushed, so that nothing can stop between the two.)
+const [repository, slug] = must(
+  "gh",
+  [
+    "repo",
+    "view",
+    "--json",
+    "url,nameWithOwner",
+    "--jq",
+    ".url, .nameWithOwner",
+  ],
+  { quiet: true }
+).split("\n")
+const collaborators = new Set(
+  must("gh", ["api", `repos/${slug}/collaborators`, "--jq", ".[].login"], {
+    quiet: true,
+  }).split("\n")
+)
+/** the GitHub account a commit is by, or "" where GitHub knows of none */
+const authorOf = (sha) =>
+  must(
+    "gh",
+    ["api", `repos/${slug}/commits/${sha}`, "--jq", '.author.login // ""'],
+    {
+      quiet: true,
+    }
+  )
+/** whether an account has a commit in the version before */
+const hadCommits = (login) =>
+  must(
+    "gh",
+    [
+      "api",
+      `repos/${slug}/commits?author=${login}&sha=${before}&per_page=1`,
+      "--jq",
+      "length",
+    ],
+    { quiet: true }
+  ) !== "0"
 const commits = must(
   "git",
-  ["log", "--reverse", "--format=- %s (%h)", `${before}..HEAD`],
+  ["log", "--reverse", "--format=%H%x09%h%x09%s", `${before}..HEAD`],
   { quiet: true }
 )
   .split("\n")
-  .filter((line) => line && !line.startsWith(`- chore: ${next} (`))
-const repository = must(
-  "gh",
-  ["repo", "view", "--json", "url", "--jq", ".url"],
-  {
-    quiet: true,
-  }
-)
+  .filter(Boolean)
+  .map((line) => {
+    const [sha, short, subject] = line.split("\t")
+    const login = authorOf(sha)
+    return {
+      short,
+      subject,
+      outside: login && !collaborators.has(login) ? login : "",
+    }
+  })
+  .filter(({ subject }) => subject !== `chore: ${next}`)
+const newcomers = new Map()
+for (const { short, subject, outside } of commits)
+  if (outside && !newcomers.has(outside) && !hadCommits(outside))
+    // the pull request it came in by, where the subject names one
+    newcomers.set(
+      outside,
+      subject.match(/\(#\d+\)$/)?.[0].slice(1, -1) ?? short
+    )
 const notes = [
-  ...commits,
+  ...commits.map(
+    ({ short, subject, outside }) =>
+      `- ${subject} (${short})${outside ? `, by @${outside}` : ""}`
+  ),
   ...(commits.length > 0 ? [""] : []),
+  ...(newcomers.size > 0
+    ? [
+        `**New contributors**: ${[...newcomers]
+          .map(
+            ([login, first]) =>
+              `@${login} made their first contribution in ${first}`
+          )
+          .join("; ")}`,
+        "",
+      ]
+    : []),
   `**Full Changelog**: ${repository}/compare/${before}...${tag}`,
 ].join("\n")
 
