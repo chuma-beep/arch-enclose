@@ -1,0 +1,15 @@
+{
+  "name": "Default",
+  "light": {},
+  "dark": {
+    "attention": "#f7cc3d",
+    "message": "#202020",
+    "tools": "#0069fb",
+    "parts": {
+      "red": "#fa8b89",
+      "orange": "#ffbb6f",
+      "yellow": "#f6ec6c",
+      "lime": "#bbf97d"
+    }
+  }
+}

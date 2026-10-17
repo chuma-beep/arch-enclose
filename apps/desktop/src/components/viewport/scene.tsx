@@ -642,7 +642,9 @@ const PartModel = React.memo(function PartModel({
   const skinColors = React.useMemo(
     () =>
       loaded.skins.map((skin) => skinColour(loaded, skin, colors.dark, colour)),
-    [loaded, colors.dark, colour]
+    // (and again in a theme's colours for the palette, which skinColour reads)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loaded, colors.dark, colors.palette, colour]
   )
 
   const lines = React.useMemo(() => {

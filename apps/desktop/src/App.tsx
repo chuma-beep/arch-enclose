@@ -3,6 +3,7 @@ import { FolderPlusIcon, ImagePlusIcon, SettingsIcon } from "lucide-react"
 
 import { Settings } from "@/components/settings"
 import { Sidebar } from "@/components/sidebar"
+import { ThemeCreator } from "@/components/theme-creator/creator"
 import { Thread } from "@/components/thread"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -20,6 +21,7 @@ import { toolsAsked, toolUsed } from "@/lib/custom-tools/asked"
 import { isPicture } from "@/lib/pictures"
 import { MAC } from "@/lib/platform"
 import { useActiveProject, useStore } from "@/lib/store"
+import { useThemes } from "@/lib/themes"
 
 /** Answer Claude's questions about what is on screen. */
 function useViewportRequests() {
@@ -201,6 +203,8 @@ export function App() {
   const threadOpen = useStore((state) => state.threadOpen)
   const project = useActiveProject()
   const settingsOpen = useStore((state) => state.settingsOpen)
+  // (as the app is worked on: made into a package, it has no theme creator)
+  const creating = useThemes((state) => state.creating)
   const setSettingsOpen = useStore((state) => state.setSettingsOpen)
   const dropping = useFolderDrop()
   useViewportRequests()
@@ -242,6 +246,9 @@ export function App() {
         </main>
         {threadOpen && project && <Thread project={project} />}
         {settingsOpen && <Settings />}
+        {creating && import.meta.env.DEV && (
+          <ThemeCreator key={creating} making={creating} />
+        )}
         {dropping && (
           <div className="pointer-events-none fixed inset-2 z-50 flex items-center justify-center rounded-2xl bg-background/70 ring-2 ring-foreground/40 backdrop-blur-sm ring-inset">
             <div className="flex items-center gap-2.5 text-sm font-medium">

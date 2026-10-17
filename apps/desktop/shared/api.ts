@@ -2,6 +2,7 @@
 // change here is checked on both ends.
 
 import type { Building, StepsGone } from "./board-format"
+import type { Theme, ThemeLooks } from "./theme-format"
 
 export type Vec3 = [number, number, number]
 
@@ -1033,6 +1034,21 @@ export type CadApi = {
     /** say that the view was put into one of these, for the app's count of its use */
     used(feature: Feature): void
   }
+  /** the themes there are beside the app's own look (see shared/theme-format.ts) */
+  themes: {
+    list(): Promise<Theme[]>
+    /**
+     * Write a new theme, called by its name (numbered where that is taken), and give it
+     * back as written. Run from a checkout only: made into a package, the app writes none.
+     */
+    save(theme: Omit<Theme, "id">): Promise<Theme>
+    /** take one away, likewise from a checkout only; resolves to the themes left */
+    remove(id: string): Promise<Theme[]>
+    /** what is changed of the app's own look, under every theme */
+    defaults(): Promise<ThemeLooks>
+    /** write that, likewise from a checkout only, and give it back as written */
+    saveDefaults(looks: ThemeLooks): Promise<ThemeLooks>
+  }
   github: {
     get(): Promise<GitHubState>
     /** sign in to GitHub: what the user is to do is heard of as it comes */
@@ -1125,6 +1141,11 @@ export const CHANNEL = {
   settingsSetAnalytics: "settings:set-analytics",
   settingsSetVersions: "settings:set-versions",
   analyticsUsed: "analytics:used",
+  themesList: "themes:list",
+  themesSave: "themes:save",
+  themesRemove: "themes:remove",
+  themesDefaults: "themes:defaults",
+  themesSaveDefaults: "themes:save-defaults",
   updateGet: "update:get",
   updateDownload: "update:download",
   updateRestart: "update:restart",

@@ -1,3 +1,4 @@
+import type * as React from "react"
 import { cn } from "cn"
 
 /** A theme the window can be drawn in. */
@@ -34,13 +35,17 @@ const SPLIT = 160
  * cards and the buttons over it, and the conversation beside it. Each half of it stands
  * inside the class that sets a theme's colours and is drawn in nothing but those, so it
  * shows a theme whether or not the app is in it. `system` is light on the left and dark
- * on the right, the model whole across the two.
+ * on the right, the model whole across the two. `colours` are a theme's own, for each
+ * look, in place of those the app is drawn in (see src/lib/themes.ts): with them, it is
+ * that theme that is shown, and not the one the app is in.
  */
 export function Miniature({
   theme,
+  colours,
   className,
 }: {
   theme: Drawn | "system"
+  colours?: Record<Drawn, React.CSSProperties>
   className?: string
 }) {
   const left: Drawn = theme === "dark" ? "dark" : "light"
@@ -49,6 +54,7 @@ export function Miniature({
     <svg
       viewBox="0 0 320 208"
       aria-hidden
+      data-theme-preview={colours ? "" : undefined}
       strokeWidth={1}
       // lines are a pixel wide however small the picture is
       className={cn(
@@ -56,7 +62,7 @@ export function Miniature({
         className
       )}
     >
-      <g className={left}>
+      <g className={left} style={colours?.[left]}>
         {/* the view: all of it, so that the other half is drawn over this one and no
             gap shows between two halves that are the same */}
         <rect width="236" height="208" className="fill-sidebar" />
@@ -88,7 +94,7 @@ export function Miniature({
         <circle cx="10" cy="197.6" r="3.6" className={ROUND} />
       </g>
 
-      <g className={right}>
+      <g className={right} style={colours?.[right]}>
         {/* the rest of the view, and the conversation beside it */}
         <rect
           x={SPLIT}
@@ -96,7 +102,7 @@ export function Miniature({
           height="208"
           className="fill-sidebar"
         />
-        <rect x="236" width="84" height="208" className="fill-background" />
+        <rect x="236" width="84" height="208" className="fill-chat" />
         <line x1="236" x2="236" y2="208" className="stroke-border" />
 
         {/* down the view's right-hand edge: the conversation, which is open, and the
@@ -150,7 +156,7 @@ export function Miniature({
           width="45"
           height="13.5"
           rx="4"
-          className="fill-muted"
+          className="fill-user-message"
         />
         <rect x="272" y="24" width="37" height="2" rx="1" className={SAID} />
         <rect x="272" y="28.2" width="22" height="2" rx="1" className={SAID} />

@@ -1,8 +1,9 @@
 import * as React from "react"
 import { cn } from "cn"
-import { ChevronDownIcon, XIcon } from "lucide-react"
+import { ChevronDownIcon, PaletteIcon, PencilIcon, XIcon } from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
+import { DEFAULT_THEME, type Theme } from "@shared/theme-format"
 import { ConnectGitHub } from "@/components/connect-github"
 import { GitHubIcon } from "@/components/icons"
 import { Logo } from "@/components/mark"
@@ -44,6 +45,7 @@ import { MAC } from "@/lib/platform"
 import { TURN_SPEED, usePreferences, ZOOM_SPEED } from "@/lib/preferences"
 import { dated } from "@/lib/saved"
 import { useStore } from "@/lib/store"
+import { EDIT_DEFAULTS, previewOf, useLook, useThemes } from "@/lib/themes"
 
 /** The sections, in the order they are listed: what is turned to most comes first. */
 const SECTIONS = [
@@ -348,38 +350,188 @@ function General() {
   )
 }
 
-/** The themes there are, in the order they are offered. */
-const THEMES = [
+/** The looks the window can be drawn in, in the order they are offered. */
+const MODES = [
   { value: "system", label: "System" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ] as const
 
+/** What a card of the settings that is chosen by its picture is drawn as. */
+const PICTURED =
+  "group flex w-full flex-col gap-2 rounded-2xl bg-card p-1.5 pb-2.5 ring-1 ring-foreground/10 outline-none hover:ring-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-primary"
+
+/** What is done to a theme from a button on its card's corner, shown with the pointer on it. */
+const CORNER =
+  "absolute top-3 right-3 flex size-6 cursor-pointer items-center justify-center rounded-full bg-background/85 opacity-0 ring-1 ring-foreground/10 transition-[opacity,color,background-color] outline-none group-hover/theme:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+
+/**
+ * A theme, as the window would be drawn in it in the look it is in now: the app's own,
+ * where none is given. One that can be taken away has a cross for it, on its corner, and
+ * the app's own a pencil, where this checkout changes it.
+ */
+function ThemeCard({
+  theme,
+  chosen,
+  onChoose,
+  onRemove,
+  onEdit,
+}: {
+  theme: Theme | null
+  chosen: boolean
+  onChoose: () => void
+  onRemove?: () => void
+  onEdit?: () => void
+}) {
+  const look = useLook()
+  const name = theme?.name ?? "Default"
+  return (
+    <div className="group/theme relative">
+      <button
+        type="button"
+        aria-pressed={chosen}
+        onClick={onChoose}
+        className={PICTURED}
+      >
+        <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
+          <Miniature theme={look} colours={previewOf(theme)} />
+        </span>
+        <span className="truncate px-1 text-sm text-muted-foreground group-aria-pressed:text-foreground">
+          {name}
+        </span>
+      </button>
+      {onRemove && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={onRemove}
+                className={cn(CORNER, "hover:bg-red-600 hover:text-white")}
+              />
+            }
+          >
+            <XIcon className="size-3.5" />
+            <span className="sr-only">Remove {name}</span>
+          </TooltipTrigger>
+          <TooltipContent>Remove</TooltipContent>
+        </Tooltip>
+      )}
+      {onEdit && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                onClick={onEdit}
+                className={cn(
+                  CORNER,
+                  "hover:bg-foreground hover:text-background"
+                )}
+              />
+            }
+          >
+            <PencilIcon className="size-3" />
+            <span className="sr-only">Change {name}</span>
+          </TooltipTrigger>
+          <TooltipContent>Change</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  )
+}
+
 function Appearance() {
   const { theme, setTheme } = useTheme()
+  const themes = useThemes((state) => state.themes)
+  const chosen = useThemes((state) => state.chosen)
+  const choose = useThemes((state) => state.choose)
+  const remove = useThemes((state) => state.remove)
+  const load = useThemes((state) => state.load)
+  const setCreating = useThemes((state) => state.setCreating)
+  const close = useStore((state) => state.setSettingsOpen)
+  // (as they are now: one may have been written or taken away since)
+  React.useEffect(() => void load(), [load])
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="px-1 text-sm text-muted-foreground">Theme</h2>
-      <div className="grid grid-cols-3 gap-3">
-        {THEMES.map(({ value, label }) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={theme === value}
-            onClick={() => setTheme(value)}
-            className="group flex flex-col gap-2 rounded-2xl bg-card p-1.5 pb-2.5 ring-1 ring-foreground/10 outline-none hover:ring-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-primary"
-          >
-            {/* the window as the theme draws it, its corners following the card's */}
-            <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
-              <Miniature theme={value} />
-            </span>
-            <span className="text-sm text-muted-foreground group-aria-pressed:text-foreground">
-              {label}
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
+    <>
+      <section className="flex flex-col gap-2">
+        <h2 className="px-1 text-sm text-muted-foreground">Mode</h2>
+        <div className="grid grid-cols-3 gap-3">
+          {MODES.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={theme === value}
+              onClick={() => setTheme(value)}
+              className={PICTURED}
+            >
+              {/* the window as the look draws it, its corners following the card's */}
+              <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
+                <Miniature theme={value} />
+              </span>
+              <span className="text-sm text-muted-foreground group-aria-pressed:text-foreground">
+                {label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+      {/* the app's own look, which stays, and the themes beside it; as it is worked on,
+          the app can take those away, as it makes them */}
+      <section className="flex flex-col gap-2">
+        <h2 className="px-1 text-sm text-muted-foreground">Theme</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <ThemeCard
+            theme={null}
+            chosen={!chosen}
+            onChoose={() => choose(DEFAULT_THEME)}
+            onEdit={
+              EDIT_DEFAULTS
+                ? () => {
+                    close(false)
+                    setCreating("defaults")
+                  }
+                : undefined
+            }
+          />
+          {themes.map((one) => (
+            <ThemeCard
+              key={one.id}
+              theme={one}
+              chosen={chosen?.id === one.id}
+              onChoose={() => choose(one.id)}
+              onRemove={
+                import.meta.env.DEV ? () => void remove(one.id) : undefined
+              }
+            />
+          ))}
+        </div>
+      </section>
+    </>
+  )
+}
+
+/**
+ * The theme creator, as the app has it while it is worked on: the settings give way to
+ * it, over the whole window.
+ */
+function CreateTheme() {
+  const close = useStore((state) => state.setSettingsOpen)
+  const setCreating = useThemes((state) => state.setCreating)
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      // its words end where the cards under it do
+      className="-mr-3 gap-1.5 text-muted-foreground"
+      onClick={() => {
+        close(false)
+        setCreating("theme")
+      }}
+    >
+      <PaletteIcon />
+      Create theme
+    </Button>
   )
 }
 
@@ -906,6 +1058,7 @@ const PAGES: Record<SectionId, () => React.ReactNode> = {
 /** What is done to all of a section, for the ones that have it: beside its name. */
 const BESIDE: Partial<Record<SectionId, () => React.ReactNode>> = {
   providers: CheckAgain,
+  ...(import.meta.env.DEV ? { appearance: CreateTheme } : {}),
 }
 
 /**

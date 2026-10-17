@@ -41,6 +41,8 @@ npm run format      # .ts and .tsx only
   plain words.
 - Commit messages follow the history: `feat(view): ...`, `fix(chat): ...`.
 - Where your change makes the README or a page in `docs/` wrong, change that with it.
+- A theme is a pull request of its own: the one file the theme creator writes in
+  `themes/` ([Themes](docs/settings.md#themes)), and nothing else.
 - Leave `examples/` and `apps/desktop/shared/examples.json` as they are. The examples are published
   as archives, and a change to one means a new release of them.
 

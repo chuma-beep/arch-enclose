@@ -20,6 +20,7 @@ import { Writing } from "@/components/writing"
 import type { Model } from "@/lib/model"
 import { usePreferences } from "@/lib/preferences"
 import { savingParts } from "@/lib/saved"
+import { currentPalette } from "@/lib/palette"
 import { goesBy, useStore, type Note, type Selection } from "@/lib/store"
 import type { LoadedPart } from "./load"
 
@@ -156,7 +157,7 @@ function Colours({
           >
             <span
               className="size-4 rounded-full"
-              style={{ background: PALETTE[name] }}
+              style={{ background: currentPalette()[name] }}
             />
           </Button>
         )

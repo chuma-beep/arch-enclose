@@ -22,8 +22,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { PALETTE } from "@shared/palette"
 import type { Control, IconName, Option, Value } from "@/lib/custom-tools/types"
+import { currentPalette } from "@/lib/palette"
 
 // What a tool's controls are drawn as. A tool says what kind each of its controls is,
 // and nothing of how it looks: they are all the app's, in white on the blue of what is
@@ -387,7 +387,7 @@ function Palette({
               "size-6 cursor-pointer rounded-full outline-offset-2 outline-white",
               chosen ? "outline-2" : "outline-0 hover:outline-1"
             )}
-            style={{ background: PALETTE[name] }}
+            style={{ background: currentPalette()[name] }}
           />
         )
       })}

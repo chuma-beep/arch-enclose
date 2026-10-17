@@ -173,6 +173,14 @@ const api: CadApi = {
   analytics: {
     used: (feature) => ipcRenderer.send(CHANNEL.analyticsUsed, feature),
   },
+  themes: {
+    list: () => ipcRenderer.invoke(CHANNEL.themesList),
+    save: (theme) => ipcRenderer.invoke(CHANNEL.themesSave, theme),
+    remove: (id) => ipcRenderer.invoke(CHANNEL.themesRemove, id),
+    defaults: () => ipcRenderer.invoke(CHANNEL.themesDefaults),
+    saveDefaults: (looks) =>
+      ipcRenderer.invoke(CHANNEL.themesSaveDefaults, looks),
+  },
   github: {
     get: () => ipcRenderer.invoke(CHANNEL.githubGet),
     connect: () => ipcRenderer.invoke(CHANNEL.githubConnect),

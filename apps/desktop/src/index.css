@@ -58,6 +58,8 @@
   --color-tool: var(--tool);
   --color-tool-panel: var(--tool-panel);
   --color-tool-line: var(--tool-line);
+  --color-chat: var(--chat);
+  --color-user-message: var(--user-message);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -117,12 +119,17 @@
   --axis-z: #0f73ff;
   /* What is the project's own and not the app's is blue: the tools made for its model.
        It is the blue of the Z axis. Their panel is a deeper shade of it, for white
-       letters to be read on, and the line round the panel a lighter one. */
+       letters to be read on, and the line round the panel a lighter one: of the tools'
+       colour, whatever a theme makes that (see shared/theme-format.ts). */
   --tool: var(--axis-z);
-  --tool-panel: oklch(from var(--axis-z) calc(l - 0.135) c calc(h + 6));
+  --tool-panel: oklch(from var(--tool) calc(l - 0.135) c calc(h + 6));
   --tool-line: oklch(
-    from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
+    from var(--tool) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
   );
+  /* the conversation's ground, and the bubble of what the user says in it: of their own,
+       for a theme to colour them and nothing else */
+  --chat: var(--background);
+  --user-message: var(--muted);
   /* what a floating card does to the 3D view behind it, so its text stays readable
        whatever the model's colour */
   --glass: blur(20px) saturate(1.3) brightness(1.2);
@@ -164,6 +171,13 @@
   --section: oklch(0.7 0.17 250);
   --attention: oklch(0.82 0.15 80);
   --unfinished: oklch(0.76 0.16 55);
+  /* (said again for the dark, so that inside it they are of its colours) */
+  --tool-panel: oklch(from var(--tool) calc(l - 0.135) c calc(h + 6));
+  --tool-line: oklch(
+    from var(--tool) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
+  );
+  --chat: var(--background);
+  --user-message: var(--muted);
   --glass: blur(20px) saturate(1.3) brightness(0.55);
 }
 

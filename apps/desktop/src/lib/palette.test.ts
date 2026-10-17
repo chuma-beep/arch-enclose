@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { PALETTE } from "@shared/palette"
-import { drawnIn } from "./palette"
+import { drawnIn, setPalettes } from "./palette"
 
 describe("drawnIn", () => {
   it("draws a colour named in the palette as that colour", () => {
@@ -51,6 +51,22 @@ describe("drawnIn", () => {
       if (turn !== 2)
         expect(drawnIn(null, turn, true)).toBe(drawnIn(null, turn))
     expect(drawnIn("#d9d9d4", 0, true)).toBe("#d9d9d4")
+  })
+
+  it("draws each of the palette's colours as a theme has it, where one does", () => {
+    const light = { ...PALETTE, blue: "#336699", indigo: "#5544aa" }
+    setPalettes(light, PALETTE)
+    try {
+      expect(drawnIn("blue", 0)).toBe("#336699")
+      expect(drawnIn("#4a7fb5", 0)).toBe("#336699")
+      expect(drawnIn(null, 0)).toBe("#336699")
+      // (what green gives way to, too)
+      expect(drawnIn("green", 0, true)).toBe("#5544aa")
+      // a grey is still its own
+      expect(drawnIn("#d9d9d4", 0)).toBe("#d9d9d4")
+    } finally {
+      setPalettes(PALETTE, PALETTE)
+    }
   })
 
   it("leaves alone what it cannot read as a colour", () => {

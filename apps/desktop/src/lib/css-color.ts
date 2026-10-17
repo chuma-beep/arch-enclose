@@ -1,6 +1,9 @@
 import * as React from "react"
 import * as THREE from "three"
 
+import type { PaletteName } from "@shared/palette"
+import { currentPalette } from "./palette"
+
 // The theme's tokens are oklch(), which THREE.Color can't parse. A 2D canvas can:
 // paint the colour and read the pixel back.
 let ctx: CanvasRenderingContext2D | null = null
@@ -24,6 +27,9 @@ function resolve(css: string): THREE.Color {
   )
 }
 
+/** A colour as CSS gives one (oklch(), a name, a var() that has been read), as "#rrggbb". */
+export const hexOf = (css: string) => `#${resolve(css).getHexString()}`
+
 export type ThemeColors = {
   /** what the view is drawn over: the window's own colour behind it */
   backdrop: THREE.Color
@@ -36,6 +42,8 @@ export type ThemeColors = {
   section: THREE.Color
   /** the model's three axes */
   axes: { x: THREE.Color; y: THREE.Color; z: THREE.Color }
+  /** the palette's colours, as the theme the window is in has them in its look */
+  palette: Record<PaletteName, string>
   dark: boolean
 }
 
@@ -50,18 +58,22 @@ function read(): ThemeColors {
     picked: token("--selection-fill"),
     section: token("--section"),
     axes: { x: token("--axis-x"), y: token("--axis-y"), z: token("--axis-z") },
+    palette: currentPalette(),
     dark: document.documentElement.classList.contains("dark"),
   }
 }
 
-/** The theme's colours as THREE.Colors, re-read whenever light/dark flips. */
+/**
+ * The theme's colours as THREE.Colors, re-read whenever light/dark flips, or the window
+ * is put into another theme (see themes.ts).
+ */
 export function useThemeColors(): ThemeColors {
   const [colors, setColors] = React.useState(read)
   React.useEffect(() => {
     const observer = new MutationObserver(() => setColors(read()))
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-theme"],
     })
     return () => observer.disconnect()
   }, [])

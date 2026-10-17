@@ -78,6 +78,8 @@ try {
           to: "kit",
           filter: ["**/*", "!**/__pycache__", "!**/.DS_Store"],
         },
+        // the themes there are beside the app's own look, which it reads and offers
+        { from: "../../themes", to: "themes", filter: ["*.json"] },
         // what of other people's code goes out with the app, and under what terms:
         // written by the build (scripts/licenses.mjs), and opened from the settings
         {
