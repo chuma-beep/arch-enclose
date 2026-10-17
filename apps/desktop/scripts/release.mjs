@@ -130,6 +130,37 @@ if (wrong.length > 0) stop(wrong.join("\n[release] "))
 console.log(
   `[release] ready: main is clean and up to date, and there is no ${tag} yet`
 )
+
+// How far behind tscircuit's own releases the one boards are built with is: it is kept
+// at one version (kit/board.mjs), so that boards build alike from one day to the next,
+// and moved on by hand, when there is a reason to, with a few boards built again to see.
+// Only said: it stops nothing.
+{
+  const board = fs.readFileSync(
+    path.join(ROOT, "..", "..", "kit", "board.mjs"),
+    "utf8"
+  )
+  const kept = /const TSCIRCUIT = "tscircuit@([^"]+)"/.exec(board)?.[1]
+  const versions = run("npm", ["view", "tscircuit", "versions", "--json"], {
+    quiet: true,
+  })
+  let since = -1
+  let newest = null
+  try {
+    // (each comes out twice, the second time as "-libonly": those are left out)
+    const all = JSON.parse(versions.said).filter((one) => !one.includes("-"))
+    newest = all.at(-1)
+    since = all.length - 1 - all.indexOf(kept)
+  } catch {
+    // npm could not be asked: nothing is said
+  }
+  if (kept && newest && since >= 0)
+    console.log(
+      since === 0
+        ? `[release] tscircuit: boards are built with ${kept}, the newest`
+        : `[release] tscircuit: boards are built with ${kept}; ${newest} is out, ${since} release${since === 1 ? "" : "s"} on`
+    )
+}
 if (dry) {
   console.log(
     `[release] (dry) would test, see that a tool is shut in, ${resumed ? "" : `commit "chore: ${next}", `}build and notarize, tag ${tag}, push, and publish, listing the commits since ${before}`

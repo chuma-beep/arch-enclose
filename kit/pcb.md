@@ -73,7 +73,9 @@ built by itself: there is nothing to tell it. Do not copy the script into the pr
   footprint of it needs (see Before it is ordered). It says which parts it turned.
 - A finished board's build ends with the checks it is ordered by (see Before it is
   ordered): read them.
-- Anything after the board's file goes to `tsci build` as it is.
+- Anything after the board's file goes to `tsci build` as it is. `--routing-disabled`
+  builds it unrouted, whatever the board says: for the first steps of a detailed board
+  (see A rough board, and a detailed one).
 
 Look at the three pictures in `pcb/build/` before you report a board, and mend what is
 wrong. Your screenshot tool shows the model's view, not PCB mode.
@@ -135,7 +137,11 @@ export default () => (
   `qfn32`, `pinrow4`, `pushbutton`), or comes with a real part. To find one with its
   stock: `npm_config_allow_git=all npx --yes -p tscircuit tsci search --jlcpcb "ESP32-C3"`.
 - The rest of what tscircuit has, and how each element is used, is in its documentation
-  at https://docs.tscircuit.com. Where you have a skill for tscircuit, use it.
+  at https://docs.tscircuit.com. Where you have a skill for tscircuit, use it. What each
+  element takes, as the tscircuit the app builds with has it, is in its own files, which
+  npx keeps: `~/.npm/_npx/*/node_modules/@tscircuit/props/lib/components/`. Look there,
+  and never search the whole disk or the home folder for them (`find /`, `find ~`): the
+  Mac stops the user to ask whether the app may look in each of their private folders.
 
 ## Choosing parts
 
@@ -234,11 +240,32 @@ library is JLCPCB's:
 
 ## Routing
 
-Let the router try first. Draw a trace by hand (`pcbPath`) only where it fails, which is
-most often in getting out from among a part's fine pins: as much of the trace as gets
-it clear, and the router does the rest. Keep traces 0.15 mm wide or more, and those that
-carry the current of a motor or a light wider. Read the build's warnings for traces
-that cross, or come too close: a board with any is not done.
+The board is routed by tscircuit's own router, in the build. Never write a router of
+your own, a script that works traces out and writes them into the board, and never
+route a whole board by hand: tscircuit's router is what is kept up to date, and the app
+follows it as it routes. Help it where it needs help:
+
+- A part with many fine pins (QFN, a fine-pitch chip, a module's castellated pads) goes
+  in a `<fanout>`, which brings its pins out first and has the rest routed from there:
+  `<fanout padding={1}>` round the `<chip>`, with its traces outside as before. On a
+  board with inner layers, `<fanout autorouter="dogbone" fanoutRoutingLayers={["inner1"]}>`
+  takes each pin down a via beside it instead.
+- Where the order matters, route in phases: `<autoroutingphase phaseIndex={0}
+  connections={["U1.pin1", "J1.pin2"]} />` routes those first, power and the longest
+  runs say, and each later phase routes round what is there. One with `reroute` and a
+  `region` or a `connection` routes those again.
+- A trace drawn by hand (`pcbPath`) is only for a short way out from among a part's
+  pins, where the fanout does not do: as much of it as gets it clear.
+- Keep traces 0.15 mm wide or more, and those that carry the current of a motor or a
+  light wider. Read the build's warnings for traces that cross, or come too close: a
+  board with any is not done.
+
+(https://docs.tscircuit.com/elements/fanout and /elements/autoroutingphase have more.)
+
+Where the router still cannot route everything, change the board rather than the
+router: give the parts more room, move or turn the ones whose connections cross, take a
+part whose pins are further apart, or use four layers. If it still cannot be routed,
+say which connections are left and what would free them, and leave it unfinished.
 
 ## A rough board, and a detailed one
 
@@ -270,9 +297,17 @@ A detailed board takes a while, and the user watches it come together in PCB mod
 which the app opens on the board when it is first built in a turn. So build it in
 steps, and build after each one, rather than once at the end:
 
-1. its outline, holes and every part, placed where it goes, with `routingDisabled`;
-2. every connection, still unrouted, which the drawing shows as straight lines;
-3. routed.
+1. placing: its outline, holes and every part, placed where it goes;
+2. connecting: every connection, still unrouted, which the drawing shows as straight lines;
+3. routing: routed, by the build;
+4. checking: the checks it is ordered by (see Before it is ordered), and putting right
+   what they find.
+
+Build the first two with `--routing-disabled` after the board's file. Where you have
+the app's `step` tool, as the agent making a board in the background does, say with it
+which step you are at as you begin each one, and again whenever you go back to one: to
+routing again after a check failed, say. A board that is already made and is being
+changed goes through the steps it needs: say the one you begin at.
 
 Say in a few words what you are at as you go: it is how the user follows the work.
 

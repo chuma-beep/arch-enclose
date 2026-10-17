@@ -166,16 +166,18 @@ another conversation, which goes on once the board is done or stopped. What was 
 of a stopped board stays in its files.
 
 When Claude builds a board, PCB mode opens on it, and a detailed board is built in steps:
-its parts placed, then joined, then routed. Each build shows as it comes
+its parts placed, then connected, then routed. Each build shows as it comes
 in, and as Claude writes the board the app makes a quick look at it by itself, unrouted,
 so that its parts appear as they are put on it: even while what is written breaks
 tscircuit's rules, as a board half written does. While it is routed, the line under the
 board's name says how far that has got. A board made in detail in the background has
-its steps at the foot of PCB mode instead, in a row: **Parts placed**, **Joined**,
+its steps at the foot of PCB mode instead, in a row: **Placing parts**, **Connecting**,
 **Routing** and **Checking**, each with how long it took, how long it has been going,
-or that it has not started yet. A step is done when the board is first built that far;
-checking is what comes after it is routed, until the board is done. While it is routed,
-how far that has got goes round the step.
+or that it has not started yet. The agent says which step it is at as it begins each.
+It often goes back, to routing again after a check failed, say: then the steps after
+that one are to come again. (An agent that says nothing of its steps has them gone by
+how far each build of the board got.) While it is routed, how far that has got goes
+round the step.
 
 For as long as a board is still being made, it looks it: a light goes across it, over
 and over, in each of the three views and on its card in the list; and **Working**

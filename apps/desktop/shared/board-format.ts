@@ -232,11 +232,10 @@ export function unsourcedOf(circuit: unknown): string[] {
 
 /**
  * How far a build of a board has got with it, in the steps a detailed board is made in
- * (kit/pcb.md): its parts placed, then joined (every connection made, still unrouted),
+ * (kit/pcb.md): its parts placed, then connected (every connection made, still unrouted),
  * then routed.
  */
-export type BoardStep = "placed" | "joined" | "routed"
-export const BOARD_STEPS: readonly BoardStep[] = ["placed", "joined", "routed"]
+export type BoardStep = "placed" | "connected" | "routed"
 
 /** What a build of a board has on it: how far it has got, and how much there is of it. */
 export type MadeOf = {
@@ -250,7 +249,7 @@ export type MadeOf = {
 }
 
 /**
- * What a board as tscircuit has it has on it (see `MadeOf`). It is joined once it has
+ * What a board as tscircuit has it has on it (see `MadeOf`). It is connected once it has
  * any connection, and routed once it has any trace: a board is built after each step,
  * and not before it is done.
  */
@@ -268,7 +267,7 @@ export function madeOf(circuit: unknown): MadeOf {
       count("pcb_trace") > 0
         ? "routed"
         : connections > 0
-          ? "joined"
+          ? "connected"
           : parts > 0
             ? "placed"
             : null,
@@ -279,32 +278,59 @@ export function madeOf(circuit: unknown): MadeOf {
   }
 }
 
-/** How long each step of making a board took, in ms: null for one it did not get to. */
-export type StepsTook = {
-  placing: number | null
-  joining: number | null
-  routing: number | null
-  /** from when it was first routed until it was over: its checks, and what was put right for them */
-  checking: number | null
+/**
+ * The steps a detailed board is made in (kit/pcb.md), as what is being done in each:
+ * placing its parts, connecting them (every connection made, still unrouted), routing it,
+ * and checking it as it would be ordered, putting right what the checks find.
+ */
+export type MakingStep = "placing" | "connecting" | "routing" | "checking"
+export const MAKING_STEPS: readonly MakingStep[] = [
+  "placing",
+  "connecting",
+  "routing",
+  "checking",
+]
+
+/** The step that comes after a build got this far, where the agent says nothing of it. */
+export const AFTER: Record<BoardStep, MakingStep> = {
+  placed: "connecting",
+  connected: "routing",
+  routed: "checking",
 }
 
 /**
- * How long each step of making a board took (see `StepsTook`), from when it was begun
- * on (`from`), when it was first built as far as each step (`reached`), and when it was
- * over (`to`). Each is from when the one before it was reached.
+ * The steps a board went through while it was made, in order: each with when it was
+ * begun on (ms). A step can come round again, when the board is gone back to: routed
+ * again after a check failed, say.
  */
-export function stepsTook(
-  from: number,
-  reached: Partial<Record<BoardStep, number>>,
-  to: number
-): StepsTook {
-  const { placed, joined, routed } = reached
-  const between = (start: number | undefined, end: number | undefined) =>
-    start === undefined || end === undefined ? null : Math.max(0, end - start)
-  return {
-    placing: between(from, placed),
-    joining: between(placed, joined),
-    routing: between(joined, routed),
-    checking: between(routed, to),
+export type StepsGone = { step: MakingStep; at: number }[]
+
+/** How long the making of a board was at each step, in ms: null for one it never was. */
+export type StepsTook = Record<MakingStep, number | null>
+
+/**
+ * How long the making of a board was at each step (see `StepsTook`), all told, from the
+ * steps it went through (`gone`) to when it was over (`to`): each time at one lasts
+ * until the next was begun.
+ */
+export function stepsTook(gone: StepsGone, to: number): StepsTook {
+  const took: StepsTook = {
+    placing: null,
+    connecting: null,
+    routing: null,
+    checking: null,
   }
+  gone.forEach(({ step, at }, index) => {
+    const until = gone[index + 1]?.at ?? to
+    took[step] = (took[step] ?? 0) + Math.max(0, until - at)
+  })
+  return took
 }
+
+/** How many times the making of a board went back to a step before the one it was at. */
+export const wentBack = (gone: StepsGone): number =>
+  gone.filter(
+    ({ step }, index) =>
+      index > 0 &&
+      MAKING_STEPS.indexOf(step) < MAKING_STEPS.indexOf(gone[index - 1].step)
+  ).length

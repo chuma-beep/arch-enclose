@@ -65,7 +65,9 @@ function Steps({
             <span className="font-medium text-foreground">{step.name}</span>
             <span className="text-muted-foreground tabular-nums">
               {step.from === null
-                ? "Not started yet"
+                ? step.state === "done"
+                  ? "Skipped"
+                  : "Not started yet"
                 : elapsed((step.to ?? now) - step.from)}
             </span>
           </span>

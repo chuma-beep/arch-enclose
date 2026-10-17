@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   answerTo,
   assemblyTools,
+  makingTools,
   modelTools,
   ToolServer,
   versionTools,
@@ -276,6 +277,27 @@ describe("answerTo", () => {
         params: { name: "nothing" },
       })
     ).toMatchObject({ error: { code: -32602 } })
+  })
+})
+
+describe("makingTools", () => {
+  it("says which step of making a board the agent is at, and takes only those", async () => {
+    const said: string[] = []
+    const [step] = makingTools((one) => said.push(one))
+    const answer = await answerTo("boards", [step], {
+      id: 1,
+      method: "tools/call",
+      params: { name: "step", arguments: { step: "routing" } },
+    })
+    expect(said).toEqual(["routing"])
+    expect(JSON.stringify(answer)).toContain("you are routing now")
+    const wrong = await answerTo("boards", [step], {
+      id: 2,
+      method: "tools/call",
+      params: { name: "step", arguments: { step: "soldering" } },
+    })
+    expect(said).toEqual(["routing"])
+    expect(JSON.stringify(wrong)).toMatch(/isError|error/)
   })
 })
 

@@ -554,6 +554,7 @@ describe("wiring", () => {
     const told = wiring(claude, "/app/kit/enclose.py", true).join("\n")
     expect(told).toContain("hand it to mcp__boards__make")
     expect(told).toContain("<board-job> block")
+    expect(told).toContain("with mcp__boards__step as you begin each one")
   })
 
   it("says where a board is built from, and where how to make one is said", () => {
@@ -663,6 +664,8 @@ describe("keeping", () => {
     expect(told).toContain("write, move or delete nothing")
     // nor the copies of its files that a project holds
     expect(told).toContain("enclose.py, screws.py")
+    // and that it never searches the whole disk, which the Mac asks the user about
+    expect(told).toContain("Never search the whole disk")
   })
 
   it("has the user told how the app can be changed: by forking it", () => {
@@ -827,7 +830,7 @@ describe("a board made in the background", () => {
     expect(now().job).toMatchObject({
       board: "main",
       name: "Main board",
-      reached: {},
+      steps: [{ step: "placing", at: expect.any(Number) }],
     })
     // the conversation is not at work while the board is made beside it
     await until(() => now().status === "idle")
@@ -874,10 +877,11 @@ describe("a board made in the background", () => {
       made: { step: "routed", parts: 2, nets: 1, connections: 1, vias: 0 },
     })
     expect(how.took).toBeGreaterThanOrEqual(0)
-    // (built once, routed: every step but the last was got to at once)
-    expect(how.steps.joining).toBe(0)
-    expect(how.steps.routing).toBe(0)
+    // (built once, routed: it went from placing its parts to checking them)
+    expect(how.steps).toMatchObject({ connecting: null, routing: null })
+    expect(how.steps.placing).toBeGreaterThanOrEqual(0)
     expect(how.steps.checking).toBeGreaterThanOrEqual(0)
+    expect(how.back).toBe(0)
     hold()
   })
 
@@ -893,8 +897,9 @@ describe("a board made in the background", () => {
       outcome: "stopped",
       builds: 0,
       made: null,
-      steps: { placing: null, joining: null, routing: null, checking: null },
+      steps: { connecting: null, routing: null, checking: null },
     })
+    expect(made[0].steps.placing).toBeGreaterThanOrEqual(0)
     hold()
   })
 
