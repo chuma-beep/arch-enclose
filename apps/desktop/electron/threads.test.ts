@@ -12,6 +12,7 @@ import {
   assembling,
   fastening,
   keeping,
+  knownAs,
   tooling,
   lookOverAsked,
   pictured,
@@ -544,6 +545,13 @@ describe("tooling", () => {
     expect(told).toContain("mcp__viewport__tool sets one of its controls")
     const grok = tooling((set, name) => `${set}__${name}`, "/k/enclose.py")
     expect(grok.join("\n")).toContain("viewport__tool sets")
+  })
+
+  it("names a tool for each agent the way that agent joins the names", () => {
+    expect(knownAs("claude")("viewport", "tool")).toBe("mcp__viewport__tool")
+    expect(knownAs("codex")("viewport", "tool")).toBe("mcp__viewport__tool")
+    expect(knownAs("grok")("viewport", "tool")).toBe("viewport__tool")
+    expect(knownAs("opencode")("viewport", "tool")).toBe("viewport_tool")
   })
 })
 

@@ -13,7 +13,7 @@ keep it manageable.
 
 ## Running it
 
-You need Node 22 or newer. macOS is the only system it has been tried on. The app is in
+You need Node 22 or newer. It is tried on macOS and on Arch Linux. The app is in
 `apps/desktop`, and its commands are run from there.
 
 ```

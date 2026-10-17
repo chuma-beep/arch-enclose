@@ -363,13 +363,15 @@ empty one, as the message box is after a message is sent, it is the model's.
 ## Other agents
 
 Claude is the one the app is made round, but not the only one it can put a message to.
-Codex and Grok answer as well, each its maker's command-line agent, installed on your
-machine and signed in there, once it is switched on: only Claude is on to begin with.
-The [settings](settings.md) show which of them the app found (Providers), switch each on
-or off, and hold what each is started with. Grok cannot see
-[pictures](messages.md#pictures).
+Codex, Grok and opencode answer as well, each its maker's command-line agent, installed
+on your machine and signed in there, once it is switched on: only Claude is on to begin
+with. The [settings](settings.md) show which of them the app found (Providers), switch
+each on or off, and hold what each is started with. Grok and
+opencode cannot see [pictures](messages.md#pictures). opencode answers with an account
+signed in or without one, on its free models; looking at it leaves one empty session
+behind in its list, which is where its models come from.
 
-The marks of all three are in a row over the [three choices](#model-effort-and-access)
+The marks of all of them are in a row over the [choices](#model-effort-and-access)
 under the message. Click one and the next conversation is had with that agent, with its
 models to choose from. A conversation under way is carried on by the agent it began
 with, so there another's mark begins a new one, [from the model as it is](#versions),

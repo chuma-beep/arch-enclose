@@ -79,6 +79,7 @@ import { followRename, listCommands, lookAtClaude } from "./claude"
 import { lookAtCodex } from "./codex"
 import { readTools } from "./custom-tools"
 import { lookAtGrok } from "./grok"
+import { lookAtOpencode } from "./opencode"
 import {
   arrange,
   bringIn,
@@ -214,7 +215,7 @@ let versions: Versions
 /** the conversation the window shows of each project, by project */
 const showing = new Map<string, string>()
 let settings: SettingsStore
-/** the agents on this machine: Claude Code, Codex, Grok */
+/** the agents on this machine: Claude Code, Codex, Grok, opencode */
 let providers: Providers
 let python: Python
 /** where the app's own tools answer, for an agent that cannot be handed them */
@@ -507,6 +508,10 @@ function createWindow(openProject: string | null) {
     backgroundColor: "#171717",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 18, y: 18 },
+    // Elsewhere the menu a Mac keeps at the top of the screen is a bar across the top of
+    // the window, in the system's colours: kept out of sight, with its shortcuts still
+    // working, and shown while Alt is held.
+    autoHideMenuBar: process.platform !== "darwin",
     // what a taskbar shows for the window; a Mac shows the app's own icon, in its Dock
     icon: path.join(
       ICONS,
@@ -2084,7 +2089,12 @@ if (!app.requestSingleInstanceLock()) {
     putFirstOnPath(() => python.bin())
     providers = new Providers({
       settings,
-      look: { claude: lookAtClaude, codex: lookAtCodex, grok: lookAtGrok },
+      look: {
+        claude: lookAtClaude,
+        codex: lookAtCodex,
+        grok: lookAtGrok,
+        opencode: lookAtOpencode,
+      },
       onChange: () => {
         send(CHANNEL.providersChanged, providers.list())
         // with an agent found, a model can be looked over and what the cards say summed up
@@ -2124,13 +2134,26 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     // Run from a checkout, the app is whatever was last built there. It is the app made
-    // into a package that has newer versions of itself to look for.
-    if (app.isPackaged && !CAPTURE) {
-      const { autoUpdater } = electronUpdater
+    // into a package that has newer versions of itself to look for. On Linux only the
+    // AppImage updates itself (its feed names nothing else): a deb, rpm or pacman install
+    // is replaced by installing the newer one, so it looks for none, rather than offer
+    // one it cannot fetch.
+    if (
+      app.isPackaged &&
+      !CAPTURE &&
+      (process.platform !== "linux" || process.env.APPIMAGE)
+    ) {
+      // (on Linux the AppImage's own updater, named: left to itself electron-updater would
+      // take a deb's, rpm's or pacman's wherever the app carries their package-type file,
+      // and an AppImage can, as all four are made at once from the one folder)
+      const updater =
+        process.platform === "linux"
+          ? new electronUpdater.AppImageUpdater()
+          : electronUpdater.autoUpdater
       if (UPDATES_FROM)
-        autoUpdater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
+        updater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
       updates = new Updates({
-        updater: autoUpdater,
+        updater,
         onChange: (update) => send(CHANNEL.updateChanged, update),
       })
       updates.start()

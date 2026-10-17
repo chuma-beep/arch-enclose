@@ -25,6 +25,7 @@ const DEFAULTS = {
 describe("providerSettings", () => {
   it("starts with Claude Code on and the others off", () => {
     expect(providerDefaults("claude").enabled).toBe(true)
+    expect(providerDefaults("opencode").enabled).toBe(false)
     expect(providerDefaults("codex").enabled).toBe(false)
     expect(providerDefaults("grok").enabled).toBe(false)
   })

@@ -245,12 +245,28 @@ export function GitHubIcon(props: IconProps) {
 export function ProviderIcon({
   provider,
   ...props
-}: IconProps & { provider: "claude" | "codex" | "grok" }) {
+}: IconProps & { provider: "claude" | "codex" | "grok" | "opencode" }) {
   const Mark =
     provider === "claude"
       ? ClaudeIcon
       : provider === "codex"
         ? OpenAIIcon
-        : GrokIcon
+        : provider === "grok"
+          ? GrokIcon
+          : OpencodeIcon
   return <Mark {...props} />
+}
+
+/**
+ * opencode's mark: a terminal's prompt, drawn the way lucide draws its terminal, so it
+ * sits beside the others without looking like a visitor. (Not its logo: there is no
+ * drawing of opencode's to borrow here.)
+ */
+function OpencodeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m4 17 6-6-6-6" />
+      <path d="M12 19h8" />
+    </Icon>
+  )
 }

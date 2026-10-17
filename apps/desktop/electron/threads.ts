@@ -1,8 +1,8 @@
-// The conversations about each project, each with one of the agents: Claude Code, Codex
-// or Grok. Each message starts the user's own install of that agent in the project
-// folder, resuming the conversation it belongs to, and turns what it reports into the
-// items the window shows. A project can have had any number of conversations, and all of
-// them are kept; only one of them is carried on at a time.
+// The conversations about each project, each with one of the agents: Claude Code,
+// Codex, Grok or opencode. Each message starts the user's own install of that agent in
+// the project folder, resuming the conversation it belongs to, and turns what it
+// reports into the items the window shows. A project can have had any number of
+// conversations, and all of them are kept; only one of them is carried on at a time.
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
@@ -55,6 +55,7 @@ import { followDoing, running } from "./claude"
 import { runCodex } from "./codex"
 import { GIST_FROM, gistOf, plain } from "./gist"
 import { runGrok } from "./grok"
+import { runOpencode } from "./opencode"
 import type { Arrangement } from "./imports"
 import {
   forgetConversations,
@@ -308,11 +309,16 @@ const STOP_BOARD_TOOL = toolName(BOARDS, "stop")
 
 /**
  * What an agent itself knows such a tool as, which is what it is told to call: Claude
- * Code and Codex by the set it is in, marked as a tool that was brought to them, and
- * Grok by the set alone.
+ * Code and Codex by the set it is in, marked as a tool that was brought to them, Grok
+ * by the set alone, and opencode by the server's name and the tool's, joined with one
+ * line, which is how opencode joins them.
  */
-const knownAs = (provider: ProviderId) => (set: string, name: string) =>
-  provider === "grok" ? `${set}__${name}` : toolName(set, name)
+export const knownAs = (provider: ProviderId) => (set: string, name: string) =>
+  provider === "grok"
+    ? `${set}__${name}`
+    : provider === "opencode"
+      ? `${set}_${name}`
+      : toolName(set, name)
 const UP_FRONT = { alwaysLoad: true }
 
 /** What each agent is called, where something is said of it to the user. */
@@ -320,17 +326,22 @@ const AGENTS: Record<ProviderId, string> = {
   claude: "Claude Code",
   codex: "Codex",
   grok: "Grok",
+  opencode: "opencode",
 }
 
 /**
- * Whether an agent takes pictures with a message. Grok does not. Of a model that is to
- * be looked over it is told in words; and the pictures a user puts with a message it
- * cannot be shown at all, which it and the user are both told.
+ * Whether an agent takes pictures with a message. Grok does not, and opencode is not
+ * taken to: it can be pointed at any of hundreds of models and only some of them see
+ * pictures, so a picture would be put to one that cannot take it as often as not.
+ * Both are told in words what a picture is, and that they are not shown it, and the
+ * user is told the same. (Per model, where opencode would say which see pictures, is
+ * something to come back to.)
  */
 const TAKES_PICTURES: Record<ProviderId, boolean> = {
   claude: true,
   codex: true,
   grok: false,
+  opencode: false,
 }
 
 function field(input: unknown, key: string): string {
@@ -2034,10 +2045,15 @@ export class Threads {
       if (provider === "claude")
         await this.claude(turn, projectId, project.path, run, finished)
       else {
-        // Codex and Grok are not handed the tools: they are told where they answer
+        // Codex, Grok and opencode are not handed the tools: they are told where
+        // they answer
         serving = await this.deps.tools.serve(tools)
         const served = { ...turn, served: serving.urls }
-        await (provider === "codex" ? runCodex(served) : runGrok(served))
+        await (provider === "codex"
+          ? runCodex(served)
+          : provider === "grok"
+            ? runGrok(served)
+            : runOpencode(served))
       }
     } catch (error) {
       if (abort.signal.aborted) {
@@ -2294,7 +2310,11 @@ export class Threads {
       else {
         serving = await this.deps.tools.serve(tools)
         const served = { ...turn, served: serving.urls }
-        await (provider === "codex" ? runCodex(served) : runGrok(served))
+        await (provider === "codex"
+          ? runCodex(served)
+          : provider === "grok"
+            ? runGrok(served)
+            : runOpencode(served))
       }
     } catch (error) {
       if (!job.abort.signal.aborted) {

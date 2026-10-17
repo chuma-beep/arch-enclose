@@ -85,6 +85,12 @@ function ask() {
       `--capture=${path.join(scratch, "window.png")}`,
       `--script=${path.join(HERE, "sandbox/ask.js")}`,
       "--wait=1500",
+      // A machine in CI has no graphics card, and Chromium draws no WebGL without one
+      // unless told to draw it in software: without it the model never shows, and the
+      // project's tools never come up to be tried.
+      ...(process.env.CI
+        ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+        : []),
     ],
     {
       cwd: APP,

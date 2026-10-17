@@ -64,8 +64,8 @@ built beside the picture before it reports.
 
 A message that was sent shows its pictures over what it said. They are kept with the
 app's own state, not in the project's folder, for as long as the project is on the list.
-Codex takes pictures the same way. Grok cannot see them: it gets your words, and the
-conversation says so.
+Codex takes pictures the same way. Grok and opencode cannot see them: they get your
+words, and the conversation says so.
 
 ## While Claude is at work
 

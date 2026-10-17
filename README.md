@@ -7,13 +7,14 @@ mean, say what should change, and Claude edits the project and rebuilds it.
 The circuit boards that go in a model are designed with
 [tscircuit](https://tscircuit.com), and drawn in the app with its libraries.
 
-Early days: for macOS only, and of CAD files it opens STEP, STL and OBJ.
+Early days: for macOS and Linux, and of CAD files it opens STEP, STL and OBJ.
 
 ## Install
 
 Download the latest version from
 [GitHub Releases](https://github.com/enclosedev/enclose/releases/latest): the disk image
-that ends in `arm64` for Apple silicon, `x64` for Intel. It needs macOS 13 or newer,
+that ends in `arm64` for Apple silicon, `x64` for Intel, or on Linux the AppImage, deb,
+pacman package or rpm. It needs macOS 13 or newer, or Linux on x86_64 or aarch64, and
 [Claude Code](https://code.claude.com/docs/en/overview) installed and signed in; and
 for circuit boards, [Node.js](https://nodejs.org).
 
