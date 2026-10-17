@@ -1,7 +1,9 @@
 // The theme creator, which the app has only as it is worked on: over the whole window, a
 // colour picker for each thing a theme colours down the left, and the window drawn in
-// what is picked on the right, in the light look or the dark. What is picked in one look
-// is that look's alone; what is not picked is the app's own. Saved, the theme is a file
+// what is picked on the right, in the light look or the dark. The window's own colours
+// are on one tab, and a circuit board's in PCB mode on another, where the window is
+// drawn in PCB mode with a board of its own, looked at the way of what is being picked.
+// What is picked in one look is that look's alone; what is not picked is the app's own. Saved, the theme is a file
 // in themes/ at the top of the repository, to be put to the app in a pull request. It
 // changes the app's own look as well, in themes/default.json, put to the app the same
 // way: then what is not picked is the app's own as src/index.css has it. What the theme
@@ -14,15 +16,19 @@ import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
 import {
   changes,
   NAME_LENGTH,
+  PCB_AREAS,
+  PCB_SLOTS,
   readLooks,
   SLOTS,
   THEME_FOLDER,
   type Mode,
+  type PcbColours,
   type ThemeColours,
   type ThemeLooks,
   type SlotId,
 } from "@shared/theme-format"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Tooltip,
@@ -30,6 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { hexOf } from "@/lib/css-color"
+import type { BoardAs } from "@/lib/store"
 import { paletteOf, useLook, useThemes, type Making } from "@/lib/themes"
 import { Mockup, MOCKUP } from "./mockup"
 import { ColourPicker } from "./picker"
@@ -40,6 +47,20 @@ const same = (a: ThemeLooks, b: ThemeLooks) =>
 
 /** The parts of the window, in the order their colours are picked. */
 const AREAS = ["Sidebar", "Viewer", "Chat", "Tools"] as const
+
+/** The tabs the colours are picked on, and what of the window is on each. */
+const TABS = [
+  { value: "general", label: "General", areas: AREAS },
+  { value: "pcb", label: "PCB", areas: PCB_AREAS },
+] as const
+type Tab = (typeof TABS)[number]["value"]
+
+/** The way PCB mode looks at a board to show what is picked of each of its ways. */
+const SHOWN_AS: Record<(typeof PCB_AREAS)[number], BoardAs> = {
+  "3D view": "3d",
+  "Technical view": "pcb",
+  Schematic: "schematic",
+}
 
 /** How long it says that it was saved, and how long that takes to fade, ms. */
 const NOTED = 3000
@@ -123,6 +144,7 @@ function Row({
   changed,
   reset,
   onReset,
+  onUse,
   children,
 }: {
   area: string
@@ -132,10 +154,17 @@ function Row({
   /** what is said of putting it back as it was */
   reset: string
   onReset: () => void
+  /** anything in it is pressed or gone into */
+  onUse?: () => void
   children: React.ReactNode
 }) {
   return (
-    <section className="flex gap-5 border-t py-5">
+    <section
+      onPointerDownCapture={onUse}
+      onFocusCapture={onUse}
+      // (the first under the tabs has their line over it)
+      className="flex gap-5 border-t py-5 first:border-t-0"
+    >
       <div className="flex w-28 shrink-0 flex-col items-start text-sm">
         <span>{area}</span>
         {label !== area && (
@@ -195,6 +224,9 @@ export function ThemeCreator({
   const [made, setMade] = React.useState<ThemeLooks>(kept.looks)
   const [name, setName] = React.useState(kept.name)
   const [part, setPart] = React.useState<PaletteName>("blue")
+  const [tab, setTab] = React.useState<Tab>("general")
+  // the way the board is looked at, on the PCB tab: as PCB mode first looks at one
+  const [boardAs, setBoardAs] = React.useState<BoardAs>("3d")
   const [said, setSaid] = React.useState<string | null>(null)
   // that it was saved, for a while: `at` tells one saving from the next
   const [note, setNote] = React.useState<{
@@ -209,6 +241,14 @@ export function ThemeCreator({
   const defaults = React.useMemo(() => defaultsOf(mode, base), [mode, base])
   const colours = made[mode]
   const palette = base ? paletteOf(colours) : paletteOf(colours, under[mode])
+  // a board's colours as they are picked, over what they are over
+  const boardColours = React.useMemo(
+    () =>
+      Object.fromEntries(
+        PCB_SLOTS.map(({ id }) => [id, colours[id] ?? defaults[id]])
+      ) as PcbColours,
+    [colours, defaults]
+  )
   const anything = changes(made.light) || changes(made.dark)
   // what is picked or called that is not as it was saved last
   const unsaved = name.trim() !== kept.name || !same(made, kept.looks)
@@ -367,65 +407,97 @@ export function ThemeCreator({
             <span className="sr-only">Close the theme creator</span>
           </Button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-8">
-          {AREAS.map((area) => (
-            <React.Fragment key={area}>
-              {SLOTS.filter((slot) => slot.area === area).map((slot) => (
-                <Row
-                  key={slot.id}
-                  area={area}
-                  label={slot.label}
-                  changed={differs(slot.id)}
-                  reset={reset}
-                  onReset={() => colour(slot.id, backTo(slot.id))}
-                >
-                  <ColourPicker
-                    label={`${area}, ${slot.label}`}
-                    value={colours[slot.id] ?? defaults[slot.id]}
-                    onChange={(value) => colour(slot.id, value)}
-                  />
-                </Row>
-              ))}
-              {area === "Viewer" && (
-                <div ref={parts} className="scroll-my-4">
+        {/* the window's own colours, or a board's */}
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as Tab)}
+          className="min-h-0 flex-1 gap-0"
+        >
+          <TabsList
+            variant="line"
+            className="mx-7 h-10! w-auto shrink-0 justify-start gap-5 rounded-none border-b p-0"
+          >
+            {TABS.map(({ value, label }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="h-full flex-none px-0 after:-bottom-px! after:h-px!"
+              >
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent
+            value={tab}
+            // (each tab from its top)
+            key={tab}
+            className="min-h-0 overflow-y-auto px-7 pb-8"
+          >
+            {TABS.find(({ value }) => value === tab)!.areas.map((area) => (
+              <React.Fragment key={area}>
+                {SLOTS.filter((slot) => slot.area === area).map((slot) => (
                   <Row
-                    area="Viewer"
-                    label="Parts"
-                    changed={partDiffers(part)}
+                    key={slot.id}
+                    area={area}
+                    label={slot.label}
+                    changed={differs(slot.id)}
                     reset={reset}
-                    onReset={() => partColour(part, partBackTo(part))}
+                    onReset={() => colour(slot.id, backTo(slot.id))}
+                    onUse={
+                      area in SHOWN_AS
+                        ? () =>
+                            setBoardAs(SHOWN_AS[area as keyof typeof SHOWN_AS])
+                        : undefined
+                    }
                   >
-                    {/* each of the palette's colours, the one being changed lit; a
-                        part in the window opposite picks its colour too */}
-                    <div className="grid grid-cols-7 gap-1.5">
-                      {PALETTE_NAMES.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          title={name}
-                          aria-pressed={part === name}
-                          onClick={() => setPart(name)}
-                          className="relative aspect-square cursor-pointer rounded-full ring-1 ring-foreground/15 outline-offset-2 outline-foreground ring-inset hover:ring-foreground/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:outline-2"
-                          style={{ background: palette[name] }}
-                        >
-                          {partDiffers(name) && (
-                            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-foreground ring-2 ring-background" />
-                          )}
-                          <span className="sr-only">{name}</span>
-                        </button>
-                      ))}
-                    </div>
                     <ColourPicker
-                      label={`Parts, ${part}`}
-                      value={palette[part]}
-                      onChange={(value) => partColour(part, value)}
+                      label={`${area}, ${slot.label}`}
+                      value={colours[slot.id] ?? defaults[slot.id]}
+                      onChange={(value) => colour(slot.id, value)}
                     />
                   </Row>
-                </div>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
+                ))}
+                {area === "Viewer" && (
+                  <div ref={parts} className="scroll-my-4">
+                    <Row
+                      area="Viewer"
+                      label="Parts"
+                      changed={partDiffers(part)}
+                      reset={reset}
+                      onReset={() => partColour(part, partBackTo(part))}
+                    >
+                      {/* each of the palette's colours, the one being changed lit; a
+                          part in the window opposite picks its colour too */}
+                      <div className="grid grid-cols-7 gap-1.5">
+                        {PALETTE_NAMES.map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            title={name}
+                            aria-pressed={part === name}
+                            onClick={() => setPart(name)}
+                            className="relative aspect-square cursor-pointer rounded-full ring-1 ring-foreground/15 outline-offset-2 outline-foreground ring-inset hover:ring-foreground/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:outline-2"
+                            style={{ background: palette[name] }}
+                          >
+                            {partDiffers(name) && (
+                              <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-foreground ring-2 ring-background" />
+                            )}
+                            <span className="sr-only">{name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <ColourPicker
+                        label={`Parts, ${part}`}
+                        value={palette[part]}
+                        onChange={(value) => partColour(part, value)}
+                      />
+                    </Row>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </TabsContent>
+        </Tabs>
       </aside>
       <main className="relative min-w-0 flex-1">
         <div className="drag absolute inset-x-0 top-0 h-12" />
@@ -468,6 +540,16 @@ export function ThemeCreator({
             colours={colours}
             base={base}
             palette={palette}
+            board={
+              tab === "pcb"
+                ? {
+                    as: boardAs,
+                    onAs: setBoardAs,
+                    colours: boardColours,
+                    ground: colours.viewer ?? defaults.viewer,
+                  }
+                : null
+            }
             picked={part}
             onPick={(name) => {
               setPart(name)

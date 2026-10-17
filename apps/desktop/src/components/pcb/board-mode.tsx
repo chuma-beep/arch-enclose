@@ -18,6 +18,7 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 
 import type { BoardSummary } from "@shared/api"
 import type { Building } from "@shared/board-format"
+import type { PcbColours } from "@shared/theme-format"
 import { LIVE } from "@/components/steps"
 import { Badge } from "@/components/ui/badge"
 import { useThemeColors } from "@/lib/css-color"
@@ -41,7 +42,7 @@ import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
 import { UnfinishedBadge, WorkingBadge } from "./board-steps"
-import { inOurColours } from "./colours"
+import { boardPaint, inOurColours, repaint } from "./colours"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -56,7 +57,7 @@ const FURTHEST = 0.5
  * board's files are the project's, and anything could have been written into them),
  * made to fill what it is put in. With how big it was drawn, in its own pixels.
  */
-function readDrawing(
+export function readDrawing(
   markup: string
 ): { svg: SVGSVGElement; width: number; height: number } | null {
   const read = new DOMParser().parseFromString(markup, "image/svg+xml")
@@ -568,12 +569,15 @@ function unpicked(line: LineSegments2) {
  * STEP file has them) and the view's camera comes to it from its front right corner, as
  * to a model. With the box round it, in the model's frame, which the camera goes by.
  */
-function standing(board: THREE.Group) {
+export function standing(board: THREE.Group, colours: PcbColours) {
   const holder = new THREE.Group()
   holder.rotation.y = Math.PI
   holder.add(board)
   const made: { dispose(): void }[] = []
   const sweep = newSweep()
+  const paint = boardPaint(colours)
+  // the faces of the board's edge, whose colour is the app's (see colours.ts)
+  const edges: { material: THREE.MeshStandardMaterial; own: THREE.Color }[] = []
   const slight = Math.cos((CREASE * Math.PI) / 180)
   const meshes: THREE.Mesh[] = []
   board.traverse((thing) => {
@@ -599,9 +603,12 @@ function standing(board: THREE.Group) {
         made.push(material)
         const copy = (material as THREE.Material).clone()
         // (the board itself in the app's colours, which are then its own)
-        inOurColours(copy)
-        if (copy instanceof THREE.MeshStandardMaterial)
-          faces.push({ material: copy, own: copy.color.clone() })
+        const ours = inOurColours(copy, paint)
+        if (copy instanceof THREE.MeshStandardMaterial) {
+          const face = { material: copy, own: copy.color.clone() }
+          faces.push(face)
+          if (ours === "edge") edges.push(face)
+        }
         return copy
       })
       thing.material = Array.isArray(thing.material) ? own : own[0]
@@ -681,6 +688,17 @@ function standing(board: THREE.Group) {
           if (much === undefined) material.color.copy(own).multiplyScalar(rest)
           else material.color.copy(own).lerp(colour, much)
         }
+    },
+    /**
+     * Have the board itself drawn in other colours of the theme's: what is lit of it
+     * is lit again (by `light`) to be seen in them.
+     */
+    paint: (colours: PcbColours) => {
+      repaint(paint, colours)
+      for (const face of edges) {
+        face.own.copy(paint.edge)
+        face.material.color.copy(paint.edge)
+      }
     },
     // (and in the view's own frame, for the light to go across no more than the board)
     seen: new THREE.Box3(min.clone(), max.clone()),
@@ -917,14 +935,16 @@ function Picking({
 /**
  * The parts of the board that are lit: the one picked out, all the way, in the colour a
  * part of the model is when it is picked out; and those whose square in the list of
- * them the pointer is over, less.
+ * them the pointer is over, less. And the board itself in the theme's colours, as the
+ * window is put in another.
  */
 function Lighting({ shown }: { shown: ReturnType<typeof standing> }) {
   const picked = useStore((state) => state.boardPicked?.name ?? null)
   const hover = useStore((state) => state.boardHover)
-  const { picked: colour } = useThemeColors()
+  const { picked: colour, pcb } = useThemeColors()
   const invalidate = useThree((state) => state.invalidate)
   React.useEffect(() => {
+    shown.paint(pcb)
     const how = new Map<string, number>()
     for (const name of hover ?? []) how.set(name, HOVER_LIT)
     if (picked) how.set(picked, 1)
@@ -932,7 +952,7 @@ function Lighting({ shown }: { shown: ReturnType<typeof standing> }) {
     // board goes dark around them while their square is pointed at)
     shown.light(how, colour, hover && hover.length > 0 ? HOVER_REST : 1)
     invalidate()
-  }, [shown, picked, hover, colour, invalidate])
+  }, [shown, picked, hover, colour, pcb, invalidate])
   return null
 }
 
@@ -985,13 +1005,16 @@ function InThreeD({
   const [shown, setShown] = React.useState<ReturnType<typeof standing> | null>(
     null
   )
+  // (in the theme's colours as they were at first: Lighting has it in theirs now)
+  const { pcb } = useThemeColors()
+  const colours = React.useRef(pcb)
   React.useEffect(() => {
     let over = false
     let had: ReturnType<typeof standing> | null = null
     void loadBoard(url).then(
       (loaded) => {
         if (over) return disposeBoard(loaded)
-        had = standing(loaded)
+        had = standing(loaded, colours.current)
         setShown(had)
       },
       () => {
@@ -1064,39 +1087,52 @@ function InThreeD({
  * A board drawn the one way or the other, as SVG: null while it is being drawn, and not
  * at all in 3D. What draws it is loaded the first time it is wanted: it is a good deal of
  * the app, and no use to a project that has no boards. False where it cannot be drawn.
+ * Drawn again in the theme's colours as they change.
  */
-function useDrawn(
+export function useDrawn(
   circuit: Circuit | null,
   as: BoardAs,
+  colours: PcbColours,
   dark: boolean,
   ground: string,
   side: "top" | "bottom"
 ): string | false | null {
   const [drawn, setDrawn] = React.useState<{
-    of: [Circuit, BoardAs, string, string]
+    of: [Circuit, BoardAs, string, string, string]
     markup: string | false
   } | null>(null)
+  // (by what they are, and not by which object has them)
+  const inColours = JSON.stringify(colours)
   React.useEffect(() => {
     if (!circuit || as === "3d") return
     let over = false
     void import("./drawing").then(({ drawingOf }) => {
       let markup: string | false
       try {
-        markup = drawingOf(circuit, as, dark, ground, side)
+        markup = drawingOf(
+          circuit,
+          as,
+          JSON.parse(inColours) as PcbColours,
+          dark,
+          ground,
+          side
+        )
       } catch {
         // nothing tscircuit could draw: it is said so
         markup = false
       }
-      if (!over) setDrawn({ of: [circuit, as, ground, side], markup })
+      if (!over)
+        setDrawn({ of: [circuit, as, inColours, ground, side], markup })
     })
     return () => {
       over = true
     }
-  }, [circuit, as, dark, ground, side])
+  }, [circuit, as, inColours, dark, ground, side])
   if (!drawn || as === "3d") return null
-  const [was, wasAs, wasGround, wasSide] = drawn.of
+  const [was, wasAs, wasColours, wasGround, wasSide] = drawn.of
   return was === circuit &&
     wasAs === as &&
+    wasColours === inColours &&
     wasGround === ground &&
     wasSide === side
     ? drawn.markup
@@ -1136,7 +1172,7 @@ export function BoardMode({
   board: BoardSummary
 }) {
   const as: BoardAs = useStore((state) => state.view.boardAs)
-  const { dark, backdrop } = useThemeColors()
+  const { dark, backdrop, pcb } = useThemeColors()
   // on the view's own ground, as the model is
   const ground = `#${backdrop.getHexString()}`
   const { circuit, trouble } = useCircuit(projectId, board)
@@ -1146,6 +1182,7 @@ export function BoardMode({
   const markup = useDrawn(
     circuit,
     as,
+    pcb,
     dark,
     ground,
     as === "pcb" ? side : "top"

@@ -1,9 +1,11 @@
 // The window in a theme being made, for its colours to be seen as they are picked: the
 // projects' cards in each of the ways a card can be, a part in each of the palette's
 // colours in the view, the project's tools, and a conversation with what the user says in
-// it in each of its bubbles. It is drawn as the window is, in the same classes and
-// tokens, but of nothing real: none of it does anything but show a colour, apart from
-// the parts, which pick their colour to be changed.
+// it in each of its bubbles. Or, for a circuit board's colours, the view in PCB mode,
+// with a board in it. It is drawn as the window is, in the same classes and tokens, but
+// of nothing real: none of it does anything but show a colour, apart from the parts,
+// which pick their colour to be changed, and PCB mode's buttons for the ways a board is
+// looked at, which change it.
 import * as React from "react"
 import * as THREE from "three"
 import { Canvas } from "@react-three/fiber"
@@ -18,18 +20,29 @@ import {
   DownloadIcon,
   Grid3x3Icon,
   HammerIcon,
+  LayersIcon,
   MessageSquareIcon,
   MoveVerticalIcon,
   PlusIcon,
+  Rotate3dIcon,
   SearchIcon,
   SettingsIcon,
+  WorkflowIcon,
+  XIcon,
 } from "lucide-react"
 
 import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
-import type { Mode, ThemeColours } from "@shared/theme-format"
+import type { Mode, PcbColours, ThemeColours } from "@shared/theme-format"
 import { EDGE } from "@/components/viewport/paint"
+import { BOARD_AS, type BoardAs } from "@/lib/store"
 import { propertiesOf } from "@/lib/themes"
 import { CORNER, LIGHTS, LOOKING_FROM, PLACES, shapeOf } from "./parts"
+import {
+  SAMPLE_NAME,
+  SampleBoard,
+  sampleSize,
+  useSampleCircuit,
+} from "./sample-board"
 
 /** How big the window is drawn, before it is made to fit where it is shown. */
 export const MOCKUP = { width: 1280, height: 800 }
@@ -229,10 +242,14 @@ function Parts({
   )
 }
 
+// as the buttons down the view's right-hand edge are drawn (tools.tsx)
+const ROUND =
+  "flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10"
+const LIT_ROUND = "bg-primary text-primary-foreground ring-primary"
+
 /** Down the view's right-hand edge: how it is looked at, and the project's own tools, open. */
 function Rail() {
-  const round =
-    "flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10"
+  const round = ROUND
   return (
     <>
       <div className="absolute top-3 right-3 flex flex-col gap-2">
@@ -285,6 +302,87 @@ function Rail() {
       </div>
     </>
   )
+}
+
+/** The ways a board is looked at in PCB mode, as the buttons for them have it (tools.tsx). */
+const BOARD_WAYS: Record<BoardAs, { label: string; Icon: typeof LayersIcon }> =
+  {
+    pcb: { label: "Technical view", Icon: LayersIcon },
+    "3d": { label: "3D view", Icon: Rotate3dIcon },
+    schematic: { label: "Schematic", Icon: WorkflowIcon },
+  }
+
+/**
+ * Down the view's right-hand edge in PCB mode: the conversation at the top, and in the
+ * middle the ways the board is looked at, which change it here as they do there, what is
+ * on it, and what leaves PCB mode, in red.
+ */
+function BoardRail({ as, onAs }: { as: BoardAs; onAs: (as: BoardAs) => void }) {
+  return (
+    <>
+      <div className="absolute top-3 right-3 flex flex-col gap-2">
+        <span className={cn(ROUND, LIT_ROUND)}>
+          <MessageSquareIcon className="size-4" strokeWidth={1.5} />
+        </span>
+      </div>
+      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-2">
+        {BOARD_AS.map((way) => {
+          const { label, Icon } = BOARD_WAYS[way]
+          return (
+            <button
+              key={way}
+              type="button"
+              title={label}
+              aria-pressed={as === way}
+              onClick={() => onAs(way)}
+              className={cn(
+                ROUND,
+                "cursor-pointer",
+                as === way ? LIT_ROUND : "hover:bg-background"
+              )}
+            >
+              <Icon className="size-4" strokeWidth={1.5} />
+              <span className="sr-only">{label}</span>
+            </button>
+          )
+        })}
+        <span className={ROUND}>
+          <BoxesIcon className="size-4" strokeWidth={1.5} />
+        </span>
+        <span
+          className={cn(ROUND, "bg-destructive text-white ring-destructive")}
+        >
+          <XIcon className="size-4" strokeWidth={1.5} />
+        </span>
+      </div>
+    </>
+  )
+}
+
+/** What the board is, over it at the top: what it is called, and how big it is. */
+function BoardTitle() {
+  const size = sampleSize(useSampleCircuit())
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center">
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-medium">{SAMPLE_NAME}</span>
+        {size && (
+          <span className="text-foreground/45 tabular-nums">{size}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** A board in PCB mode, as the window is shown with one (see `Mockup`). */
+export type BoardShown = {
+  /** the way it is looked at, and what changes that */
+  as: BoardAs
+  onAs: (as: BoardAs) => void
+  /** its colours, as they are picked, over what they are over */
+  colours: PcbColours
+  /** the view's ground, likewise */
+  ground: string
 }
 
 /** What the user says, in its bubble: as the conversation draws it (thread.tsx). */
@@ -381,6 +479,7 @@ export function Mockup({
   colours,
   base,
   palette,
+  board,
   picked,
   onPick,
 }: {
@@ -390,6 +489,8 @@ export function Mockup({
   base: boolean
   /** the palette as the colours have it, over what they are over */
   palette: Record<PaletteName, string>
+  /** the view is in PCB mode, with this board: null for the model's parts */
+  board: BoardShown | null
   /** the part colour being changed, if one is */
   picked: PaletteName | null
   onPick: (name: PaletteName) => void
@@ -407,7 +508,19 @@ export function Mockup({
       <div className="relative min-w-0 flex-1">
         {/* between the cards and the buttons down the right */}
         <div className="absolute inset-y-0 right-16 left-62">
-          <Parts palette={palette} picked={picked} onPick={onPick} />
+          {board ? (
+            <>
+              <SampleBoard
+                as={board.as}
+                colours={board.colours}
+                dark={mode === "dark"}
+                ground={board.ground}
+              />
+              <BoardTitle />
+            </>
+          ) : (
+            <Parts palette={palette} picked={picked} onPick={onPick} />
+          )}
         </div>
         {/* the window's own buttons, in its corner */}
         <div className="absolute top-4 left-4.5 flex gap-2">
@@ -423,7 +536,7 @@ export function Mockup({
         <span className="absolute bottom-4 left-4.5 flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10">
           <SettingsIcon className="size-4" strokeWidth={1.5} />
         </span>
-        <Rail />
+        {board ? <BoardRail as={board.as} onAs={board.onAs} /> : <Rail />}
       </div>
       <Conversation />
     </div>

@@ -34,8 +34,10 @@ A theme colours some of the window in its own way, in the light look and in the 
 the projects' cards and the line round them, the words on one that is working or needs
 you, and the light that runs across those while it works; the view behind the model,
 and the colours its parts are drawn in; the conversation's ground, and the bubble of
-what you say in it; and the project's own tools. What a theme leaves out is the app's
-own. A theme is chosen in **Appearance**, and stays chosen across light and
+what you say in it; the project's own tools; and a circuit board in PCB mode, in each of
+its three views: its mask, traces, pads and print in 3D, its copper on each side, print
+and edge in the technical view, and the lines, fill, wires, names and values of its
+schematic. What a theme leaves out is the app's own. A theme is chosen in **Appearance**, and stays chosen across light and
 dark: **System**, **Light** or **Dark**, beside the section's name, says which of its two
 looks is shown. The app's own colours, **Default**, are always there, and cannot be
 removed.
@@ -46,7 +48,10 @@ with the app. To make one, run the app from a checkout (see
 theme creator over the whole window. Down its left are the colours there are to pick;
 on its right, the window drawn in them, with a card in each of the ways a card can be, a
 part in each of the palette's colours, and a conversation. A click on one of those parts
-picks its colour to be changed. **Light** and **Dark**, at the top right, say which look
+picks its colour to be changed. The window's own colours are under **General**, and a
+circuit board's under **PCB**, where the window is drawn in PCB mode with a board of its
+own: it turns to the view whose colour you are picking, and PCB mode's buttons down its
+right change the view too. **Light** and **Dark**, at the top right, say which look
 is being made, and what is picked in one is that look's alone: the other keeps the
 app's colours until you pick some for it too. The title is the theme's name, up to 20
 characters: click it to name the theme. **Save theme**, which comes up once the theme

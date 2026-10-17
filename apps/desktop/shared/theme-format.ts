@@ -1,11 +1,11 @@
 // A theme: colours of its own for some of what the window is drawn in, in the light look
-// and in the dark, and for the parts of a model. What it leaves out is the app's own. A
-// theme is a file to itself in themes/ at the top of the repository, which goes out with
-// the app; run from a checkout, the app's theme creator writes one there, for it to be
-// put to the app in a pull request. The app's own look, light and dark, is no theme
-// that can be taken away: it is src/index.css and the palette, with what
-// themes/default.json changes of them, under every theme. That file is written in the
-// theme creator too, and put to the app the same way.
+// and in the dark, for the parts of a model, and for a circuit board in PCB mode. What it
+// leaves out is the app's own. A theme is a file to itself in themes/ at the top of the
+// repository, which goes out with the app; run from a checkout, the app's theme creator
+// writes one there, for it to be put to the app in a pull request. The app's own look,
+// light and dark, is no theme that can be taken away: it is src/index.css and the
+// palette, with what themes/default.json changes of them, under every theme. That file
+// is written in the theme creator too, and put to the app the same way.
 import { PALETTE_NAMES, type PaletteName } from "./palette"
 
 /** The folder at the top of the repository that the themes are in. */
@@ -88,9 +88,118 @@ export const SLOTS = [
     detail: "The project's own tools, and their panel",
     token: "--tool",
   },
+  // and a circuit board in PCB mode, each of the three ways it is looked at
+  {
+    id: "board-mask",
+    area: "3D view",
+    label: "Solder mask",
+    detail: "Most of the board: what covers it",
+    token: "--board-mask",
+  },
+  {
+    id: "board-traces",
+    area: "3D view",
+    label: "Traces",
+    detail: "The mask over copper, and the board's edge",
+    token: "--board-traces",
+  },
+  {
+    id: "board-pads",
+    area: "3D view",
+    label: "Pads",
+    detail: "Bare copper, where the parts are soldered",
+    token: "--board-pads",
+  },
+  {
+    id: "board-print",
+    area: "3D view",
+    label: "Print",
+    detail: "What is printed on the board, and its keep-outs",
+    token: "--board-print",
+  },
+  {
+    id: "technical-top",
+    area: "Technical view",
+    label: "Top copper",
+    detail: "The traces and pads on the top",
+    token: "--technical-top",
+  },
+  {
+    id: "technical-bottom",
+    area: "Technical view",
+    label: "Bottom copper",
+    detail: "The traces and pads underneath",
+    token: "--technical-bottom",
+  },
+  {
+    id: "technical-print",
+    area: "Technical view",
+    label: "Print",
+    detail: "What is printed on the board",
+    token: "--technical-print",
+  },
+  {
+    id: "technical-edge",
+    area: "Technical view",
+    label: "Board edge",
+    detail: "The board's outline, and its holes",
+    token: "--technical-edge",
+  },
+  {
+    id: "schematic-lines",
+    area: "Schematic",
+    label: "Lines",
+    detail: "Each part's outline, and its pins",
+    token: "--schematic-lines",
+  },
+  {
+    id: "schematic-fill",
+    area: "Schematic",
+    label: "Fill",
+    detail: "Inside each part",
+    token: "--schematic-fill",
+  },
+  {
+    id: "schematic-wires",
+    area: "Schematic",
+    label: "Wires",
+    detail: "What joins the parts",
+    token: "--schematic-wires",
+  },
+  {
+    id: "schematic-names",
+    area: "Schematic",
+    label: "Names",
+    detail: "What each part and pin is called",
+    token: "--schematic-names",
+  },
+  {
+    id: "schematic-values",
+    area: "Schematic",
+    label: "Values",
+    detail: "Each part's value, and the nets' labels",
+    token: "--schematic-values",
+  },
 ] as const
 
 export type SlotId = (typeof SLOTS)[number]["id"]
+
+/** The ways PCB mode looks at a circuit board, as what a theme colours in each is grouped. */
+export const PCB_AREAS = ["3D view", "Technical view", "Schematic"] as const
+
+/** What a theme colours of a circuit board, in PCB mode. */
+export type PcbSlotId = Extract<
+  (typeof SLOTS)[number],
+  { area: (typeof PCB_AREAS)[number] }
+>["id"]
+
+/** Each of them, as SLOTS has it. */
+export const PCB_SLOTS = SLOTS.filter((slot) =>
+  (PCB_AREAS as readonly string[]).includes(slot.area)
+) as Extract<(typeof SLOTS)[number], { id: PcbSlotId }>[]
+
+/** A circuit board's colours, as PCB mode draws it: each "#rrggbb". */
+export type PcbColours = Record<PcbSlotId, string>
 
 /**
  * A theme's colours for one look, each "#rrggbb": those it changes, of the window and of

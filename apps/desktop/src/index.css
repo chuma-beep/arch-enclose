@@ -2,6 +2,8 @@
    folder, Tailwind reads every model's meshes in examples/ as well, and a big one sends
    the dev server through all the memory there is. */
 @import "tailwindcss" source("../src");
+/* nor in the board the theme creator shows, which is tscircuit's, and big */
+@source not "./components/theme-creator/sample";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
@@ -146,6 +148,25 @@
   /* what a floating card does to the 3D view behind it, so its text stays readable
        whatever the model's colour */
   --glass: blur(20px) saturate(1.3) brightness(1.2);
+  /* A circuit board in PCB mode (shared/theme-format.ts): in 3D, the board as it is
+       made, in the app's greens and not tscircuit's (components/pcb/colours.ts); as it
+       is drawn, its copper in KiCad's colours for each side, and its print and edge
+       dark on the light ground; and its schematic, in one ink, as for paper
+       (components/pcb/drawing.ts). Each is said again for the dark, so that a theme's
+       colour for one look is not had in the other. */
+  --board-mask: #005413;
+  --board-traces: #006116;
+  --board-pads: #e1cf4d;
+  --board-print: #ffffff;
+  --technical-top: #c83434;
+  --technical-bottom: #4d7fc4;
+  --technical-print: #1c1c1c;
+  --technical-edge: #707271;
+  --schematic-lines: #161e18;
+  --schematic-fill: #ffffff;
+  --schematic-wires: #009600;
+  --schematic-names: #006464;
+  --schematic-values: #006464;
 }
 
 .dark {
@@ -195,6 +216,19 @@
   /* (lighter than what is going on, in the dark) */
   --attention-shimmer: oklch(from var(--attention) max(0.8, calc(l + 0.4)) c h);
   --glass: blur(20px) saturate(1.3) brightness(0.55);
+  --board-mask: #005413;
+  --board-traces: #006116;
+  --board-pads: #e1cf4d;
+  --board-print: #ffffff;
+  --technical-top: #c83434;
+  --technical-bottom: #4d7fc4;
+  --technical-print: #ffffff;
+  --technical-edge: #d0d2cd;
+  --schematic-lines: #e8eeea;
+  --schematic-fill: #1e2620;
+  --schematic-wires: #56d676;
+  --schematic-names: #76cec2;
+  --schematic-values: #d6e2d9;
 }
 
 @layer base {

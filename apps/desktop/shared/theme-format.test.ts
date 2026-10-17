@@ -2,11 +2,23 @@ import { describe, expect, it } from "vitest"
 
 import {
   changes,
+  PCB_AREAS,
+  PCB_SLOTS,
   readLooks,
   readTheme,
   themeFile,
   themeIdOf,
 } from "./theme-format"
+
+describe("PCB_SLOTS", () => {
+  it("is what a theme colours of a board, each in one of PCB mode's ways", () => {
+    expect(PCB_SLOTS.length).toBeGreaterThan(0)
+    for (const slot of PCB_SLOTS) expect(PCB_AREAS).toContain(slot.area)
+    expect(new Set(PCB_SLOTS.map(({ token }) => token)).size).toBe(
+      PCB_SLOTS.length
+    )
+  })
+})
 
 describe("readTheme", () => {
   it("reads a theme's name and the colours of each look", () => {
@@ -21,6 +33,23 @@ describe("readTheme", () => {
       name: "Ocean",
       light: { viewer: "#f2f6fa", parts: { blue: "#336699" } },
       dark: { tools: "#00aaff" },
+    })
+  })
+
+  it("reads a circuit board's colours, each of the ways PCB mode looks at one", () => {
+    expect(
+      readTheme("copper", {
+        name: "Copper",
+        dark: {
+          "board-mask": "#1A1A1A",
+          "technical-top": "#ff8800",
+          "schematic-wires": "#00ccff",
+        },
+      })?.dark
+    ).toEqual({
+      "board-mask": "#1a1a1a",
+      "technical-top": "#ff8800",
+      "schematic-wires": "#00ccff",
     })
   })
 
@@ -82,6 +111,7 @@ describe("changes", () => {
     expect(changes({})).toBe(false)
     expect(changes({ parts: {} })).toBe(false)
     expect(changes({ chat: "#000000" })).toBe(true)
+    expect(changes({ "board-pads": "#d4a017" })).toBe(true)
     expect(changes({ parts: { red: "#ff0000" } })).toBe(true)
   })
 })

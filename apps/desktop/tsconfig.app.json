@@ -27,5 +27,8 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["src", "shared"]
+  "include": ["src", "shared"],
+  // the theme creator's circuit board, written for tscircuit, which builds it: no part
+  // of the app
+  "exclude": ["src/components/theme-creator/sample"]
 }

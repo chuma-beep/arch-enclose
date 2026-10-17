@@ -2,6 +2,7 @@ import * as React from "react"
 import * as THREE from "three"
 
 import type { PaletteName } from "@shared/palette"
+import { PCB_SLOTS, type PcbColours } from "@shared/theme-format"
 import { currentPalette } from "./palette"
 
 // The theme's tokens are oklch(), which THREE.Color can't parse. A 2D canvas can:
@@ -30,6 +31,15 @@ function resolve(css: string): THREE.Color {
 /** A colour as CSS gives one (oklch(), a name, a var() that has been read), as "#rrggbb". */
 export const hexOf = (css: string) => `#${resolve(css).getHexString()}`
 
+/** A circuit board's colours in PCB mode, as what has this style has them. */
+export const pcbColoursOf = (style: CSSStyleDeclaration) =>
+  Object.fromEntries(
+    PCB_SLOTS.map(({ id, token }) => [
+      id,
+      hexOf(style.getPropertyValue(token).trim()),
+    ])
+  ) as PcbColours
+
 export type ThemeColors = {
   /** what the view is drawn over: the window's own colour behind it */
   backdrop: THREE.Color
@@ -44,6 +54,8 @@ export type ThemeColors = {
   axes: { x: THREE.Color; y: THREE.Color; z: THREE.Color }
   /** the palette's colours, as the theme the window is in has them in its look */
   palette: Record<PaletteName, string>
+  /** a circuit board's, in PCB mode, likewise */
+  pcb: PcbColours
   dark: boolean
 }
 
@@ -59,6 +71,7 @@ function read(): ThemeColors {
     section: token("--section"),
     axes: { x: token("--axis-x"), y: token("--axis-y"), z: token("--axis-z") },
     palette: currentPalette(),
+    pcb: pcbColoursOf(style),
     dark: document.documentElement.classList.contains("dark"),
   }
 }

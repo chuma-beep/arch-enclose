@@ -1,7 +1,7 @@
 // A circuit board drawn as tscircuit draws one (circuit-to-svg): as it is made, its
 // copper, pads and print on the board; or as its schematic. Each is drawn on the ground
-// PCB mode has, in the dark or the light. This is loaded only when a board is first
-// drawn: it is a good deal of the app.
+// PCB mode has, in the dark or the light, in the theme's colours for it. This is loaded
+// only when a board is first drawn: it is a good deal of the app.
 import {
   convertCircuitJsonToPcbSvg,
   convertCircuitJsonToSchematicSvg,
@@ -9,6 +9,7 @@ import {
 } from "circuit-to-svg"
 import type { AnyCircuitElement } from "circuit-json"
 
+import type { PcbColours } from "@shared/theme-format"
 import type { Circuit } from "./boards"
 import { DRAWN } from "./ground"
 
@@ -16,44 +17,40 @@ import { DRAWN } from "./ground"
  * The schematic's colours. tscircuit draws one as KiCad does, for paper, its parts and
  * pins in red: here they are drawn in one ink, white on the dark ground and near black
  * on the light, with the wires green and the names in a second colour, as they were.
+ * Those are the theme's (shared/theme-format.ts); the rest are the app's, in the dark,
+ * and KiCad's in the light.
  */
-const TEAL = "rgb(118, 206, 194)"
-const WORDS = "rgb(214, 226, 217)"
-const INK = { dark: "rgb(232, 238, 234)", light: "rgb(22, 30, 24)" }
-const inked = (ink: string) => ({
-  component_outline: ink,
-  pin: ink,
-  pin_number: ink,
-  label_global: ink,
-  no_connect: ink,
-})
-const SCHEMATIC = {
-  dark: {
-    ...inked(INK.dark),
-    component_body: "rgb(30, 38, 32)",
-    pin_name: TEAL,
-    reference: TEAL,
-    value: WORDS,
-    wire: "rgb(86, 214, 118)",
-    junction: "rgb(86, 214, 118)",
-    label_local: WORDS,
-    label_hier: "rgb(222, 190, 110)",
-    net_name: "rgb(150, 162, 153)",
-    label_background: "rgba(10, 14, 11, 0.6)",
-    aux_items: WORDS,
-    table: "rgb(150, 162, 153)",
-    note: "rgb(140, 170, 255)",
-    fields: "rgb(206, 140, 220)",
-  },
-  light: {
-    ...inked(INK.light),
-    component_body: "rgb(255, 255, 255)",
-  },
+function schematicOf(colours: PcbColours, dark: boolean) {
+  const ink = colours["schematic-lines"]
+  const values = colours["schematic-values"]
+  return {
+    component_outline: ink,
+    pin: ink,
+    pin_number: ink,
+    label_global: ink,
+    no_connect: ink,
+    component_body: colours["schematic-fill"],
+    wire: colours["schematic-wires"],
+    junction: colours["schematic-wires"],
+    pin_name: colours["schematic-names"],
+    reference: colours["schematic-names"],
+    value: values,
+    label_local: values,
+    aux_items: values,
+    ...(dark && {
+      label_hier: "rgb(222, 190, 110)",
+      net_name: "rgb(150, 162, 153)",
+      label_background: "rgba(10, 14, 11, 0.6)",
+      table: "rgb(150, 162, 153)",
+      note: "rgb(140, 170, 255)",
+      fields: "rgb(206, 140, 220)",
+    }),
+  }
 }
 /**
  * And the colours tscircuit writes into some of it for itself, whatever it is told: a
- * chip's name; and the reds of the numbers of some pins, and of some of its symbols (a
- * crystal's, say), which are all the parts' ink here.
+ * chip's name, which is in the names' colour here; and the reds of the numbers of some
+ * pins, and of some of its symbols (a crystal's, say), which are all the parts' ink.
  */
 const CHIP_NAME = "#006464"
 const REDS = [
@@ -64,35 +61,28 @@ const REDS = [
   "#8D2323",
 ]
 
-/** The colour a board's edge is drawn in: KiCad's grey, which on the light is too pale. */
-const edgeOf = (dark: boolean) =>
-  dark ? "rgb(208, 210, 205)" : "rgba(20, 24, 22, 0.6)"
-
-/**
- * The colour of what is printed on a board, its lettering and the outlines of its
- * parts, on either side: white, as it is printed, and not KiCad's colour for each side;
- * near black on the light ground, where white would not be seen.
- */
-const printOf = (dark: boolean) => (dark ? "#ffffff" : "#1c1c1c")
-
 /**
  * The holes through the board that are no part of a pad, its mounting holes, drawn with
  * an edge, as its own edge is: a hole is the ground showing through, and with nothing
  * drawn round it, on the ground, it would not be seen at all. (A pad's hole has the
  * pad's copper round it.) The line is as thin at any zoom.
  */
-const holesEdged = (markup: string, dark: boolean) =>
+const holesEdged = (markup: string, colours: PcbColours) =>
   markup.replaceAll(
     'data-type="pcb_hole"',
-    `stroke="${edgeOf(dark)}" stroke-width="1" vector-effect="non-scaling-stroke" data-type="pcb_hole"`
+    `stroke="${colours["technical-edge"]}" stroke-width="1" vector-effect="non-scaling-stroke" data-type="pcb_hole"`
   )
 
 /**
- * How the board is drawn as it is made: as KiCad draws one, on the ground it is seen on.
+ * How the board is drawn as it is made: as KiCad draws one, on the ground it is seen on,
+ * in the theme's colours for it (shared/theme-format.ts). Its copper is KiCad's colours
+ * for each side, and its edge KiCad's grey, which on the light ground is too pale: there
+ * it is near black, as what is printed on it is. That is white, as it is printed, and
+ * not KiCad's colour for each side.
  */
 function pcbLook(
   elements: AnyCircuitElement[],
-  dark: boolean,
+  colours: PcbColours,
   ground: string
 ): PcbSvgOptions {
   return {
@@ -110,9 +100,15 @@ function pcbLook(
     colorOverrides: {
       // a hole is a hole: the ground shows through it
       drill: ground,
-      // and its edge in KiCad's grey for one, which on the light ground is too pale
-      boardOutline: edgeOf(dark),
-      silkscreen: { top: printOf(dark), bottom: printOf(dark) },
+      copper: {
+        top: colours["technical-top"],
+        bottom: colours["technical-bottom"],
+      },
+      boardOutline: colours["technical-edge"],
+      silkscreen: {
+        top: colours["technical-print"],
+        bottom: colours["technical-print"],
+      },
     },
   }
 }
@@ -136,6 +132,8 @@ function turnedOver(markup: string): string {
 export function drawingOf(
   circuit: Circuit,
   as: "pcb" | "schematic",
+  /** the theme's colours for it, and whether its look is the dark */
+  colours: PcbColours,
   dark: boolean,
   /** the colour it is drawn on */
   ground: string,
@@ -147,28 +145,26 @@ export function drawingOf(
     return turnedOver(
       holesEdged(
         convertCircuitJsonToPcbSvg(elements, {
-          ...pcbLook(elements, dark, ground),
+          ...pcbLook(elements, colours, ground),
           // what is on the bottom, and what goes through: seen from under the board
           layer: "bottom",
         }),
-        dark
+        colours
       )
     )
   if (as === "pcb")
     return holesEdged(
-      convertCircuitJsonToPcbSvg(elements, pcbLook(elements, dark, ground)),
-      dark
+      convertCircuitJsonToPcbSvg(elements, pcbLook(elements, colours, ground)),
+      colours
     )
-  const theme = dark ? "dark" : "light"
   const drawn = convertCircuitJsonToSchematicSvg(elements, {
     ...DRAWN,
     colorOverrides: {
-      schematic: { background: ground, ...SCHEMATIC[theme] },
+      schematic: { background: ground, ...schematicOf(colours, dark) },
     },
   })
-  const inkedAll = REDS.reduce(
-    (svg, red) => svg.replaceAll(red, INK[theme]),
+  return REDS.reduce(
+    (svg, red) => svg.replaceAll(red, colours["schematic-lines"]),
     drawn
-  )
-  return dark ? inkedAll.replaceAll(CHIP_NAME, TEAL) : inkedAll
+  ).replaceAll(CHIP_NAME, colours["schematic-names"])
 }

@@ -1,8 +1,11 @@
-// The colours a circuit board is drawn in, in 3D in PCB mode: the app's own, in place of
-// those tscircuit gives it. Its 3D file has each side of the board as a picture, of its
-// mask, copper and lettering in tscircuit's colours, and its edge as one colour: each of
-// those is drawn in the app's colour for it instead.
+// The colours a circuit board is drawn in, in 3D in PCB mode: the app's own, as the theme
+// the window is in has them, in place of those tscircuit gives it. Its 3D file has each
+// side of the board as a picture, of its mask, copper and lettering in tscircuit's
+// colours, and its edge as one colour: each of those is drawn in the app's colour for it
+// instead, and drawn again in another as soon as the theme changes it.
 import * as THREE from "three"
+
+import type { PcbColours } from "@shared/theme-format"
 
 /**
  * The materials tscircuit gives the board itself, as against what is on it: its top and
@@ -10,23 +13,32 @@ import * as THREE from "three"
  */
 export const BOARD_ITSELF = /^(TopMaterial|BottomMaterial|GreenSideMaterial)/
 
-/** Each colour tscircuit draws a board's sides in, and the app's in its place. */
-const COLOURS: readonly (readonly [theirs: string, ours: string])[] = [
+/** What of the theme's colours a board in 3D is drawn in. */
+type BoardColour = Extract<keyof PcbColours, `board-${string}`>
+
+/**
+ * Each colour tscircuit draws a board's sides in, and which of the app's is drawn in its
+ * place: none, where it stays as it is.
+ */
+const COLOURS: readonly (readonly [
+  theirs: string,
+  ours: BoardColour | null,
+])[] = [
   // the mask
-  ["#0f4f30", "#005413"],
+  ["#0f4f30", "board-mask"],
   // the mask over copper: traces and pours
-  ["#17613b", "#006116"],
+  ["#17613b", "board-traces"],
   // bare copper: pads
-  ["#ffe066", "#e1cf4d"],
+  ["#ffe066", "board-pads"],
   // the lettering
-  ["#ffffff", "#ffffff"],
-  // keep-outs, hatched
-  ["#ff6b6b", "#ffffff"],
+  ["#ffffff", "board-print"],
+  // keep-outs, hatched: as the lettering
+  ["#ff6b6b", "board-print"],
   // holes, shaded darker over the rest
-  ["#000000", "#000000"],
+  ["#000000", null],
 ]
 /** The board's edge, which has no picture on it: the lighter of the greens. */
-const EDGE = "#006116"
+const EDGE: BoardColour = "board-traces"
 
 const glsl = (colour: string) =>
   `vec3(${new THREE.Color(colour)
@@ -42,7 +54,6 @@ const glsl = (colour: string) =>
 const RECOLOURING = `
   {
     const vec3 theirs[${COLOURS.length}] = vec3[](${COLOURS.map(([theirs]) => glsl(theirs)).join(", ")});
-    const vec3 ours[${COLOURS.length}] = vec3[](${COLOURS.map(([, ours]) => glsl(ours)).join(", ")});
     vec3 seen = diffuseColor.rgb;
     vec3 drawn = seen;
     float nearest = 1e9;
@@ -53,7 +64,7 @@ const RECOLOURING = `
         float off = distance(seen, theirs[i] + along * t);
         if (off < nearest) {
           nearest = off;
-          drawn = mix(ours[i], ours[j], t);
+          drawn = mix(boardColours[i], boardColours[j], t);
         }
       }
     }
@@ -61,28 +72,67 @@ const RECOLOURING = `
   }`
 
 /**
- * Have one of the board's own materials drawn in the app's colours (see `BOARD_ITSELF`):
- * its picture recoloured as it is drawn, or its edge given the app's colour. What else
- * is done to it as it is drawn is done as well, after this.
+ * The app's colours for one board, as its shaders have them: one for each of
+ * tscircuit's (see COLOURS), and its edge's. Changed in place, the board is drawn in
+ * the new ones the next time it is drawn.
  */
-export function inOurColours(material: THREE.Material) {
+export type BoardPaint = {
+  colours: { value: THREE.Color[] }
+  edge: THREE.Color
+}
+
+/** The app's colours for a board, as the theme has them (see `BoardPaint`). */
+export function boardPaint(theme: PcbColours): BoardPaint {
+  const paint: BoardPaint = {
+    colours: { value: COLOURS.map(() => new THREE.Color()) },
+    edge: new THREE.Color(),
+  }
+  repaint(paint, theme)
+  return paint
+}
+
+/** Have a board drawn in other colours of the theme's. */
+export function repaint(paint: BoardPaint, theme: PcbColours) {
+  COLOURS.forEach(([theirs, ours], index) =>
+    paint.colours.value[index].set(ours ? theme[ours] : theirs)
+  )
+  paint.edge.set(theme[EDGE])
+}
+
+/**
+ * Have one of the board's own materials drawn in the app's colours (see `BOARD_ITSELF`):
+ * its picture recoloured as it is drawn, or (its "edge") given the app's colour for it,
+ * which is then its own. What else is done to it as it is drawn is done as well, after
+ * this. Null for any other material, which is left as it is.
+ */
+export function inOurColours(
+  material: THREE.Material,
+  paint: BoardPaint
+): "picture" | "edge" | null {
   if (
     !BOARD_ITSELF.test(material.name) ||
     !(material instanceof THREE.MeshStandardMaterial)
   )
-    return
+    return null
   if (!material.map) {
-    material.color.set(EDGE)
-    return
+    material.color.copy(paint.edge)
+    return "edge"
   }
   const before = material.onBeforeCompile.bind(material)
   material.onBeforeCompile = (shader, renderer) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `#include <map_fragment>${RECOLOURING}`
-    )
+    shader.uniforms.boardColours = paint.colours
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "void main() {",
+        `uniform vec3 boardColours[${COLOURS.length}];\nvoid main() {`
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>${RECOLOURING}`
+      )
     before(shader, renderer)
   }
   const key = material.customProgramCacheKey.bind(material)
   material.customProgramCacheKey = () => `board in our colours+${key()}`
+  return "picture"
 }
