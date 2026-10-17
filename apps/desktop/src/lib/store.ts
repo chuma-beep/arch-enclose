@@ -291,6 +291,11 @@ const savedKeptMeshes = (): string[] => {
     return []
   }
 }
+/**
+ * The colours given by hand, as the window kept them itself before they were kept in
+ * the projects' folders: by project, and put aside for a conversation (see
+ * lib/versions.ts). Read once, to be put in the folders.
+ */
 const savedColours = (): Record<string, Record<string, PaletteName>> => {
   try {
     const kept: unknown = JSON.parse(saved(COLOURS_KEY) ?? "{}")
@@ -717,7 +722,9 @@ type State = {
   pictureTrouble: string | null
   /**
    * The colour the user has given a part, by project and part: one of the app's own, by
-   * name. It is how the app draws the part, whatever the model says of its colour.
+   * name. It is how the app draws the part, whatever the model says of its colour. Kept
+   * in the project's folder (see shared/colours-format.ts), and taken up from there
+   * where it is found changed (see coloursOf).
    */
   colours: Record<string, Record<string, PaletteName>>
   /**
@@ -977,7 +984,8 @@ function repaint(
     ...state.colours,
     [projectId]: coloured(state.colours[projectId] ?? {}, had),
   }
-  localStorage.setItem(COLOURS_KEY, JSON.stringify(colours))
+  // into the project's folder, all of them as they are now
+  void window.cad.colours.save(projectId, colours[projectId])
   useStore.setState({
     colours,
     history: { ...state.history, [projectId]: history },
@@ -1144,7 +1152,8 @@ export const useStore = create<State>()((set, get) => ({
   quoting: null,
   noted: null,
   pictureTrouble: null,
-  colours: savedColours(),
+  // (from the projects' folders, as the projects come: see coloursOf)
+  colours: {},
   meshes: {},
   keptMeshes: savedKeptMeshes(),
   ...savedArranged(),
@@ -2241,11 +2250,41 @@ function withItem(items: ThreadItem[], item: ThreadItem): ThreadItem[] {
   return next
 }
 
+/** The revision of each project's colours given by hand that the window last took up. */
+const coloursTaken = new Map<string, number>()
+
+/**
+ * The colours given by hand, with those taken up from each project's folder where they
+ * are found changed there (see Project["colours"]): the window's own giving is no news.
+ */
+function coloursOf(
+  colours: Record<string, Record<string, PaletteName>>,
+  projects: Project[]
+) {
+  let next = colours
+  for (const { id, colours: kept } of projects) {
+    if (coloursTaken.get(id) === kept.revision) continue
+    coloursTaken.set(id, kept.revision)
+    next = { ...next, [id]: kept.parts }
+  }
+  return next
+}
+
 function reconcile(projects: Project[]) {
-  const { activeId, activate, cuts, projects: before } = useStore.getState()
+  const {
+    activeId,
+    activate,
+    cuts,
+    colours,
+    projects: before,
+  } = useStore.getState()
   const kept = cutsOf(cuts, projects)
   if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
-  useStore.setState({ projects, cuts: kept })
+  useStore.setState({
+    projects,
+    cuts: kept,
+    colours: coloursOf(colours, projects),
+  })
   tally(before)
   if (activeId && projects.some((p) => p.id === activeId)) return
   // the open project is gone, or nothing was open yet: fall back to one that exists
@@ -2302,21 +2341,52 @@ function show() {
 }
 
 /**
+ * Put the colours the window kept itself, before the projects' folders kept them, into
+ * the folders: once, but for those that could not be written there, which are kept to
+ * be tried again the next time the app opens. What was put aside for a conversation goes
+ * into its version of the folder. A conversation's colours were what said that
+ * something had been put aside for it at all: its names say so from here on (see
+ * turned).
+ */
+function adoptColours() {
+  if (saved(COLOURS_KEY) === null) return
+  const kept = savedColours()
+  const state = useStore.getState()
+  const marked = Object.keys(kept).filter(
+    (key) => key.includes("/") && !(key in state.named)
+  )
+  if (marked.length > 0) {
+    const named = {
+      ...state.named,
+      ...Object.fromEntries(marked.map((key) => [key, {}])),
+    }
+    keepArranged(state.arranged, named)
+    useStore.setState({ named })
+  }
+  void window.cad.colours.adopt(kept).then((left) => {
+    if (left.length === 0) localStorage.removeItem(COLOURS_KEY)
+    else
+      localStorage.setItem(
+        COLOURS_KEY,
+        JSON.stringify(Object.fromEntries(left.map((key) => [key, kept[key]])))
+      )
+  })
+}
+
+/**
  * A project's folder became another conversation's: what was done to its model by hand
  * goes the same way (see lib/versions.ts). What was taken back or could be, of what was
  * done by hand, was of a model that is no longer the one on screen.
  */
 function turned(projectId: string, how: Turned) {
   const state = useStore.getState()
-  // colours are put aside even where there are none, which says that something was
-  const left = asideFor(projectId, how.to) in state.colours
-  const colours = carried(state.colours, projectId, how, left, {})
+  // (the colours given by hand are in the folder, and go with it: see coloursOf)
+  // names are put aside even where there are none, which says that something was
+  const left = asideFor(projectId, how.to) in state.named
   const arranged = carried(state.arranged, projectId, how, left)
-  const named = carried(state.named, projectId, how, left)
-  localStorage.setItem(COLOURS_KEY, JSON.stringify(colours))
+  const named = carried(state.named, projectId, how, left, {})
   keepArranged(arranged, named)
   useStore.setState({
-    colours,
     arranged,
     named,
     ...(how.restored
@@ -2369,6 +2439,7 @@ function tally(before?: Project[]) {
 export function connect() {
   const { cad } = window
   cad.projects.onChange(reconcile)
+  adoptColours()
   // what is waiting to be sent is kept as it changes, so that the window can be loaded
   // again without losing it
   useStore.subscribe((state, was) => {

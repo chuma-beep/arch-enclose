@@ -2,6 +2,7 @@
 // change here is checked on both ends.
 
 import type { Building, StepsGone } from "./board-format"
+import type { PartColours } from "./colours-format"
 import type { Defaults, Theme } from "./theme-format"
 
 export type Vec3 = [number, number, number]
@@ -160,6 +161,13 @@ export type Project = {
    * so the window knows to read them again.
    */
   boards: number | null
+  /**
+   * The colours given its parts by hand, as its folder has them (see
+   * shared/colours-format.ts), and a number that goes up each time they are found
+   * changed there by something other than the window giving them: the window takes them
+   * up then, and only then.
+   */
+  colours: { revision: number; parts: PartColours }
   /**
    * An assembly guide is being made for it, because the user asked for one from the
    * view: the turn Claude is on in it is that.
@@ -1039,6 +1047,23 @@ export type CadApi = {
     /** say that the view was put into one of these, for the app's count of its use */
     used(feature: Feature): void
   }
+  /** the colours given parts by hand, kept in each project's folder (see shared/colours-format.ts) */
+  colours: {
+    /**
+     * Write those of a project's parts into its folder, all of them as they are now: its
+     * history has them a moment after the last, unless Claude is at work in it, whose
+     * turn takes them in with the rest.
+     */
+    save(projectId: string, parts: PartColours): Promise<void>
+    /**
+     * Those the window kept itself, before they were kept in the folders, each put where
+     * it belongs where nothing is there already: by project, and, put aside for a
+     * conversation, by `<project>/<conversation>`, into that conversation's version.
+     * Resolves to those that could not be written there (a folder that is not there
+     * now, say), by the same keys: to be tried again another time.
+     */
+    adopt(kept: Record<string, PartColours>): Promise<string[]>
+  }
   /** the themes there are beside the app's own look (see shared/theme-format.ts) */
   themes: {
     list(): Promise<Theme[]>
@@ -1152,6 +1177,8 @@ export const CHANNEL = {
   themesRemove: "themes:remove",
   themesDefaults: "themes:defaults",
   themesSaveDefaults: "themes:save-defaults",
+  coloursSave: "colours:save",
+  coloursAdopt: "colours:adopt",
   updateGet: "update:get",
   updateDownload: "update:download",
   updateRestart: "update:restart",

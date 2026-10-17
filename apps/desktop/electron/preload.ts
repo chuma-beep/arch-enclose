@@ -173,6 +173,11 @@ const api: CadApi = {
   analytics: {
     used: (feature) => ipcRenderer.send(CHANNEL.analyticsUsed, feature),
   },
+  colours: {
+    save: (projectId, parts) =>
+      ipcRenderer.invoke(CHANNEL.coloursSave, projectId, parts),
+    adopt: (kept) => ipcRenderer.invoke(CHANNEL.coloursAdopt, kept),
+  },
   themes: {
     list: () => ipcRenderer.invoke(CHANNEL.themesList),
     save: (theme, replacing) =>

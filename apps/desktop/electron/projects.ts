@@ -16,6 +16,12 @@ import {
   BUILT_FOLDER,
 } from "../shared/board-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
+import {
+  COLOURS_FILE,
+  coloursFile,
+  readColours,
+  type PartColours,
+} from "../shared/colours-format"
 
 type Saved = {
   id: string
@@ -295,6 +301,16 @@ export class Projects {
   private boardTimers = new Map<string, NodeJS.Timeout>()
   private watchers = new Map<string, fs.FSWatcher>()
   private timers = new Map<string, NodeJS.Timeout>()
+  /**
+   * The colours given each project's parts by hand, as their file was last read or
+   * written, with what it said; how often they have been found changed by something
+   * other than the window; and what watches for that. All by project.
+   */
+  private colours = new Map<string, { parts: PartColours; file: string }>()
+  private colourRevisions = new Map<string, number>()
+  private coloursWatched = new Map<string, string>()
+  private colourWatchers = new Map<string, fs.FSWatcher>()
+  private colourTimers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
   private bringing = new Map<string, BringingIn>()
 
@@ -336,6 +352,7 @@ export class Projects {
     this.locateTools(project)
     this.locateGuides(project)
     this.locateBoards(project)
+    this.locateColours(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
@@ -580,6 +597,87 @@ export class Projects {
     return true
   }
 
+  /**
+   * Read the colours given a project's parts by hand from its folder, and watch the
+   * folder for their file being written: by the window, whose own writing is no news to
+   * it, or by anything else (a conversation's version of the folder put in place, a turn
+   * taken back, Claude). True if they are not as they were last read or written.
+   */
+  private locateColours(project: Saved): boolean {
+    const { id } = project
+    if (this.coloursWatched.get(id) !== project.path) {
+      this.coloursWatched.set(id, project.path)
+      this.colourWatchers.get(id)?.close()
+      this.colourWatchers.delete(id)
+      try {
+        this.colourWatchers.set(
+          id,
+          fs.watch(project.path, { persistent: false }, (_, changed) => {
+            if (changed !== COLOURS_FILE) return
+            clearTimeout(this.colourTimers.get(id))
+            this.colourTimers.set(
+              id,
+              setTimeout(() => {
+                if (this.locateColours(project)) this.onChange()
+              }, 300)
+            )
+          })
+        )
+      } catch {
+        // unwatchable: they are read again when the project is next looked for
+      }
+    }
+    let file = ""
+    try {
+      file = fs.readFileSync(path.join(project.path, COLOURS_FILE), "utf8")
+    } catch {
+      // none given, or none kept
+    }
+    if (this.colours.get(id)?.file === file) return false
+    let parts: PartColours = {}
+    try {
+      parts = readColours(JSON.parse(file))
+    } catch {
+      // not a list of colours, or one being written: none, until it is whole
+    }
+    this.colours.set(id, { parts, file })
+    this.colourRevisions.set(id, (this.colourRevisions.get(id) ?? 0) + 1)
+    return true
+  }
+
+  /**
+   * Write the colours given a project's parts by hand into its folder, or take their
+   * file away where there are none. It is no news to the window, which gave them, unless
+   * it is to `announce` them. True if the file is not as it was.
+   */
+  saveColours(
+    id: string,
+    parts: PartColours,
+    { announce = false }: { announce?: boolean } = {}
+  ): boolean {
+    const project = this.saved.find((p) => p.id === id)
+    if (!project) return false
+    const file = Object.keys(parts).length > 0 ? coloursFile(parts) : ""
+    if (this.colours.get(id)?.file === file) return false
+    const at = path.join(project.path, COLOURS_FILE)
+    try {
+      if (file) fs.writeFileSync(at, file)
+      else fs.rmSync(at, { force: true })
+    } catch {
+      // the folder is gone, or cannot be written: the window has them all the same
+      return false
+    }
+    this.colours.set(id, { parts, file })
+    if (announce)
+      this.colourRevisions.set(id, (this.colourRevisions.get(id) ?? 0) + 1)
+    return true
+  }
+
+  /** Whether a project's folder has colours given by hand already. */
+  hasColours(id: string): boolean {
+    return Boolean(this.colours.get(id)?.file)
+  }
+
   /** The projects, the one added last first: they are kept in the order they came. */
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
     return [...this.saved].reverse().map((p) => {
@@ -606,6 +704,10 @@ export class Projects {
         boards: this.boards.has(p.id)
           ? (this.boardRevisions.get(p.id) ?? 0)
           : null,
+        colours: {
+          revision: this.colourRevisions.get(p.id) ?? 0,
+          parts: this.colours.get(p.id)?.parts ?? {},
+        },
         // whether one is being made is known to whoever has the conversations
         assembling: false,
         // what can be taken back is kept elsewhere (changes.ts), and said by whoever
@@ -738,6 +840,13 @@ export class Projects {
     this.boardTimers.delete(id)
     this.boards.delete(id)
     this.boardRevisions.delete(id)
+    this.colourWatchers.get(id)?.close()
+    this.colourWatchers.delete(id)
+    clearTimeout(this.colourTimers.get(id))
+    this.colourTimers.delete(id)
+    this.colours.delete(id)
+    this.colourRevisions.delete(id)
+    this.coloursWatched.delete(id)
     this.boardsWatched.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
@@ -814,10 +923,12 @@ export class Projects {
         build: this.found.get(id)?.build ?? null,
       })
       this.watch(project)
-      // and so is its reference scene, if it has one of its own, and its tools and guides
+      // and so is its reference scene, if it has one of its own, its tools and guides,
+      // and the colours given its parts
       this.locateScene(project)
       this.locateTools(project)
       this.locateGuides(project)
+      this.locateColours(project)
       moved(from, to)
     }
     this.save()

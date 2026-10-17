@@ -55,6 +55,11 @@ import { BOARD_FOLDER, builtOf } from "../shared/board-format"
 import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
 import {
+  COLOURS_FILE,
+  coloursFile,
+  readColours,
+} from "../shared/colours-format"
+import {
   readTheme,
   THEME_FOLDER,
   type Defaults,
@@ -416,6 +421,31 @@ function backed() {
  */
 const whose = (id: string): string | undefined =>
   settings.get().versions ? (versions.on(id) ?? undefined) : undefined
+
+/** How long after the last colour given by hand they go into the project's history, ms. */
+const COLOURS_KEPT_AFTER = 4000
+const colouring = new Map<string, NodeJS.Timeout>()
+
+/**
+ * Have the colours given a project's parts by hand go into its history, a moment after
+ * the last of them: unless Claude is at work in it, or its folder is becoming another
+ * conversation's, where the commit that comes of that takes them in with the rest.
+ */
+function keepColours(id: string) {
+  clearTimeout(colouring.get(id))
+  colouring.set(
+    id,
+    setTimeout(() => {
+      colouring.delete(id)
+      if (threads.working(id) || versions.busy(id)) return
+      void backups.record(id, {
+        what: "Recolored parts by hand",
+        conversation: null,
+        conversationId: whose(id) ?? null,
+      })
+    }, COLOURS_KEPT_AFTER)
+  )
+}
 
 /**
  * Have a project's folder be one of its conversations': put as that one left it, where
@@ -1796,6 +1826,44 @@ function wire() {
     if (!next.analytics) analytics?.forget()
     return next
   })
+  ipcMain.handle(
+    CHANNEL.coloursSave,
+    (_, projectId: unknown, given: unknown): void => {
+      if (typeof projectId !== "string") return
+      if (projects.saveColours(projectId, readColours(given)))
+        keepColours(projectId)
+    }
+  )
+  // (once: what the window kept itself, before the folders kept them)
+  ipcMain.handle(
+    CHANNEL.coloursAdopt,
+    async (_, kept: unknown): Promise<string[]> => {
+      if (typeof kept !== "object" || kept === null) return []
+      // what could not be written where it belongs, to be tried again: not what has
+      // nowhere to go any more, nor what a folder has colours of its own in place of
+      const left: string[] = []
+      let any = false
+      for (const [key, given] of Object.entries(kept)) {
+        const parts = readColours(given)
+        if (Object.keys(parts).length === 0) continue
+        const [projectId, conversationId] = key.split("/")
+        if (conversationId !== undefined) {
+          const put = await versions
+            .adopt(projectId, conversationId, COLOURS_FILE, coloursFile(parts))
+            .then(() => true)
+            .catch(() => false)
+          if (!put) left.push(key)
+        } else if (projects.get(projectId) && !projects.hasColours(projectId)) {
+          if (projects.saveColours(projectId, parts, { announce: true })) {
+            any = true
+            keepColours(projectId)
+          } else left.push(key)
+        }
+      }
+      if (any) broadcast()
+      return left
+    }
+  )
   ipcMain.handle(CHANNEL.themesList, (): Theme[] => listThemes(THEMES))
   ipcMain.handle(CHANNEL.themesDefaults, (): Defaults => readDefaults(THEMES))
   ipcMain.handle(CHANNEL.themesSaveDefaults, (_, given: unknown): Defaults => {

@@ -1,11 +1,12 @@
 // What is done to a model by hand, where each conversation has the project its own way.
 //
-// The colours given to parts, and how they are put into groups, are the window's to
-// keep, by project: they are not in the project's folder. So when the folder becomes
-// another conversation's (see electron/versions.ts), what was done by hand is put aside
-// for the conversation that is left, and what was put aside for the one turned to is
-// had back. A conversation that begins from where another had got to begins with what
-// that one had done by hand as well.
+// How the parts are put into groups is the window's to keep, by project: it is not in
+// the project's folder. So when the folder becomes another conversation's (see
+// electron/versions.ts), what was done by hand is put aside for the conversation that is
+// left, and what was put aside for the one turned to is had back. A conversation that
+// begins from where another had got to begins with what that one had done by hand as
+// well. (The colours given to parts are in the folder, and go with it of themselves:
+// see shared/colours-format.ts.)
 
 import type { Turned } from "@shared/api"
 

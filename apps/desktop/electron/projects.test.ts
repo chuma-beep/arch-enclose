@@ -25,7 +25,9 @@ const write = (file: string, content: unknown) => {
 const MANIFEST = { parts: [{ id: "a", file: "a.glb" }] }
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-")))
+  root = fs.realpathSync(
+    fs.mkdtempSync(path.join(os.tmpdir(), "enclose-test-"))
+  )
 })
 afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true })
@@ -82,7 +84,6 @@ describe("findModel", () => {
       build: "python3 make.py",
     })
   })
-
 })
 
 describe("readBranch", () => {
@@ -135,6 +136,50 @@ describe("Projects", () => {
     expect(projects.list(idle)).toMatchObject([
       { id: again, name: "thing", manifest: "model.json" },
     ])
+    projects.close()
+  })
+
+  it("keeps the colours given by hand in the folder, and takes up others written there", () => {
+    write("thing/model.json", MANIFEST)
+    write("thing/enclose.colors.json", { a: "blue", b: "#123456" })
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    const id = projects.add(path.join(root, "thing"))
+    const colours = () => projects.list(idle)[0].colours
+    // read from the folder as the project is found
+    const found = colours()
+    expect(found.parts).toEqual({ a: "blue" })
+
+    // what the window gives is written, and is no news to it
+    expect(projects.saveColours(id, { a: "red", c: "grey" })).toBe(true)
+    expect(colours()).toEqual({
+      revision: found.revision,
+      parts: { a: "red", c: "grey" },
+    })
+    expect(
+      fs.readFileSync(path.join(root, "thing/enclose.colors.json"), "utf8")
+    ).toBe('{\n  "a": "red",\n  "c": "grey"\n}\n')
+    // as it was, it is not written again
+    expect(projects.saveColours(id, { c: "grey", a: "red" })).toBe(false)
+    projects.refresh(id)
+    expect(colours().revision).toBe(found.revision)
+
+    // written by something else, it is news
+    write("thing/enclose.colors.json", { a: "green" })
+    projects.refresh(id)
+    expect(colours()).toEqual({
+      revision: found.revision + 1,
+      parts: { a: "green" },
+    })
+
+    // none at all: no file
+    expect(projects.saveColours(id, {})).toBe(true)
+    expect(fs.existsSync(path.join(root, "thing/enclose.colors.json"))).toBe(
+      false
+    )
+    expect(projects.hasColours(id)).toBe(false)
     projects.close()
   })
 

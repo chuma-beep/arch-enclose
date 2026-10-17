@@ -297,6 +297,27 @@ export class Versions {
     })
   }
 
+  /**
+   * Put a file into the copy a conversation has of a project's folder, where the copy
+   * has none by that name: the folder has it from when it is next that conversation's.
+   * False if the conversation has no copy, or one with the file in it already.
+   */
+  adopt(
+    projectId: string,
+    conversationId: string,
+    name: string,
+    contents: string
+  ): Promise<boolean> {
+    return this.queued(projectId, async () => {
+      if (!named(projectId) || !named(conversationId)) return false
+      if (!this.has(projectId, conversationId)) return false
+      const at = path.join(this.root(projectId, conversationId), FILES, name)
+      if (fs.existsSync(at)) return false
+      await fs.promises.writeFile(at, contents)
+      return true
+    })
+  }
+
   /** A project is taken off the list: none of its versions are kept. */
   forget(projectId: string) {
     this.indexes.delete(projectId)

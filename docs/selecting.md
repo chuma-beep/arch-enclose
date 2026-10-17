@@ -20,7 +20,10 @@ that spot of the part as it is turned.
 
 - One gives it another of the app's colours, which is how the app draws it from then on
   (Claude is told, when it asks what the parts are). While you choose a colour for it,
-  and for a moment after, the part is seen in its own colour instead.
+  and for a moment after, the part is seen in its own colour instead. The colours you
+  give are kept in the project's folder, in `enclose.colors.json`, so they go wherever
+  the project goes: into its [history and backup](projects.md#history-and-backup), and
+  to another computer.
 - One downloads the part as STEP, where the model hands that out.
 - One opens a box to say what should change at the place you clicked.
 
