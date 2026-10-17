@@ -156,8 +156,9 @@ target-specific `publish: null` under deb, rpm and pacman keeps those three out 
 `latest-linux.yml`; it does not stop the `package-type` file they are written with, and
 that file is what makes an installed deb, rpm or pacman ask for an update of its own kind,
 from a feed that has no file of that kind. What keeps that from happening is the app, which
-asks for a newer version only where it was run as an AppImage. `scripts/dist.mjs` says
-which step each of the two belongs to.
+asks for a newer version only where it was run as an AppImage, and then with the
+AppImage's own updater, whatever file it was made with. `scripts/dist.mjs` says which step
+each of the two belongs to.
 
 [`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and three
 things follow from it:

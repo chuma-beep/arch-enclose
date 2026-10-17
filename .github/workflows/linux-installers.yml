@@ -52,14 +52,15 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
 
-      # rpmbuild for the rpm (dpkg-deb comes with Ubuntu), and a screen with no monitor for
-      # the check that runs the app. Ubuntu keeps an app from making the user namespaces
-      # Chromium's sandbox is made of, unless it has an AppArmor profile: let it here, so
-      # the check runs the app as a user's machine would, with its sandbox on.
+      # rpmbuild for the rpm and ar, from binutils, for the deb (dpkg-deb comes with
+      # Ubuntu, and ar is named though it most likely does too), and a screen with no
+      # monitor for the check that runs the app. Ubuntu keeps an app from making the user
+      # namespaces Chromium's sandbox is made of, unless it has an AppArmor profile: let it
+      # here, so the check runs the app as a user's machine would, with its sandbox on.
       - name: What the build and the check need
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm xvfb
+          sudo apt-get install -y binutils rpm xvfb
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - run: npm ci

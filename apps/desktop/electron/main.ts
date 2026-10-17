@@ -2058,11 +2058,17 @@ if (!app.requestSingleInstanceLock()) {
       !CAPTURE &&
       (process.platform !== "linux" || process.env.APPIMAGE)
     ) {
-      const { autoUpdater } = electronUpdater
+      // (on Linux the AppImage's own updater, named: left to itself electron-updater would
+      // take a deb's, rpm's or pacman's wherever the app carries their package-type file,
+      // and an AppImage can, as all four are made at once from the one folder)
+      const updater =
+        process.platform === "linux"
+          ? new electronUpdater.AppImageUpdater()
+          : electronUpdater.autoUpdater
       if (UPDATES_FROM)
-        autoUpdater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
+        updater.setFeedURL({ provider: "generic", url: UPDATES_FROM })
       updates = new Updates({
-        updater: autoUpdater,
+        updater,
         onChange: (update) => send(CHANNEL.updateChanged, update),
       })
       updates.start()
