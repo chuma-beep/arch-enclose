@@ -142,8 +142,8 @@ type ThemesState = {
   load(): Promise<void>
   /** draw the window in one of them, or in the app's own look (DEFAULT_THEME) */
   choose(id: string): void
-  /** write a new theme, and draw the window in it */
-  save(theme: Omit<Theme, "id">): Promise<Theme>
+  /** write a theme, new or in place of one (`replacing`), and draw the window in it */
+  save(theme: Omit<Theme, "id">, replacing?: string): Promise<Theme>
   /** write what is changed of the app's own look, and what it is called */
   saveDefaults(defaults: Defaults): Promise<void>
   /** take one away: if the window was in it, it goes back to the app's own look */
@@ -194,10 +194,15 @@ export const useThemes = create<ThemesState>()((set, get) => {
       put(get().themes.find((one) => one.id === id) ?? null, get().defaults)
     },
 
-    async save(theme) {
-      const saved = await window.cad.themes.save(theme)
+    async save(theme, replacing) {
+      const saved = await window.cad.themes.save(theme, replacing)
       set((state) => ({
-        themes: [...state.themes, saved].sort(
+        themes: [
+          ...state.themes.filter(
+            (one) => one.id !== saved.id && one.id !== replacing
+          ),
+          saved,
+        ].sort(
           (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
         ),
       }))

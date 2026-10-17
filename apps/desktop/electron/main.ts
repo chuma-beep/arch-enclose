@@ -1799,14 +1799,21 @@ function wire() {
     return saveDefaults(THEMES, given as Defaults)
   })
   // (a packaged app's themes are what it came with: it neither writes nor takes away any)
-  ipcMain.handle(CHANNEL.themesSave, (_, given: unknown): Theme => {
-    if (app.isPackaged)
-      throw new Error("Themes are made in the app as it is worked on.")
-    // what the window sends is read as a file would be, and only a theme is written
-    const theme = readTheme("new", given)
-    if (!theme) throw new Error("That is not a theme the app can write.")
-    return saveTheme(THEMES, theme)
-  })
+  ipcMain.handle(
+    CHANNEL.themesSave,
+    (_, given: unknown, replacing: unknown): Theme => {
+      if (app.isPackaged)
+        throw new Error("Themes are made in the app as it is worked on.")
+      // what the window sends is read as a file would be, and only a theme is written
+      const theme = readTheme("new", given)
+      if (!theme) throw new Error("That is not a theme the app can write.")
+      return saveTheme(
+        THEMES,
+        theme,
+        typeof replacing === "string" ? replacing : undefined
+      )
+    }
+  )
   ipcMain.handle(
     CHANNEL.themesRemove,
     async (_, id: unknown): Promise<Theme[]> => {

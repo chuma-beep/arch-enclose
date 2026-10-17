@@ -37,8 +37,8 @@ export const MOCKUP = { width: 1280, height: 800 }
 // as the sidebar draws a card (sidebar.tsx)
 const CARD =
   "glass relative flex w-full flex-col rounded-xl px-3 py-2.5 text-left ring-1"
-const LIT = "bg-sidebar-accent/90 shadow-sm ring-foreground/15"
-const UNLIT = "bg-sidebar-accent/45 ring-foreground/5"
+const LIT = "bg-sidebar-accent/90 shadow-sm ring-card-outline"
+const UNLIT = "bg-sidebar-accent/45 ring-card-outline/35"
 const SMALL = "text-[12px] leading-[1.4]"
 
 /** The cards down the side: one in each of the ways a card can be. */
@@ -55,7 +55,7 @@ const CARDS: {
     lit: true,
     news: {
       label: "Working",
-      className: "text-attention shimmer",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
       going: "2m 14s",
     },
   },
@@ -69,7 +69,7 @@ const CARDS: {
     said: "Making the switch board",
     news: {
       label: "Making a board",
-      className: "text-attention shimmer",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
       going: "48s",
     },
   },

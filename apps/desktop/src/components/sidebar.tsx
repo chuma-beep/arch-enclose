@@ -51,9 +51,9 @@ const FADES = "group-data-[away]/tuck:opacity-0"
 /** What a card is, whether it is a project's or one of its earlier conversations'. */
 const CARD = `glass pointer-events-auto relative flex w-full flex-col rounded-xl px-3 py-2.5 text-left ring-1 transition-[color,background-color,border-color,opacity] duration-200 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${FADES}`
 /** The card of what is open, and the others. */
-const LIT = "bg-sidebar-accent/90 shadow-sm ring-foreground/15"
+const LIT = "bg-sidebar-accent/90 shadow-sm ring-card-outline"
 const UNLIT =
-  "bg-sidebar-accent/45 ring-foreground/5 hover:bg-sidebar-accent/65"
+  "bg-sidebar-accent/45 ring-card-outline/35 hover:bg-sidebar-accent/65"
 
 /** What is kept at the foot of the sidebar: one thing over another. */
 const FOOT = "flex shrink-0 flex-col gap-2"
@@ -87,12 +87,12 @@ const NEWS: Record<News, { label: string; under: string; className: string }> =
       label: "Working",
       under: "Working in an earlier chat",
       // a light passes along it for as long as Claude is at work
-      className: "text-attention shimmer",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
     },
     board: {
       label: "Making a board",
       under: "Making a board in an earlier chat",
-      className: "text-attention shimmer",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
     },
     asking: {
       label: "Needs you",

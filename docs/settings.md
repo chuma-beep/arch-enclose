@@ -31,10 +31,11 @@ click on the app puts them away.
 ## Themes
 
 A theme colours some of the window in its own way, in the light look and in the dark:
-the projects' cards, and the words on one that is working or needs you; the view behind
-the model, and the colours its parts are drawn in; the conversation's ground, and the
-bubble of what you say in it; and the project's own tools. What a theme leaves out is
-the app's own. A theme is chosen in **Appearance**, and stays chosen across light and
+the projects' cards and the line round them, the words on one that is working or needs
+you, and the light that runs across those while it works; the view behind the model,
+and the colours its parts are drawn in; the conversation's ground, and the bubble of
+what you say in it; and the project's own tools. What a theme leaves out is the app's
+own. A theme is chosen in **Appearance**, and stays chosen across light and
 dark: **System**, **Light** or **Dark**, beside the section's name, says which of its two
 looks is shown. The app's own colours, **Default**, are always there, and cannot be
 removed.
@@ -45,13 +46,15 @@ with the app. To make one, run the app from a checkout (see
 theme creator over the whole window. Down its left are the colours there are to pick;
 on its right, the window drawn in them, with a card in each of the ways a card can be, a
 part in each of the palette's colours, and a conversation. A click on one of those parts
-picks its colour to be changed. The button at the top right switches between the light
-look and the dark, and what is picked in one is that look's alone: the other keeps the
-app's colours until you pick some for it too. The title is the theme's name: click it to
-name the theme. **Save theme** writes the theme, under its name, to `themes/<name>.json`,
-and the window is drawn in it. Open a pull request with that file to put it in the app
-for everyone. Run from a checkout, each theme's card has a cross to remove it, which
-deletes its file.
+picks its colour to be changed. **Light** and **Dark**, at the top right, say which look
+is being made, and what is picked in one is that look's alone: the other keeps the
+app's colours until you pick some for it too. The title is the theme's name, up to 20
+characters: click it to name the theme. **Save theme**, which comes up once the theme
+has a name, writes the theme under that name to `themes/<name>.json`, and the window is
+drawn in it. The theme creator stays open: **Save theme** is on again once something
+differs from what was saved, and saving again updates the same file, renamed with the
+theme. Open a pull request with that file to put it in the app for everyone. Run from a
+checkout, each theme's card has a cross to remove it, which deletes its file.
 
 The app's own colours are changed the same way. Run from a checkout, the **Default** card
 has a pencil that opens the theme creator on the app's own colours, in the look chosen,

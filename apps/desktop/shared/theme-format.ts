@@ -40,11 +40,25 @@ export const SLOTS = [
     token: "--sidebar-accent",
   },
   {
+    id: "outline",
+    area: "Sidebar",
+    label: "Card outline",
+    detail: "The line round each project's card",
+    token: "--card-outline",
+  },
+  {
     id: "attention",
     area: "Sidebar",
     label: "Working",
     detail: "What is going on, and what needs you",
     token: "--attention",
+  },
+  {
+    id: "shimmer",
+    area: "Sidebar",
+    label: "Working shimmer",
+    detail: "The light that runs across what is going on",
+    token: "--attention-shimmer",
   },
   {
     id: "viewer",

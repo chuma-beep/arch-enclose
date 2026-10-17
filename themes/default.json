@@ -1,15 +1,42 @@
 {
   "name": "Default",
-  "light": {},
-  "dark": {
-    "attention": "#f7cc3d",
-    "message": "#202020",
-    "tools": "#0069fb",
+  "light": {
+    "outline": "#b3b3b3",
+    "attention": "#957d00",
+    "shimmer": "#d9b600",
+    "message": "#e9e9e9",
+    "tools": "#0082ff",
     "parts": {
-      "red": "#fa8b89",
-      "orange": "#ffbb6f",
-      "yellow": "#f6ec6c",
-      "lime": "#bbf97d"
+      "red": "#f78482",
+      "orange": "#ffb159",
+      "yellow": "#fedd49",
+      "lime": "#7eff00",
+      "green": "#2dfd5e",
+      "cyan": "#49faff",
+      "blue": "#80a3ff",
+      "indigo": "#9f93ff",
+      "violet": "#d387ff",
+      "pink": "#ff92cc"
+    }
+  },
+  "dark": {
+    "cards": "#2a2a2a",
+    "attention": "#ffce1e",
+    "viewer": "#151515",
+    "message": "#1e1e1e",
+    "tools": "#0064fb",
+    "parts": {
+      "red": "#ff726f",
+      "orange": "#feaf57",
+      "yellow": "#fff24f",
+      "lime": "#9efb41",
+      "green": "#54ff7d",
+      "cyan": "#7bfafd",
+      "blue": "#7fa2fe",
+      "indigo": "#897aff",
+      "violet": "#cf7dff",
+      "pink": "#fd81c3",
+      "grey": "#464646"
     }
   }
 }

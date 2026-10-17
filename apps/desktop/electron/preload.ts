@@ -175,7 +175,8 @@ const api: CadApi = {
   },
   themes: {
     list: () => ipcRenderer.invoke(CHANNEL.themesList),
-    save: (theme) => ipcRenderer.invoke(CHANNEL.themesSave, theme),
+    save: (theme, replacing) =>
+      ipcRenderer.invoke(CHANNEL.themesSave, theme, replacing),
     remove: (id) => ipcRenderer.invoke(CHANNEL.themesRemove, id),
     defaults: () => ipcRenderer.invoke(CHANNEL.themesDefaults),
     saveDefaults: (defaults) =>

@@ -1038,10 +1038,11 @@ export type CadApi = {
   themes: {
     list(): Promise<Theme[]>
     /**
-     * Write a new theme, called by its name (numbered where that is taken), and give it
-     * back as written. Run from a checkout only: made into a package, the app writes none.
+     * Write a theme, called by its name (numbered where that is taken), and give it back
+     * as written: a new one, or one saved again in place of its file (`replacing`, what
+     * that was called). Run from a checkout only: made into a package, the app writes none.
      */
-    save(theme: Omit<Theme, "id">): Promise<Theme>
+    save(theme: Omit<Theme, "id">, replacing?: string): Promise<Theme>
     /** take one away, likewise from a checkout only; resolves to the themes left */
     remove(id: string): Promise<Theme[]>
     /** what is changed of the app's own look, under every theme, and what it is called */

@@ -184,7 +184,7 @@ export function ColourPicker({
           if (found) onChange(`#${found[1].toLowerCase()}`)
         }}
         onBlur={() => setTyped(null)}
-        className="h-7 font-mono text-xs uppercase"
+        className="h-7 font-mono text-xs uppercase select-text"
       />
     </div>
   )

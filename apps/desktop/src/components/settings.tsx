@@ -525,7 +525,7 @@ function Looks() {
         aria-label="Mode"
         variant="outline"
         size="sm"
-        spacing={0}
+        spacing={2}
         value={[theme]}
         // one is always chosen: pressing the chosen one again changes nothing
         onValueChange={(picked) => {
@@ -542,7 +542,8 @@ function Looks() {
                 <ToggleGroupItem
                   value={value}
                   aria-label={label}
-                  className="px-2.5 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+                  // a circle, as the palette beside it is
+                  className="size-8 min-w-0 rounded-full border-border bg-input/30 px-0 hover:bg-input/50 aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
                 />
               }
             >

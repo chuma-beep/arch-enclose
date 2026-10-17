@@ -75,6 +75,38 @@ describe("saveTheme", () => {
     expect(theme.id).toBe("a-theme-with-a-very")
   })
 
+  it("saves one again in place of its own file, which follows its name", () => {
+    const first = saveTheme(dir, {
+      name: "Midnight",
+      light: {},
+      dark: { chat: "#101010" },
+    })
+    saveTheme(dir, { name: "Midnight", light: {}, dark: { chat: "#111111" } })
+    const again = saveTheme(
+      dir,
+      { name: "Midnight", light: {}, dark: { chat: "#121212" } },
+      first.id
+    )
+    expect(again.id).toBe("midnight")
+    expect(listThemes(dir).map((theme) => theme.id)).toEqual([
+      "midnight",
+      "midnight-2",
+    ])
+    const renamed = saveTheme(
+      dir,
+      { name: "Ocean", light: {}, dark: { chat: "#121212" } },
+      again.id
+    )
+    expect(renamed.id).toBe("ocean")
+    expect(listThemes(dir).map((theme) => theme.id)).toEqual([
+      "midnight-2",
+      "ocean",
+    ])
+    expect(() =>
+      saveTheme(dir, { name: "Paper", light: {}, dark: {} }, "default")
+    ).toThrow()
+  })
+
   it("will not write one with no name", () => {
     expect(() => saveTheme(dir, { name: " ", light: {}, dark: {} })).toThrow()
   })

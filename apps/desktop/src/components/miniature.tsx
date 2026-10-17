@@ -78,7 +78,7 @@ export function Miniature({
           width="42"
           height="12.5"
           rx="2.4"
-          className="fill-sidebar-accent/90 stroke-foreground/15"
+          className="fill-sidebar-accent/90 stroke-card-outline"
         />
         <rect x="7.5" y="13.2" width="12" height="2" rx="1" className={SAID} />
         <rect x="7.5" y="17.3" width="22" height="2" rx="1" className={QUIET} />
@@ -88,7 +88,7 @@ export function Miniature({
           width="42"
           height="12.5"
           rx="2.4"
-          className="fill-sidebar-accent/45 stroke-foreground/5"
+          className="fill-sidebar-accent/45 stroke-card-outline/35"
         />
         <rect x="7.5" y="27.7" width="16" height="2" rx="1" className={SAID} />
         <rect x="7.5" y="31.8" width="18" height="2" rx="1" className={QUIET} />

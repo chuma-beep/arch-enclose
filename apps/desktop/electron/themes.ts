@@ -44,22 +44,33 @@ export function listThemes(dir: string): Theme[] {
 }
 
 /**
- * Write a new theme into the folder, under a name of its own: what it is called comes
- * from its name, numbered where that is taken. Gives back the theme as it was written.
+ * Write a theme into the folder, under a name of its own: what it is called comes from
+ * its name, numbered where that is taken. One saved again (`replacing`, what its file was
+ * called) takes the place of its own file, which goes for the new one where its name
+ * makes that called something else. Gives back the theme as it was written.
  */
-export function saveTheme(dir: string, given: Omit<Theme, "id">): Theme {
+export function saveTheme(
+  dir: string,
+  given: Omit<Theme, "id">,
+  replacing?: string
+): Theme {
   const name = nameOf(given.name)
   if (!name) throw new Error("A theme needs a name.")
+  if (replacing !== undefined && !readTheme(replacing, { name: replacing }))
+    throw new Error(`There is no theme "${replacing}" to save again.`)
   fs.mkdirSync(dir, { recursive: true })
   const taken = fs
     .readdirSync(dir)
     .filter((file) => file.endsWith(".json"))
     .map((file) => file.slice(0, -".json".length))
+    .filter((id) => id !== replacing)
   const id = themeIdOf(name, taken)
   const file = themeFile({ name, light: given.light, dark: given.dark })
   const theme = readTheme(id, JSON.parse(file))
   if (!theme) throw new Error(`"${name}" could not be made a theme.`)
   fs.writeFileSync(path.join(dir, `${id}.json`), file)
+  if (replacing !== undefined && replacing !== id)
+    fs.rmSync(path.join(dir, `${replacing}.json`), { force: true })
   return theme
 }
 
