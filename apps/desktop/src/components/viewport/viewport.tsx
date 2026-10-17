@@ -67,6 +67,7 @@ import { bridge } from "./bridge"
 import { BackingUp } from "@/components/backing-up"
 import { ExplodeSlider } from "./explode-slider"
 import {
+  apartAsShown,
   disposeModel,
   eachAlone,
   loadModel,
@@ -662,13 +663,38 @@ function Model({ project }: { project: Project }) {
     const { groups, of } = arranged(base.model, arrangement, named)
     return regrouped(base, groups, of)
   }, [base, arrangement, named])
+  // And, pulled apart with some of it out of sight, as what is on show comes apart by
+  // itself (see apartAsShown): by the user, by the project's tools, or by the view being
+  // cut down to a part or a group. What is looked for by name is looked for in all of the
+  // model, which is all on show meanwhile, as the scene has it.
+  const view = useStore((s) => s.view)
+  const hiddenByTools = useTools((s) => s.looks.hidden)
+  const looking = useStore((s) => s.finding !== null)
+  // (by what is out of sight, and not by the lists of it, which are made afresh)
+  const outOfSight = React.useMemo(
+    () => [...new Set([...view.hidden, ...hiddenByTools])].sort().join("\n"),
+    [view.hidden, hiddenByTools]
+  )
+  const { exploded, only: cutTo } = view
+  const asShown = React.useMemo(() => {
+    if (!inGroups || !exploded || looking || (outOfSight === "" && !cutTo))
+      return inGroups
+    const hidden = outOfSight === "" ? [] : outOfSight.split("\n")
+    return apartAsShown(inGroups, (part) =>
+      onShow(part, { hidden, only: cutTo })
+    )
+  }, [inGroups, exploded, looking, outOfSight, cutTo])
   // And as it comes apart: piece by piece, or, pulled apart a second time, part by part.
   const alone = useStore((s) => s.view.alone)
   const loaded = React.useMemo(
+    () => (asShown && alone ? eachAlone(asShown) : asShown),
+    [asShown, alone]
+  )
+  // The guides are not of what is on show: one goes by how all of the model comes apart.
+  const guided = React.useMemo(
     () => (inGroups && alone ? eachAlone(inGroups) : inGroups),
     [inGroups, alone]
   )
-  const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const selection = useStore((s) => s.selection)
   const several = useStore((s) => s.several)
@@ -1498,7 +1524,8 @@ function Model({ project }: { project: Project }) {
   const assembly = view.assembly && real !== null && !lookingOver
   // And so does a board, in PCB mode: one of the circuit boards that go in the thing.
   const board = onBoard && loaded && !lookingOver ? onBoard : null
-  const { only, hidden } = view
+  // (what the project's tools have out of sight too)
+  const { only, hidden } = shownView
   const drawn = React.useMemo(
     () =>
       real?.parts.filter((part) => onShow(part, { only, hidden })) ??
@@ -1758,8 +1785,8 @@ function Model({ project }: { project: Project }) {
           name={real.model.title ?? project.name}
         />
       )}
-      {assembly && real && (
-        <Assembly project={project} loaded={real} listed={listed} />
+      {assembly && real && guided && (
+        <Assembly project={project} loaded={guided} listed={listed} />
       )}
       {board && <BoardMode projectId={project.id} board={board} />}
 

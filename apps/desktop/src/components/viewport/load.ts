@@ -437,57 +437,69 @@ function pieced(
     groups,
     across
   )
+  return worked
+    ? { pieces, ...waysOf(parts, boxes, pieces, box) }
+    : { pieces, ways: null, alone: null }
+}
 
-  // A model that does not say how it comes apart is pulled out from its middle: not part
-  // by part, but piece by piece, each piece clear of the rest. A part goes as its piece.
-  if (worked) {
-    const middle = box.getCenter(new THREE.Vector3())
-    // a piece is all of its parts: the box round them, and where their surfaces are,
-    // each counting for as much as there is of it
-    const wholes = new Map<
-      number,
-      { box: THREE.Box3; centre: THREE.Vector3; area: number }
-    >()
-    pieces.forEach((piece, index) => {
-      const { centre, area } = surfaceOf(parts[index])
-      const whole = wholes.get(piece)
-      if (whole) {
-        whole.box.union(boxes[index])
-        whole.centre.addScaledVector(centre, area)
-        whole.area += area
-      } else
-        wholes.set(piece, {
-          box: boxes[index].clone(),
-          centre: centre.multiplyScalar(area),
-          area,
-        })
-    })
-    for (const whole of wholes.values())
-      if (whole.area > 0) whole.centre.divideScalar(whole.area)
-      else whole.box.getCenter(whole.centre)
-    const ways = begun(waysOut([...wholes.values()], middle, across))
-    const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
-    // every part by itself: each is a piece, clear of all the others
-    const alone =
-      wholes.size < parts.length
-        ? begun(
-            waysOut(
-              parts.map((part, index) => ({
-                box: boxes[index],
-                centre: surfaceOf(part).centre,
-              })),
-              middle,
-              across
-            )
+/**
+ * Where each of these parts goes when they are pulled apart, as a model that does not say
+ * how it comes apart is: out from the middle of the box round them (`box`), not part by
+ * part, but piece by piece, each piece clear of the rest. A part goes as its piece. And
+ * where each goes when every part goes by itself (`alone`), if that is anywhere else.
+ * `boxes` is where each part is in the model.
+ */
+function waysOf(
+  parts: LoadedPart[],
+  boxes: THREE.Box3[],
+  pieces: number[],
+  box: THREE.Box3
+): { ways: THREE.Vector3[]; alone: THREE.Vector3[] | null } {
+  const across = box.getSize(new THREE.Vector3()).length()
+  const middle = box.getCenter(new THREE.Vector3())
+  // a piece is all of its parts: the box round them, and where their surfaces are,
+  // each counting for as much as there is of it
+  const wholes = new Map<
+    number,
+    { box: THREE.Box3; centre: THREE.Vector3; area: number }
+  >()
+  pieces.forEach((piece, index) => {
+    const { centre, area } = surfaceOf(parts[index])
+    const whole = wholes.get(piece)
+    if (whole) {
+      whole.box.union(boxes[index])
+      whole.centre.addScaledVector(centre, area)
+      whole.area += area
+    } else
+      wholes.set(piece, {
+        box: boxes[index].clone(),
+        centre: centre.multiplyScalar(area),
+        area,
+      })
+  })
+  for (const whole of wholes.values())
+    if (whole.area > 0) whole.centre.divideScalar(whole.area)
+    else whole.box.getCenter(whole.centre)
+  const ways = begun(waysOut([...wholes.values()], middle, across))
+  const way = new Map([...wholes.keys()].map((piece, n) => [piece, ways[n]]))
+  // every part by itself: each is a piece, clear of all the others
+  const alone =
+    wholes.size < parts.length
+      ? begun(
+          waysOut(
+            parts.map((part, index) => ({
+              box: boxes[index],
+              centre: surfaceOf(part).centre,
+            })),
+            middle,
+            across
           )
-        : null
-    return {
-      pieces,
-      ways: pieces.map((piece) => way.get(piece)!.clone()),
-      alone,
-    }
+        )
+      : null
+  return {
+    ways: pieces.map((piece) => way.get(piece)!.clone()),
+    alone,
   }
-  return { pieces, ways: null, alone: null }
 }
 
 /**
@@ -553,6 +565,39 @@ export function eachAlone(loaded: LoadedModel): LoadedModel {
       part.alone.equals(part.away) ? part : { ...part, away: part.alone }
     ),
   }
+}
+
+/**
+ * A model as it comes apart with only some of it on show: what is on show is pulled apart
+ * by itself, out from its own middle, each piece clear of the rest of what is on show and
+ * not of what is out of sight. Pulled apart about all of it, a model with something put
+ * out of sight that reaches far from the rest, a cord with its plug, would come apart
+ * about a middle out in the air, and what is left would all go off to one side. What is
+ * out of sight goes nowhere. A model that says where its parts go goes there, whatever of
+ * it is on show, and one that is all on show, or none of it, is the very same model. A
+ * part that goes where it went is the very same one.
+ */
+export function apartAsShown(
+  loaded: LoadedModel,
+  shown: (part: LoadedPart) => boolean
+): LoadedModel {
+  if (!loaded.worked) return loaded
+  const on = loaded.parts.filter(shown)
+  if (on.length === 0 || on.length === loaded.parts.length) return loaded
+  const boxes = on.map((part) => part.box.clone().applyMatrix4(part.home))
+  const box = boxes.reduce((all, one) => all.union(one), new THREE.Box3())
+  const pieces = on.map((part) => part.piece)
+  const { ways, alone } = waysOf(on, boxes, pieces, box)
+  const at = new Map(on.map((part, index) => [part, index]))
+  const parts = loaded.parts.map((part) => {
+    const index = at.get(part)
+    const away = index === undefined ? new THREE.Vector3() : ways[index]
+    const own = index === undefined || !alone ? away : alone[index]
+    return away.equals(part.away) && own.equals(part.alone)
+      ? part
+      : { ...part, away, alone: own }
+  })
+  return { ...loaded, parts, further: alone !== null }
 }
 
 /**

@@ -55,8 +55,8 @@ read at that size: click it to read it.
 ## What is drawn
 
 What is drawn is what the view had on show: pick parts in the list and the sheets are of
-those, put some out of sight with H and they are left out, pull the model apart and it
-is drawn pulled apart.
+those, put some out of sight with H (or have the project's tools do it) and they are
+left out, pull the model apart and it is drawn pulled apart.
 
 The cut and the ground are the view's, and their buttons wait until it is back. So do
 the cards of the other projects, which close up out of the sheets' way and leave the

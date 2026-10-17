@@ -47,6 +47,14 @@ again. (A model that says where its own parts go is pulled apart to where it say
 it: a face ends up above the works it covers, however far the works had to be lifted to
 come out of the case.
 
+It is what is on show that comes apart. With some of the model out of sight, by hand
+(H), by the project's own [tools](project-tools.md), or with the view cut down to a part
+or a group, the rest comes apart by itself: out from its own middle, and clear of
+itself only. A power lead put out of sight, which hangs far below the rest, no longer
+sends all of the rest the other way. Put back, or found by name, what was out of sight
+comes apart with the rest again. (A model that says where its own parts go is pulled
+apart to where it says, whatever is on show.)
+
 ## Grid
 
 **Grid** (Shift+G, as in Figma) rules the ground into squares and draws the world's
