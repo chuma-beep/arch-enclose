@@ -3,6 +3,7 @@ import { cn } from "cn"
 import { CheckIcon } from "lucide-react"
 
 import type { Project, Question, ThreadItem } from "@shared/api"
+import { REACH } from "@/components/steps"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { answerOf, NOTHING, pick, write, type Said } from "@/lib/questions"
@@ -75,8 +76,10 @@ export function QuestionCard({
   React.useEffect(() => {
     whole.current?.scrollIntoView({ block: "nearest" })
   }, [at])
-  const CARD =
-    "flex scroll-my-6 flex-col rounded-2xl bg-card p-3.5 ring-1 ring-foreground/10"
+  const CARD = cn(
+    "flex scroll-my-6 flex-col rounded-2xl bg-card py-3.5 ring-1 ring-foreground/10",
+    REACH
+  )
 
   const question = questions[at]
   if (item.state !== "pending" || !question)

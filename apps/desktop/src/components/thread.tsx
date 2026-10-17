@@ -4,6 +4,7 @@ import {
   ArrowUpIcon,
   BoxesIcon,
   BoxIcon,
+  ChevronDownIcon,
   ClockIcon,
   EyeIcon,
   GitBranchPlusIcon,
@@ -28,7 +29,7 @@ import { Thumb } from "@/components/picture"
 import { QuestionCard } from "@/components/question"
 import { QUOTABLE, Quoting } from "@/components/quoting"
 import { Reply } from "@/components/reply"
-import { LINE, LIVE, Meanwhile, Steps } from "@/components/steps"
+import { LINE, LIVE, Meanwhile, REACH, Steps } from "@/components/steps"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -362,7 +363,12 @@ function PermissionCard({
   const answer = (choice: "allow" | "always" | "deny") =>
     void window.cad.thread.answer(project.id, item.id, choice)
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl bg-card p-3.5 ring-1 ring-foreground/10">
+    <div
+      className={cn(
+        "flex flex-col gap-2.5 rounded-2xl bg-card py-3.5 ring-1 ring-foreground/10",
+        REACH
+      )}
+    >
       <div className="text-sm font-medium">{item.title}</div>
       {item.detail && (
         <pre className="max-h-40 overflow-auto rounded-lg bg-muted p-2.5 font-mono text-xs whitespace-pre-wrap">
@@ -470,10 +476,11 @@ function Item({
 
 /**
  * A circuit board made in detail in the background, beside the conversation: all of it in
- * one card, which grows as the board is made. At its top, what it is at and how long it
- * has been, with what stops it and what shows the board in PCB mode; under that, what
- * was done and said in making it, spelled out as a turn is while Claude is at it, and
- * folded away once it is over, under what came of it.
+ * one card. At its top, what it is at and how long it has been, with what stops it and
+ * what shows the board in PCB mode. Under that, only what is going on now: while it is
+ * being made, the last thing the agent said and the step it is on; once it is over, what
+ * came of it. "See all" opens the whole of what was done and said in making it, spelled
+ * out as a turn is while Claude is at it, and "See less" folds it away again.
  */
 function JobCard({
   item,
@@ -490,6 +497,24 @@ function JobCard({
   // what came of it: what was said last, once it is over
   const said = !working && last?.kind === "assistant" ? last : null
   const took = (item.ended ?? now) - item.at
+  // what was done and said, as it is spelled out while it is under way: the last thing
+  // said, and the steps after it, which is the one it is on
+  const pieces = React.useMemo(
+    () =>
+      blocks.flatMap((block): Block[] =>
+        block.kind === "steps" ? spelledOut(block) : [block]
+      ),
+    [blocks]
+  )
+  const lastSaid = pieces.findLast((piece) => piece.kind === "assistant")
+  const onNow = pieces.at(-1)?.kind === "steps" ? pieces.at(-1) : undefined
+  const shown = working
+    ? [lastSaid, onNow].filter((piece) => piece !== undefined)
+    : said
+      ? [said]
+      : pieces.slice(-1)
+  // there is more to it than that, which "See all" opens
+  const hidden = pieces.length > shown.length
   // Once it is over it is kept to a square, which what came of it is often longer than:
   // the foot of it fades out where there is more, and a click on it shows the rest. A
   // click on what it is called puts it back.
@@ -516,10 +541,10 @@ function JobCard({
         : `${item.name} could not be made`
   return (
     // (as wide as the conversation, which is what the square is counted from)
-    <div className="@container">
+    <div className={cn("@container", REACH, "px-0")}>
       <div
         className={cn(
-          "flex flex-col gap-3 rounded-xl border bg-foreground/[0.025] px-4 py-3 transition-colors duration-150 hover:border-foreground/18",
+          "flex flex-col gap-3 rounded-xl border bg-foreground/[0.025] px-4.5 py-3 transition-colors duration-150 hover:border-foreground/18",
           kept && "max-h-[100cqw]"
         )}
       >
@@ -582,52 +607,57 @@ function JobCard({
         <div
           ref={body}
           className={cn(
-            "relative -mx-4 -mb-3 flex min-h-0 flex-col gap-3 px-4 pb-3",
+            "relative -mx-4.5 -mb-3 flex min-h-0 flex-col gap-3 px-4.5 pb-3",
             kept && "overflow-hidden",
             // what is under the fade is there to be had
             more && "mask-b-from-[calc(100%-5rem)] mask-b-to-100%"
           )}
         >
-          {blocks
-            .filter((block) => block !== said)
-            .map((block) =>
-              block.kind === "steps" ? (
-                working ? (
-                  <AtWork
-                    key={block.id}
-                    stretch={block}
-                    live={block === last}
-                    doing={null}
-                  />
+          {open
+            ? [
+                ...blocks.filter((block) => block !== said),
+                ...(said ? [said] : []),
+              ].map((block) =>
+                block.kind === "steps" ? (
+                  working ? (
+                    <AtWork
+                      key={block.id}
+                      stretch={block}
+                      live={block === last}
+                      doing={null}
+                    />
+                  ) : (
+                    <Steps
+                      key={block.id}
+                      steps={block.steps}
+                      took={block.took}
+                      working={false}
+                    />
+                  )
                 ) : (
-                  <Steps
+                  <JobPiece
                     key={block.id}
-                    steps={block.steps}
-                    took={block.took}
-                    working={false}
+                    piece={block}
+                    final={block === said}
                   />
                 )
-              ) : block.kind === "assistant" ? (
-                <Reply key={block.id} item={block} />
-              ) : block.kind === "notice" ? (
-                <div
-                  key={block.id}
-                  className={cn(
-                    "text-xs",
-                    block.tone === "error"
-                      ? "text-destructive"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  {block.text}
-                </div>
-              ) : null
-            )}
-          {said && (
-            <div {...{ [QUOTABLE]: "" }}>
-              <Reply item={said} />
-            </div>
-          )}
+              )
+            : shown.map((piece) =>
+                piece.kind === "steps" ? (
+                  <Steps
+                    key={piece.id}
+                    steps={piece.steps}
+                    took={piece.took}
+                    working={working}
+                  />
+                ) : (
+                  <JobPiece
+                    key={piece.id}
+                    piece={piece}
+                    final={piece === said}
+                  />
+                )
+              )}
           {more && (
             <button
               type="button"
@@ -637,9 +667,61 @@ function JobCard({
             />
           )}
         </div>
+        {(hidden || open) && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className={cn(
+              LINE,
+              "w-fit cursor-pointer rounded-md outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            )}
+          >
+            {open ? "See less" : "See all"}
+            <ChevronDownIcon
+              className={cn(
+                "size-3.5 opacity-60 transition-transform",
+                open && "rotate-180"
+              )}
+            />
+          </button>
+        )}
       </div>
     </div>
   )
+}
+
+/**
+ * One thing in a board's card that is not a step: something the agent said, the last of
+ * which is what came of it (`final`), whose words can be picked out; or a notice.
+ */
+function JobPiece({
+  piece,
+  final,
+}: {
+  piece: Exclude<Block, { kind: "steps" }>
+  final: boolean
+}) {
+  if (piece.kind === "assistant")
+    return final ? (
+      <div {...{ [QUOTABLE]: "" }}>
+        <Reply item={piece} />
+      </div>
+    ) : (
+      <Reply item={piece} />
+    )
+  if (piece.kind === "notice")
+    return (
+      <div
+        className={cn(
+          "text-xs",
+          piece.tone === "error" ? "text-destructive" : "text-muted-foreground"
+        )}
+      >
+        {piece.text}
+      </div>
+    )
+  return null
 }
 
 /**

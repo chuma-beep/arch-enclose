@@ -146,7 +146,7 @@ right change over to the board's, and the cards of the other projects are put aw
 **Schematic**. Beside **Technical view**, **Bottom side** (S) turns the board over, to show its bottom as it is seen from under it. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
 wheel, and a double click shows all of it again. The 3D is looked round as the model is,
 with the same camera, with the edges drawn as the model's are, and in the app's own
-colours for a board: two greens for its mask, the lighter over copper, a yellow for its
+colours for a board: two greys for its mask, the lighter over copper, a yellow for its
 pads, and white for its lettering and for where nothing may go. **Parts** (P) lists what is on the board, each kind of part once in a small square
 with a picture of it in 3D, what it is, and how many of it there are with their names on
 the board (C1, C2); a part the board has no 3D of is a grey block its size. Pointing at
@@ -159,7 +159,9 @@ last of the buttons down the right, or Esc, brings the model back.
 
 A detailed board is made in the background, by another agent, while the conversation
 goes on: it has a card of its own in the conversation, which says what it is at as it
-goes, with **Show**, which opens the board in PCB mode, and **Stop**. Meanwhile the model
+goes, with **Show**, which opens the board in PCB mode, and **Stop**. The card shows
+only the last thing the agent said and the step it is on, and once it is done, what came
+of it; **See all**, at its foot, opens everything it did and said on the way. Meanwhile the model
 is locked. Claude still answers what you ask, and passes on to the board's agent what you
 say of the board; asked to change the model, it offers to stop the board or to make the
 change when it is done. Cmd+Z waits for the board too, and so does what is said in
@@ -178,7 +180,9 @@ or that it has not started yet. The agent says which step it is at as it begins 
 It often goes back, to routing again after a check failed, say: then the steps after
 that one are to come again. (An agent that says nothing of its steps has them gone by
 how far each build of the board got.) While it is routed, how far that has got goes
-round the step.
+round the step. In the technical view, each trace a build brings draws itself in along
+its way as the build comes in, and while the board is being checked a line scans across
+it.
 
 For as long as a board is still being made, it looks it: a light goes across it, over
 and over, in each of the three views and on its card in the list; and **Working**

@@ -33,6 +33,12 @@ import { duration, elapsed, useNow } from "@/lib/time"
 
 /** A line of the steps, whichever one; and of anything else that opens as they do. */
 export const LINE = "flex h-5 items-center gap-2 text-xs text-muted-foreground"
+/**
+ * A card in the conversation, as far across as the message box under it, with what is
+ * in it as far in as the conversation's words: the conversation's room at its sides
+ * (32px) less the box's (14px), out and back in. Its edges and the box's are one line.
+ */
+export const REACH = "-mx-4.5 px-4.5"
 /** Words for what is still going on: a light passes along them, over and over. */
 export const LIVE = "shimmer shimmer-color-foreground"
 /** How long such a line takes to open into what is under it, ms. */
