@@ -46,6 +46,7 @@ import {
   boardPaint,
   inOurColours,
   inShade,
+  keepOutsOf,
   repaint,
   shadedOf,
   type Shaded,
@@ -708,6 +709,8 @@ export function standing(board: THREE.Group, colours: PcbColours) {
           else material.color.copy(own).lerp(colour, much)
         }
     },
+    /** Have its keep-outs hatched by the app, where the board as tscircuit has it says. */
+    keepOuts: (circuit: Circuit | null) => keepOutsOf(paint, circuit),
     /**
      * Have the board itself drawn in other colours of the theme's: what is lit of it
      * is lit again (by `light`) to be seen in them.
@@ -954,6 +957,25 @@ function Picking({
 }
 
 /**
+ * The board's keep-outs hatched by the app, as soon as the board as tscircuit has it is
+ * there to say where they are (see colours.ts).
+ */
+export function KeepOuts({
+  shown,
+  circuit,
+}: {
+  shown: ReturnType<typeof standing>
+  circuit: Circuit | null
+}) {
+  const invalidate = useThree((state) => state.invalidate)
+  React.useEffect(() => {
+    shown.keepOuts(circuit)
+    invalidate()
+  }, [shown, circuit, invalidate])
+  return null
+}
+
+/**
  * The parts of the board that are lit: the one picked out, all the way, in the colour a
  * part of the model is when it is picked out; and those whose square in the list of
  * them the pointer is over, less. And the board itself in the theme's colours, as the
@@ -1098,6 +1120,7 @@ function InThreeD({
       {/* (after the camera is set up, which it goes by) */}
       <Focusing holder={shown.holder} circuit={circuit} />
       <Lighting shown={shown} />
+      <KeepOuts shown={shown} circuit={circuit} />
       <Picking shown={shown} names={names} />
       <BoardPartMark circuit={circuit} />
     </Canvas>

@@ -15,7 +15,12 @@ import { Canvas, useThree } from "@react-three/fiber"
 
 import type { PcbColours } from "@shared/theme-format"
 import type { Circuit } from "@/components/pcb/boards"
-import { readDrawing, standing, useDrawn } from "@/components/pcb/board-mode"
+import {
+  KeepOuts,
+  readDrawing,
+  standing,
+  useDrawn,
+} from "@/components/pcb/board-mode"
 import { disposeBoard, loadBoard } from "@/components/pcb/pictures"
 import { FOV, HOME_DIRECTION, toWorld } from "@/components/viewport/rig"
 import type { BoardAs } from "@/lib/store"
@@ -186,7 +191,14 @@ function Framing({ seen }: { seen: THREE.Box3 }) {
 }
 
 /** The board in 3D, lit as PCB mode lights it, from where a model is first seen. */
-function InThreeD({ colours }: { colours: PcbColours }) {
+function InThreeD({
+  board,
+  colours,
+}: {
+  /** the board as tscircuit has it, once it is loaded: where its keep-outs are */
+  board: Circuit | null
+  colours: PcbColours
+}) {
   const [shown, setShown] = React.useState<ReturnType<typeof standing> | null>(
     null
   )
@@ -222,6 +234,7 @@ function InThreeD({ colours }: { colours: PcbColours }) {
       <primitive object={shown.holder} />
       <Framing seen={shown.seen} />
       <Painting shown={shown} colours={colours} />
+      <KeepOuts shown={shown} circuit={board} />
     </Canvas>
   )
 }
@@ -286,7 +299,7 @@ export function SampleBoard({
   ground: string
 }) {
   const board = useSampleCircuit()
-  if (as === "3d") return <InThreeD colours={colours} />
+  if (as === "3d") return <InThreeD board={board} colours={colours} />
   if (!board) return null
   return (
     <Drawn

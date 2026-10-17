@@ -4,10 +4,13 @@
 // colours, and its edge as one colour: each of those is drawn in the app's colour for it
 // instead, and drawn again in another as soon as the theme changes it. What is on the
 // board is in its makers' colours, which are mostly greys: each grey is drawn in the
-// theme's shade for greys as light, as much lighter or darker than that as it was.
+// theme's shade for greys as light, as much lighter or darker than that as it was. And
+// its keep-outs, which tscircuit hatches as coarsely as its picture is drawn, are
+// hatched again by the app, finer, and as finely on every board.
 import * as THREE from "three"
 
 import type { PcbColours } from "@shared/theme-format"
+import type { Circuit } from "./boards"
 
 /**
  * The materials tscircuit gives the board itself, as against what is on it: its top and
@@ -44,6 +47,18 @@ const COLOURS: readonly (readonly [
 ]
 /** The board's edge, which has no picture on it: the lighter of the greens. */
 const EDGE: BoardColour = "board-traces"
+/** Where in COLOURS the mask is, and the keep-outs' hatching. */
+const MASK = 0
+const KEEP_OUT = COLOURS.findIndex(([theirs]) => theirs === "#ff6b6b")
+
+/**
+ * How a keep-out is hatched by the app, in mm: a line this far from the next, this wide,
+ * leaning as tscircuit's do (down to the right, seen from over the board). Where the lines are drawn too fine to be told apart, it is
+ * as much of their colour as there is of them, evenly.
+ */
+const HATCH = { apart: 0.45, wide: 0.1 }
+/** The most keep-outs on a side of a board that are hatched by the app (the rest as drawn). */
+const MOST_KEEP_OUTS = 24
 
 /**
  * The shades of grey of what is on a board, from the lightest, each with the grey it is
@@ -123,13 +138,35 @@ const RECOLOURING = `
     float nearest = 1e9;
     for (int i = 0; i < ${COLOURS.length}; i++) {
       for (int j = i + 1; j < ${COLOURS.length}; j++) {
-        vec3 along = theirs[j] - theirs[i];
-        float t = clamp(dot(seen - theirs[i], along) / dot(along, along), 0.0, 1.0);
-        float off = distance(seen, theirs[i] + along * t);
+        vec3 way = theirs[j] - theirs[i];
+        float t = clamp(dot(seen - theirs[i], way) / dot(way, way), 0.0, 1.0);
+        float off = distance(seen, theirs[i] + way * t);
         if (off < nearest) {
           nearest = off;
           drawn = mix(boardColours[i], boardColours[j], t);
         }
+      }
+    }
+    // the app's hatching, across the lines in mm: how much of a line is here (before
+    // anything is asked of where it is, for how fast that changes to be known)
+    float across = (boardAt.x + boardAt.y) * 0.70710678;
+    float pixel = fwidth(across);
+    float fromLine = abs(fract(across / ${HATCH.apart.toFixed(3)} + 0.5) - 0.5) * ${HATCH.apart.toFixed(3)};
+    float line = 1.0 - smoothstep(${(HATCH.wide / 2).toFixed(3)} - pixel, ${(HATCH.wide / 2).toFixed(3)} + pixel, fromLine);
+    line = mix(line, ${(HATCH.wide / HATCH.apart).toFixed(4)}, smoothstep(${(HATCH.apart / 4).toFixed(3)}, ${(HATCH.apart / 2).toFixed(3)}, pixel));
+    // within a keep-out, what tscircuit hatched, its lines and the mask between them (or
+    // a blend of the two, as near as any two colours are), is hatched again: what else
+    // is there (a pad, a hole) is left as it is
+    vec3 hatchWay = theirs[${KEEP_OUT}] - theirs[${MASK}];
+    float hatchAlong = clamp(dot(seen - theirs[${MASK}], hatchWay) / dot(hatchWay, hatchWay), 0.0, 1.0);
+    bool hatched = distance(seen, theirs[${MASK}] + hatchWay * hatchAlong) <= nearest + 0.015;
+    for (int k = 0; k < ${MOST_KEEP_OUTS}; k++) {
+      if (!hatched || k >= keepOutCount) break;
+      vec4 zone = keepOuts[k];
+      vec2 from = boardAt - zone.xy;
+      if (zone.w < 0.0 ? dot(from, from) <= zone.z * zone.z : abs(from.x) <= zone.z && abs(from.y) <= zone.w) {
+        drawn = mix(boardColours[${MASK}], boardColours[${KEEP_OUT}], line);
+        break;
       }
     }
     diffuseColor.rgb = drawn;
@@ -143,13 +180,29 @@ const RECOLOURING = `
 export type BoardPaint = {
   colours: { value: THREE.Color[] }
   edge: THREE.Color
+  /**
+   * Its keep-outs on each side, as the app hatches them (see `keepOutsOf`): in the
+   * board's own mm, a circle as its middle, its radius, and -1; a rectangle as its
+   * middle, and half its width and height. And how many there are.
+   */
+  keepOuts: Record<
+    "top" | "bottom",
+    { at: { value: THREE.Vector4[] }; count: { value: number } }
+  >
 }
 
 /** The app's colours for a board, as the theme has them (see `BoardPaint`). */
 export function boardPaint(theme: PcbColours): BoardPaint {
+  const side = () => ({
+    at: {
+      value: Array.from({ length: MOST_KEEP_OUTS }, () => new THREE.Vector4()),
+    },
+    count: { value: 0 },
+  })
   const paint: BoardPaint = {
     colours: { value: COLOURS.map(() => new THREE.Color()) },
     edge: new THREE.Color(),
+    keepOuts: { top: side(), bottom: side() },
   }
   repaint(paint, theme)
   return paint
@@ -161,6 +214,45 @@ export function repaint(paint: BoardPaint, theme: PcbColours) {
     paint.colours.value[index].set(ours ? theme[ours] : theirs)
   )
   paint.edge.set(theme[EDGE])
+}
+
+/**
+ * Have a board's keep-outs hatched by the app, on each side they are on, as the board as
+ * tscircuit has it says where they are: none, where there is nothing of it yet.
+ */
+export function keepOutsOf(paint: BoardPaint, board: Circuit | null) {
+  for (const layer of ["top", "bottom"] as const) {
+    const { at, count } = paint.keepOuts[layer]
+    count.value = 0
+    for (const element of board ?? []) {
+      if (count.value >= MOST_KEEP_OUTS) break
+      const { type, layers, shape, center, radius, width, height } =
+        element as {
+          type: unknown
+          layers?: unknown
+          shape?: unknown
+          center?: { x: number; y: number }
+          radius?: number
+          width?: number
+          height?: number
+        }
+      if (
+        type !== "pcb_keepout" ||
+        !Array.isArray(layers) ||
+        !layers.includes(layer) ||
+        !center
+      )
+        continue
+      if (shape === "circle" && typeof radius === "number")
+        at.value[count.value++].set(center.x, center.y, radius, -1)
+      else if (
+        shape === "rect" &&
+        typeof width === "number" &&
+        typeof height === "number"
+      )
+        at.value[count.value++].set(center.x, center.y, width / 2, height / 2)
+    }
+  }
 }
 
 /**
@@ -182,13 +274,30 @@ export function inOurColours(
     material.color.copy(paint.edge)
     return "edge"
   }
+  // (the picture of the bottom is of it as seen from over the board, as the top's is)
+  const keepOuts =
+    paint.keepOuts[/^Bottom/.test(material.name) ? "bottom" : "top"]
   const before = material.onBeforeCompile.bind(material)
   material.onBeforeCompile = (shader, renderer) => {
     shader.uniforms.boardColours = paint.colours
+    shader.uniforms.keepOuts = keepOuts.at
+    shader.uniforms.keepOutCount = keepOuts.count
+    // where on the board each point of it is, in its own mm: tscircuit's 3D has the
+    // board's X as its -X, and its Y as its Z
+    shader.vertexShader = shader.vertexShader
+      .replace("void main() {", "varying vec2 boardAt;\nvoid main() {")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nboardAt = vec2(-position.x, position.z);"
+      )
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "void main() {",
-        `uniform vec3 boardColours[${COLOURS.length}];\nvoid main() {`
+        `uniform vec3 boardColours[${COLOURS.length}];
+        uniform vec4 keepOuts[${MOST_KEEP_OUTS}];
+        uniform int keepOutCount;
+        varying vec2 boardAt;
+        void main() {`
       )
       .replace(
         "#include <map_fragment>",
