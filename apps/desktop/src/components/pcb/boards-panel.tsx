@@ -2,9 +2,8 @@ import * as React from "react"
 import { cn } from "cn"
 
 import type { BoardSummary } from "@shared/api"
-import { Badge } from "@/components/ui/badge"
 import { useStore } from "@/lib/store"
-import { WorkingBadge } from "./board-steps"
+import { UnfinishedBadge, WorkingBadge } from "./board-steps"
 import { sizeSaid, useBeingMade } from "./boards"
 import { useBoardPictures } from "./pictures"
 import { TurningBoard } from "./turning-board"
@@ -127,9 +126,7 @@ function BoardCard({
         <WorkingBadge className="absolute top-2.5 left-2.5" />
       ) : (
         !board.finished && (
-          <Badge variant="outline" className="absolute top-2.5 left-2.5">
-            Unfinished
-          </Badge>
+          <UnfinishedBadge className="absolute top-2.5 left-2.5" />
         )
       )}
       {/* what it is called and, under that in the same letters, its size */}

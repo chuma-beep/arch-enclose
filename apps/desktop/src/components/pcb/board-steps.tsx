@@ -22,6 +22,24 @@ export function WorkingBadge({ className }: { className?: string }) {
 }
 
 /**
+ * How a board only roughed out so far is tagged, to be made in detail later: in orange,
+ * to be seen at a glance among the boards that are done.
+ */
+export function UnfinishedBadge({ className }: { className?: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-unfinished/45 bg-unfinished/15 text-unfinished",
+        className
+      )}
+    >
+      Unfinished
+    </Badge>
+  )
+}
+
+/**
  * At the foot of PCB mode while an agent makes the board on screen in detail: the steps
  * it is made in, in a row, each with how long it took, or has taken so far, or that it
  * has not been begun on. It is where the whole of the making stands, which what the

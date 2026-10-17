@@ -40,7 +40,7 @@ import { bridge } from "@/components/viewport/bridge"
 import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
-import { WorkingBadge } from "./board-steps"
+import { UnfinishedBadge, WorkingBadge } from "./board-steps"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -1118,11 +1118,7 @@ export function BoardMode({
           {making ? (
             <WorkingBadge className="shrink-0" />
           ) : (
-            !board.finished && (
-              <Badge variant="outline" className="shrink-0">
-                Unfinished
-              </Badge>
-            )
+            !board.finished && <UnfinishedBadge className="shrink-0" />
           )}
           {turned && (
             <Badge variant="outline" className="shrink-0">
