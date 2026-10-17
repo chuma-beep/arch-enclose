@@ -646,7 +646,8 @@ export function Tools({
   const setBoardPartsOpen = useStore((state) => state.setBoardPartsOpen)
   const finding = useStore((state) => state.finding !== null)
   const find = useStore((state) => state.find)
-  const bare = useStore((state) => state.bare)
+  // (put away only at the last of Cmd+.'s steps: the first is of the cards alone)
+  const bare = useStore((state) => state.cleared === "all")
   // While one sheet of the blueprint has the view to itself there is none of them:
   // only, at the top, what puts the sheet back among the others.
   if (view.sheet !== null)

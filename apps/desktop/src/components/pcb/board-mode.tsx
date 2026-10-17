@@ -29,6 +29,7 @@ import {
   sizeSaid,
   useBeingMade,
   useCircuit,
+  useJobOn,
   type Circuit,
 } from "./boards"
 import { DRAWN } from "./ground"
@@ -39,6 +40,8 @@ import { bridge } from "@/components/viewport/bridge"
 import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
+import { UnfinishedBadge, WorkingBadge } from "./board-steps"
+import { inOurColours } from "./colours"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -86,6 +89,20 @@ function readDrawing(
 const SWEEP_S = 2.2
 /** How wide it is, against the board as it is seen. */
 const SWEEP_WIDE = 0.14
+/**
+ * While the board is being checked, the light is a line that scans across it, slower:
+ * how wide that is, against the board, and how long it takes to go across, s.
+ */
+const SCAN_WIDE = 0.012
+const SCAN_S = 3.6
+/**
+ * How long a trace takes to draw itself in, as a build brings it, ms; how much later
+ * each next one begins; and how many are drawn in one after another at most, the rest
+ * with the last of them.
+ */
+const LAYING_MS = 900
+const LAYING_APART_MS = 25
+const LAYING_MOST = 60
 /** How light the light is at its brightest, on the dark ground and on the light. */
 const SWEEP = { dark: 0.3, light: 0.5 }
 
@@ -171,11 +188,17 @@ function sweptOver(
 
 /**
  * Put the light this share of the way across what it is laid over (`box`, in the
- * drawing's units): from short of it to past it, eased, as the 3D's goes.
+ * drawing's units): from short of it to past it, eased, as the 3D's goes; or, as a line
+ * that scans (`scan`), evenly.
  */
-function sweepAt(light: SVGLinearGradientElement, box: DOMRect, share: number) {
-  const eased = share * share * (3 - 2 * share)
-  const wide = box.width * SWEEP_WIDE
+function sweepAt(
+  light: SVGLinearGradientElement,
+  box: DOMRect,
+  share: number,
+  scan = false
+) {
+  const eased = scan ? share : share * share * (3 - 2 * share)
+  const wide = box.width * (scan ? SCAN_WIDE : SWEEP_WIDE)
   // (leaning, its foot is further back than its head: the band has that much more to go)
   const from = box.x - wide
   const to = box.x + box.width + LEAN * (box.y + box.height) + wide
@@ -188,20 +211,79 @@ function sweepAt(light: SVGLinearGradientElement, box: DOMRect, share: number) {
 type Looking = { x: number; y: number; scale: number }
 
 /**
+ * What a trace in a drawing is known by from one build to the next: how it goes, and
+ * how wide it is. (What tscircuit calls each is counted afresh in each build.)
+ */
+const traceOf = (trace: Element) =>
+  `${trace.getAttribute("d") ?? ""}|${trace.getAttribute("stroke-width") ?? ""}`
+
+/**
+ * The traces of the drawing of each board last shown, by the board and the way it is
+ * drawn: kept here, as a drawing is put away while the board is built again and a new
+ * one comes in its place.
+ */
+const lastTraces = new Map<string, Set<string>>()
+/**
+ * The traces of each board being drawn in, and since when (ms, as the page counts): a
+ * board is often drawn again a moment after a build, and they go on from where they were.
+ */
+const layingSince = new Map<string, { traces: Set<string>; at: number }>()
+/** How long all the traces a build brings take to be drawn in, ms. */
+const LAYING_ALL_MS = LAYING_MS + LAYING_MOST * LAYING_APART_MS
+
+/**
+ * Have the traces of a drawing that the one before it did not have draw themselves in,
+ * along the way they go, one a little after another: what a build brought, as it came.
+ * `gone` is how far along that already is, ms, where it was begun in a drawing before.
+ */
+function lay(traces: SVGGeometryElement[], gone = 0) {
+  traces.forEach((trace, index) => {
+    const length = trace.getTotalLength()
+    if (!(length > 0)) return
+    trace.style.strokeDasharray = String(length)
+    const laying = trace.animate(
+      [{ strokeDashoffset: length }, { strokeDashoffset: 0 }],
+      {
+        duration: LAYING_MS,
+        delay: Math.min(index, LAYING_MOST) * LAYING_APART_MS,
+        easing: "ease-out",
+        fill: "backwards",
+      }
+    )
+    laying.currentTime = gone
+    laying.onfinish = () => (trace.style.strokeDasharray = "")
+  })
+}
+
+/**
  * A drawing of the board, filling the view, moved about and zoomed by the hand. It
  * keeps where it was looked at as long as it is the same board drawn the same way.
+ * While the board is being made (`swept`) a light goes across it, a line that scans it
+ * while it is being checked (`checking`), and each trace a build brings draws itself in.
  */
 function Drawing({
+  id,
   markup,
   dark,
   swept,
+  checking = false,
 }: {
+  /** the board, of which project, and the way it is drawn */
+  id: string
   markup: string
   dark: boolean
   /** the board is still being made: a light goes across it, over and over */
   swept: boolean
+  /** and it is being checked: the light is a line that scans it */
+  checking?: boolean
 }) {
   const holder = React.useRef<HTMLDivElement>(null)
+  // (the board being made, as it is when a new drawing comes, without waiting on it:
+  // kept before the drawing is, which is what reads it)
+  const making = React.useRef(swept)
+  React.useLayoutEffect(() => {
+    making.current = swept
+  }, [swept])
   const looking = React.useRef<Looking | null>(null)
   const sweep = React.useRef<ReturnType<typeof sweptOver> | null>(null)
   /** how big the whole of it is shown: what zooming in and out is counted from */
@@ -214,6 +296,32 @@ function Drawing({
     const { svg, ...size } = drawing
     sweep.current = sweptOver(svg, size, dark)
     within.replaceChildren(svg)
+    // the traces it has that the drawing before it had not: what a build brought, drawn
+    // in, while the board is being made
+    const drawn = [...svg.querySelectorAll<SVGGeometryElement>(".pcb-trace")]
+    const had = lastTraces.get(id)
+    lastTraces.set(id, new Set(drawn.map(traceOf)))
+    const now = performance.now()
+    const fresh = had ? drawn.filter((trace) => !had.has(traceOf(trace))) : []
+    // (or the same drawing again, while what it brought is still being drawn in)
+    const earlier = layingSince.get(id)
+    const going =
+      fresh.length === 0 && earlier && now - earlier.at < LAYING_ALL_MS
+        ? earlier
+        : null
+    if (
+      making.current &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      if (fresh.length > 0) {
+        layingSince.set(id, { traces: new Set(fresh.map(traceOf)), at: now })
+        lay(fresh)
+      } else if (going)
+        lay(
+          drawn.filter((trace) => going.traces.has(traceOf(trace))),
+          now - going.at
+        )
+    }
 
     const show = () => {
       const at = looking.current
@@ -330,7 +438,7 @@ function Drawing({
       within.removeEventListener("pointercancel", up)
       within.removeEventListener("dblclick", fit)
     }
-  }, [markup, dark])
+  }, [id, markup, dark])
 
   // the light, while the board is being made: as the 3D's, a frame at a time
   React.useEffect(() => {
@@ -347,12 +455,14 @@ function Drawing({
     const box = over.getBBox()
     let frame = 0
     const go = () => {
-      sweepAt(light, box, (performance.now() / 1000 / SWEEP_S) % 1)
+      const across =
+        (performance.now() / 1000 / (checking ? SCAN_S : SWEEP_S)) % 1
+      sweepAt(light, box, across, checking)
       frame = requestAnimationFrame(go)
     }
     go()
     return () => cancelAnimationFrame(frame)
-  }, [markup, dark, swept])
+  }, [markup, dark, swept, checking])
 
   return (
     <div
@@ -421,7 +531,11 @@ function newSweep(): Sweep {
 
 /** Give a board's faces the light that goes across it (see Sweep), out until it is lit. */
 function sweepable(material: THREE.Material, sweep: Sweep) {
-  material.onBeforeCompile = (shader) => {
+  // (after whatever else is done to it as it is drawn)
+  const before = material.onBeforeCompile.bind(material)
+  const key = material.customProgramCacheKey.bind(material)
+  material.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer)
     shader.uniforms.sweepAt = sweep.at
     shader.uniforms.sweepSize = sweep.size
     shader.fragmentShader = shader.fragmentShader
@@ -437,7 +551,7 @@ function sweepable(material: THREE.Material, sweep: Sweep) {
         gl_FragColor.rgb += sweepAt.z * exp(-off * off);`
       )
   }
-  material.customProgramCacheKey = () => "board-sweep"
+  material.customProgramCacheKey = () => `board-sweep+${key()}`
 }
 
 /** A line drawn over a board, which a click goes through to what is under it. */
@@ -447,10 +561,10 @@ function unpicked(line: LineSegments2) {
 }
 
 /**
- * A board in 3D as the view shows it: as tscircuit built it, in its own colours, with
- * its lines drawn as the model's parts made of a mesh have theirs: wherever two of its
- * triangles meet at an edge, and the outline of its curved faces, wherever that is
- * seen from. It is turned half round, so that its own X and Y are the model's (as its
+ * A board in 3D as the view shows it: as tscircuit built it, in the app's colours (see
+ * colours.ts), with its lines drawn as the model's parts made of a mesh have theirs:
+ * wherever two of its triangles meet at an edge, and the outline of its curved faces,
+ * wherever that is seen from. It is turned half round, so that its own X and Y are the model's (as its
  * STEP file has them) and the view's camera comes to it from its front right corner, as
  * to a model. With the box round it, in the model's frame, which the camera goes by.
  */
@@ -484,6 +598,8 @@ function standing(board: THREE.Group) {
         // (the one it came with is no one's now)
         made.push(material)
         const copy = (material as THREE.Material).clone()
+        // (the board itself in the app's colours, which are then its own)
+        inOurColours(copy)
         if (copy instanceof THREE.MeshStandardMaterial)
           faces.push({ material: copy, own: copy.color.clone() })
         return copy
@@ -1036,6 +1152,8 @@ export function BoardMode({
   )
   const size = sizeSaid(board)
   const making = useBeingMade(projectId, board)
+  // (an agent making it in detail has the steps it is at shown at the foot of the view)
+  const job = useJobOn(projectId, board)
   const partsOpen = useStore((state) => state.boardPartsOpen)
 
   return (
@@ -1079,9 +1197,11 @@ export function BoardMode({
         // (keyed by the board and the way it is drawn, so that each starts whole)
         <Drawing
           key={`${board.id}:${as}:${turned}`}
+          id={`${projectId}:${board.id}:${as}:${turned}`}
           markup={markup}
           dark={dark}
           swept={making}
+          checking={job?.steps.at(-1)?.step === "checking"}
         />
       ) : trouble || markup === false ? (
         <Nothing
@@ -1100,8 +1220,9 @@ export function BoardMode({
         />
       )}
 
-      {/* what it is, at the top: where the window is not dragged by; and under that,
-          while it is being built, how far that has got */}
+      {/* what it is, at the top: where the window is not dragged by, and that it is
+          being worked on while it is; and under that, while it is being built, how far
+          that has got, unless an agent is making it in detail, whose steps say that */}
       <div className="pointer-events-none absolute inset-x-0 top-4 flex flex-col items-center gap-2">
         <div className="flex max-w-[50%] items-center gap-2 text-sm select-none">
           <span className="truncate font-medium">{board.name}</span>
@@ -1110,10 +1231,10 @@ export function BoardMode({
               {size}
             </span>
           )}
-          {!board.finished && (
-            <Badge variant="outline" className="shrink-0">
-              Unfinished
-            </Badge>
+          {making ? (
+            <WorkingBadge className="shrink-0" />
+          ) : (
+            !board.finished && <UnfinishedBadge className="shrink-0" />
           )}
           {turned && (
             <Badge variant="outline" className="shrink-0">
@@ -1121,22 +1242,7 @@ export function BoardMode({
             </Badge>
           )}
         </div>
-        {board.building ? (
-          <BuildingLine building={board.building} />
-        ) : (
-          // (and where there is nothing of it yet, the view says so in the middle)
-          making &&
-          (board.built !== null || board.preview !== null) && (
-            <span
-              className={cn(
-                "animate-in text-xs text-foreground/60 duration-200 fade-in",
-                LIVE
-              )}
-            >
-              Still being made
-            </span>
-          )
-        )}
+        {!job && board.building && <BuildingLine building={board.building} />}
       </div>
     </div>
   )

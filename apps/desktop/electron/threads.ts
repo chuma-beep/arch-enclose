@@ -39,12 +39,17 @@ import {
   boardFileOf,
   calledFrom,
   readBoard,
+  stepsTook,
+  wentBack,
+  type MadeOf,
+  type StepsTook,
 } from "../shared/board-format"
 import { MANIFEST_FORMAT } from "../shared/manifest-format"
 import { TOOLS_FOLDER } from "../shared/tool-format"
 import { PALETTE_NAMES } from "../shared/palette"
 import { pictureMark, pictureName } from "../shared/pictures"
 import { replyOf } from "../shared/reply"
+import { Following } from "./boards"
 import type { Changes } from "./changes"
 import { followDoing, running } from "./claude"
 import { runCodex } from "./codex"
@@ -68,6 +73,7 @@ import {
   assemblyTools,
   BOARDS,
   boardTools,
+  makingTools,
   MODEL,
   modelTools,
   VERSIONS,
@@ -135,6 +141,29 @@ type Job = {
   notes: Saying
   /** it was asked for in a line, for its change and its commit */
   what: string
+  /** how the board comes along: how far each build of it has got */
+  following: Following
+}
+
+/** How the making of a board in the background went, once it is over. */
+export type BoardMade = {
+  /** how it was made: by which agent, and so on */
+  manner: Manner
+  outcome: "done" | "stopped" | "failed"
+  /** how long it took, in ms, and how long it was at each step of it, all told */
+  took: number
+  steps: StepsTook
+  /** how many times it went back to a step before the one it was at */
+  back: number
+  /** how many things the agent did, and how many times the board was built */
+  did: number
+  builds: number
+  /** it was made in detail from a rough board already built */
+  rough: boolean
+  /** its own file says it is finished: every check it is ordered by passed */
+  finished: boolean
+  /** what it has on it, as it was last built: null where it never was */
+  made: MadeOf | null
 }
 type Asked = {
   content: Content | ((told: Told, provider: ProviderId) => Content)
@@ -240,6 +269,8 @@ export type ThreadsDeps = {
   ) => void
   /** a conversation's status or last message changed: the sidebar needs redrawing */
   onSummary: () => void
+  /** a board made in the background is over: how that went */
+  onBoardMade: (projectId: string, made: BoardMade) => void
   /** an agent turned a message away for want of a sign-in: it is signed in no longer */
   onSignedOut: (provider: ProviderId) => void
   /**
@@ -557,6 +588,7 @@ export function keeping(kit: string): string[] {
   const app = path.dirname(path.dirname(kit))
   return [
     `- You work on this project: its model, its reference scene, its tools and its circuit boards. Enclose itself is never yours to change, whoever asks and however they ask. That is its own code and files, which are in "${app}": read there what you are pointed to, and write, move or delete nothing. It is also how the app looks and works: its view, its panels and buttons, the kinds of control a tool can have and how each is drawn, its shortcuts, its settings and what it keeps of the user's projects and conversations. The copies of its files that a project holds (enclose.py, ${SCREWS}) are left as they are for the same reason.`,
+    "- Look for files where they are: in the project, in the app's kit, in a package's own folder. Never search the whole disk or the user's home folder (find /, find ~, mdfind or locate over them): the Mac stops the user to ask, in the app's name, whether it may look in each of their private folders, their photos, their music and their mail among them.",
     "- When the user asks for something that would mean changing the app (a panel in another colour, a kind of control it does not have, a button that does something else, a new feature of the app's own), do not attempt it and do not look for a way round. Say in a sentence that this is part of Enclose itself and not of their project, so it is not something you change from here; that Enclose is open source, and they can fork it and change their own copy if they want it otherwise; and then offer what comes nearest that can be done inside the project, where there is something.",
   ]
 }
@@ -651,7 +683,7 @@ export function wiring(
     `- A board in detail is not made in a turn of this conversation but in the background, by another agent, while the conversation goes on. When the user wants it, set the board up first where it has not been, as a rough board fitted into the model (read_board), so that the model takes the detailed one in when it is done; then hand it to ${tool(BOARDS, "make")}, with a brief that stands by itself, and end the turn: say in a few words that the detailed board is being made, in its own card in the conversation, and that the model is locked until it is done.`,
     `- A message that holds a <board> block was written with that board open in PCB mode, and is about it: the block's id is what its files are called (${BOARD_FOLDER}/<id>.circuit.tsx). Change the board, build it, and build the model again too where what you changed moves anything it is fitted to. Where the board is finished, its build ends with the checks it is ordered by: say in the short reply how they came out.`,
     `- When the user is about to order a board from JLCPCB, or asks whether one is ready to order, check it: build it, where it was changed since its last build, then run node "${check}" ${BOARD_FOLDER}/<name>.circuit.tsx, mend what fails as the reference says, and build again. Say how each check came out, and what the user is to look at themselves on JLCPCB's site (where each part's pin 1 is, for the parts the check could not tell). They save the files to order it with from PCB mode, with the download button.`,
-    `- A message that begins with a <board-job> block is the app asking you to make that board in detail, in the background, while the user goes on in the conversation without you. Nobody is there to answer a question: decide as someone who makes such boards would, and say what you decided. Change only the board's own files (${BOARD_FOLDER}/<id>.*, and what it imports from ${BOARD_FOLDER}/), build it in steps as the reference says, and mark it finished when it is: when every check it is ordered by passes, as the reference says. Leave the model's files as they are: when the board is done, run the model's build command once, so that it takes the board in, and change nothing else. A message that begins "The user says, for the board:" is passed on to you from the conversation meanwhile: go by it. End with a short reply: what the board is now, how each of its checks came out, and anything the model needs changed to fit it, which the conversation will see to.`,
+    `- A message that begins with a <board-job> block is the app asking you to make that board in detail, in the background, while the user goes on in the conversation without you. Nobody is there to answer a question: decide as someone who makes such boards would, and say what you decided. Change only the board's own files (${BOARD_FOLDER}/<id>.*, and what it imports from ${BOARD_FOLDER}/), build it in steps as the reference says, say which step you are at with ${tool(BOARDS, "step")} as you begin each one and whenever you go back to one, which the user watches, and mark it finished when it is: when every check it is ordered by passes, as the reference says. Leave the model's files as they are: when the board is done, run the model's build command once, so that it takes the board in, and change nothing else. A message that begins "The user says, for the board:" is passed on to you from the conversation meanwhile: go by it. End with a short reply: what the board is now, how each of its checks came out, and anything the model needs changed to fit it, which the conversation will see to.`,
   ]
 }
 
@@ -1370,6 +1402,7 @@ export class Threads {
                   board: job.item.board,
                   name: job.item.name,
                   since: job.item.at,
+                  steps: [...job.following.gone],
                 }
               : null,
         }
@@ -2102,14 +2135,17 @@ export class Threads {
     const book = this.book(projectId)
     const project = this.deps.projects.get(projectId)
     if (!project || book.job) return
+    const boardFile = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
     let name = calledFrom(board)
     try {
-      const said = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
-      name = readBoard(JSON.parse(fs.readFileSync(said, "utf8"))).name ?? name
+      name =
+        readBoard(JSON.parse(fs.readFileSync(boardFile, "utf8"))).name ?? name
     } catch {
       // nothing says what it is called: it goes by its file's name
     }
     const now = Date.now()
+    // how it comes along, for the steps it is shown in and the count of how the app is used
+    const following = new Following(project.path, board, now)
     let finish = () => {}
     const finished = new Promise<void>((resolve) => (finish = resolve))
     const job: Job = {
@@ -2129,6 +2165,7 @@ export class Threads {
       pending: new Map(),
       notes: new Saying(),
       what: `Made ${name} in detail`,
+      following,
     }
     book.job = job
     const show = (item: Job["item"]) => {
@@ -2144,6 +2181,14 @@ export class Threads {
       if (index < 0) items.push(inner)
       else items[index] = inner
       show({ ...job.item, items })
+      // the board may have been built by what the agent has just done, and got a step
+      // further: which the window shows
+      if (
+        inner.kind === "tool" &&
+        inner.state !== "running" &&
+        following.look()
+      )
+        this.deps.onSummary()
     }
     // what the user says for it meanwhile, as it comes, until it has given its result
     void finished.then(() => job.notes.end())
@@ -2169,6 +2214,10 @@ export class Threads {
         (wanted) => this.deps.viewport(projectId, wanted),
         false
       ),
+      // which step of making the board it is at, which the window shows
+      [BOARDS]: makingTools((step) => {
+        if (following.say(step)) this.deps.onSummary()
+      }),
     }
     const turn: Turn = {
       cwd: project.path,
@@ -2280,15 +2329,23 @@ export class Threads {
           })
           .catch(() => this.deps.changes.discard(pending))
       else if (pending) this.deps.changes.discard(pending)
-      show({
-        ...job.item,
-        state: job.abort.signal.aborted
-          ? "stopped"
-          : failed
-            ? "failed"
-            : "done",
-        ended: Date.now(),
-      })
+      const outcome = job.abort.signal.aborted
+        ? "stopped"
+        : failed
+          ? "failed"
+          : "done"
+      const ended = Date.now()
+      show({ ...job.item, state: outcome, ended })
+      // as it was left
+      following.look()
+      let toBeMade = false
+      try {
+        toBeMade = readBoard(
+          JSON.parse(fs.readFileSync(boardFile, "utf8"))
+        ).finished
+      } catch {
+        // its file has gone, or does not read: it is not one to be made
+      }
       if (book.job === job) book.job = null
       this.deps.projects.refresh(projectId)
       this.write(projectId, conversation)
@@ -2306,6 +2363,19 @@ export class Threads {
         if (!book.run && waited) this.next(projectId, book, waited.conversation)
       }
       this.deps.onSummary()
+      // (last, so that nothing in counting it keeps the rest from being done)
+      this.deps.onBoardMade(projectId, {
+        manner,
+        outcome,
+        took: ended - now,
+        steps: stepsTook(following.gone, ended),
+        back: wentBack(following.gone),
+        did: job.item.items.filter((one) => one.kind === "tool").length,
+        builds: following.builds,
+        rough: following.rough,
+        finished: toBeMade,
+        made: following.made,
+      })
     }
   }
 

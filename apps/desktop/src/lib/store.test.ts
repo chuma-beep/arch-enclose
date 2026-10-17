@@ -186,6 +186,20 @@ describe("what Esc steps back through", () => {
     expect(esc()).toBe(false)
   })
 
+  it("leaves the project's tools at work, where they have been since it opened, until they are brought up", () => {
+    // at work by themselves, from when the project opened
+    state().setView({ tools: true, toolsQuiet: true })
+    expect(esc()).toBe(false)
+    expect(view().tools).toBe(true)
+    // brought up, and put away: Esc then lets go of them, as of the rest of the view
+    state().setToolsOpen(true)
+    expect(view()).toMatchObject({ tools: true, toolsQuiet: false })
+    expect(esc()).toBe(true)
+    expect(state().toolsOpen).toBe(false)
+    expect(esc()).toBe(true)
+    expect(view().tools).toBe(false)
+  })
+
   it("puts a model that is pulled apart together before anything else, whenever it was", () => {
     state().setView({ exploded: true })
     state().setView({ section: cut })
@@ -224,19 +238,22 @@ describe("what Esc steps back through", () => {
   })
 })
 
-describe("the view with the window to itself", () => {
-  it("has the cards and buttons put away, and leaves the conversation as it is", () => {
+describe("what is over the view, put away a step at a time", () => {
+  it("is the other projects, then all of it, then none, and leaves the conversation as it is", () => {
     state().setThreadOpen(true)
-    state().setBare(true)
-    expect(state()).toMatchObject({ bare: true, threadOpen: true })
-    state().setBare(false)
-    expect(state()).toMatchObject({ bare: false, threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: "others", threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: "all", threadOpen: true })
+    state().clearView()
+    expect(state()).toMatchObject({ cleared: null, threadOpen: true })
   })
 
   it("is not what Esc gets out of", () => {
-    state().setBare(true)
+    state().clearView()
+    state().clearView()
     expect(state().leave()).toBe(false)
-    expect(state().bare).toBe(true)
+    expect(state().cleared).toBe("all")
   })
 })
 

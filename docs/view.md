@@ -22,6 +22,12 @@ The view turns about what the camera looks at, in the middle of the view. The se
 can have it turn about what is picked out, or about the place on the model the pointer
 was on as the turn began, which then stays where it is while the rest goes round it.
 
+What is out of sight is nothing to the camera: the view a model opens with, Cmd+1, the
+set views and how far it zooms go by the parts on show, and what is picked out but out
+of sight is not turned about or gone to. When the project's own
+[tools](project-tools.md) put parts out of sight or back, the camera takes in what is on
+show then, from the side it is on; parts hidden by hand leave it where it is.
+
 A trackpad and a wheel send the same scroll, so which one it was is read from how the
 scroll moves ([`scroll.ts`](../apps/desktop/src/lib/scroll.ts)). Holding Ctrl makes any
 scroll zoom, whatever it was taken for. The settings can say which it is, how fast the

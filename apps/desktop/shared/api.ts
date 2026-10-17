@@ -1,7 +1,7 @@
 // What the Electron side and the window say to each other. Both import this file, so a
 // change here is checked on both ends.
 
-import type { Building } from "./board-format"
+import type { Building, StepsGone } from "./board-format"
 
 export type Vec3 = [number, number, number]
 
@@ -61,9 +61,16 @@ export type ConversationSummary = {
   versioning: boolean
   /**
    * A circuit board being made in detail in the background, beside the conversation,
-   * which it was asked for in: the board, and when that began (ms). Null while none is.
+   * which it was asked for in: the board, when that began (ms), and the steps of making
+   * it that it has gone through, the one it is at last (see `StepsGone`). Null while
+   * none is.
    */
-  job: { board: string; name: string; since: number } | null
+  job: {
+    board: string
+    name: string
+    since: number
+    steps: StepsGone
+  } | null
 }
 
 /**

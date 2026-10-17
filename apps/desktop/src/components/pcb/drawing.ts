@@ -69,6 +69,13 @@ const edgeOf = (dark: boolean) =>
   dark ? "rgb(208, 210, 205)" : "rgba(20, 24, 22, 0.6)"
 
 /**
+ * The colour of what is printed on a board, its lettering and the outlines of its
+ * parts, on either side: white, as it is printed, and not KiCad's colour for each side;
+ * near black on the light ground, where white would not be seen.
+ */
+const printOf = (dark: boolean) => (dark ? "#ffffff" : "#1c1c1c")
+
+/**
  * The holes through the board that are no part of a pad, its mounting holes, drawn with
  * an edge, as its own edge is: a hole is the ground showing through, and with nothing
  * drawn round it, on the ground, it would not be seen at all. (A pad's hole has the
@@ -105,6 +112,7 @@ function pcbLook(
       drill: ground,
       // and its edge in KiCad's grey for one, which on the light ground is too pale
       boardOutline: edgeOf(dark),
+      silkscreen: { top: printOf(dark), bottom: printOf(dark) },
     },
   }
 }

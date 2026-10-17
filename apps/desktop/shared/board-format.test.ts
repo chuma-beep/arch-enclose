@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import { calledFrom, readBoard, sizeOf, unsourcedOf } from "./board-format"
+import {
+  calledFrom,
+  madeOf,
+  readBoard,
+  sizeOf,
+  stepsTook,
+  unsourcedOf,
+  wentBack,
+} from "./board-format"
 
 describe("readBoard", () => {
   it("reads what a board is called, and whether it is finished", () => {
@@ -122,5 +130,99 @@ describe("unsourcedOf", () => {
   it("is nothing of what is not a board", () => {
     expect(unsourcedOf({})).toEqual([])
     expect(unsourcedOf([null, 3])).toEqual([])
+  })
+})
+
+describe("madeOf", () => {
+  const of = (...types: string[]) => madeOf(types.map((type) => ({ type })))
+
+  it("goes by what is on it: parts, then connections, then traces", () => {
+    expect(of("pcb_board").step).toBeNull()
+    expect(of("source_component").step).toBe("placed")
+    expect(of("source_component", "source_trace").step).toBe("connected")
+    expect(of("source_component", "source_trace", "pcb_trace").step).toBe(
+      "routed"
+    )
+  })
+
+  it("counts how much there is of it", () => {
+    expect(
+      of(
+        "source_component",
+        "source_component",
+        "source_net",
+        "source_trace",
+        "source_trace",
+        "source_trace",
+        "pcb_via"
+      )
+    ).toEqual({ step: "connected", parts: 2, nets: 1, connections: 3, vias: 1 })
+  })
+
+  it("is nothing of what is not a board", () => {
+    expect(madeOf({})).toEqual({
+      step: null,
+      parts: 0,
+      nets: 0,
+      connections: 0,
+      vias: 0,
+    })
+  })
+})
+
+describe("stepsTook", () => {
+  it("has how long it was at each step, all told, each until the next was begun", () => {
+    expect(
+      stepsTook(
+        [
+          { step: "placing", at: 1000 },
+          { step: "connecting", at: 4000 },
+          { step: "routing", at: 5000 },
+          { step: "checking", at: 9000 },
+          // a check failed, and it was routed again
+          { step: "routing", at: 10_000 },
+          { step: "checking", at: 12_000 },
+        ],
+        13_000
+      )
+    ).toEqual({
+      placing: 3000,
+      connecting: 1000,
+      routing: 6000,
+      checking: 2000,
+    })
+  })
+
+  it("has none for a step it never was at", () => {
+    expect(
+      stepsTook(
+        [
+          { step: "placing", at: 1000 },
+          { step: "routing", at: 4000 },
+        ],
+        10_000
+      )
+    ).toEqual({
+      placing: 3000,
+      connecting: null,
+      routing: 6000,
+      checking: null,
+    })
+  })
+})
+
+describe("wentBack", () => {
+  it("counts the times it went back to an earlier step", () => {
+    expect(
+      wentBack([
+        { step: "placing", at: 0 },
+        { step: "routing", at: 1 },
+        { step: "checking", at: 2 },
+        { step: "routing", at: 3 },
+        { step: "checking", at: 4 },
+        { step: "connecting", at: 5 },
+      ])
+    ).toBe(2)
+    expect(wentBack([{ step: "placing", at: 0 }])).toBe(0)
   })
 })

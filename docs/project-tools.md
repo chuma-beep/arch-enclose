@@ -25,9 +25,11 @@ control is one of the app's kinds, whatever the tool:
 - a choice among the app's colours
 - something the tool says
 
-The panel stays up while the view is turned, since a tool is worked with the model in
-sight. The button or Esc puts it away, and the tools are still at work then: Esc again
-lets go of the model, which is back as it is built.
+The tools are at work from when the project opens, so that what they put out of sight is
+out of sight from the first, and an Esc meant for something else does not let go of
+them. The panel stays up while the view is turned, since a tool is worked with the model
+in sight. The button or Esc puts it away, and the tools are still at work then: once
+they have been brought up, Esc again lets go of the model, which is back as it is built.
 
 ## How a tool is written
 

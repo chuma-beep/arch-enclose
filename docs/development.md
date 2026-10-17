@@ -205,7 +205,11 @@ nobody has, the tests passing, and a project's tool shut in (`npm run sandbox`, 
 [Checks](#checks)). It asks before it goes on (`-- --yes` has it not ask), and publishes
 nothing until the app is built and a Mac has been seen to take it. `-- --dry` only sees
 that everything is ready. If it stops after the version was committed, run it again with
-that version and it goes on from there.
+that version and it goes on from there. It also says how far behind tscircuit's newest
+release the version boards are built with is (`TSCIRCUIT` in `kit/board.mjs`). That is
+kept at one version so that boards build alike from day to day, and moved on by hand when
+there is a reason to: a fix or a better router that is wanted, or about once a month.
+Build a few boards again with it before a release.
 
 What it does, a step at a time, which can also be done by hand:
 

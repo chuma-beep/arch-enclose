@@ -80,9 +80,9 @@ function useViewportRequests() {
 /**
  * Cmd+B shows the conversation, and puts it away again. Cmd+, does the same for the
  * settings, as it does in every Mac app. Cmd+N makes a new project, and Cmd+O asks for
- * a file or folder to open as one: what the + under the project cards does. Cmd+. gives
- * the view the window to itself, with the cards and the buttons over it put away, and
- * brings them back.
+ * a file or folder to open as one: what the + under the project cards does. Cmd+. puts
+ * away what is over the view a step at a time: the other projects' cards, then all of
+ * it, and then it brings it all back.
  */
 function useAppKeys() {
   React.useEffect(() => {
@@ -103,8 +103,8 @@ function useAppKeys() {
         event.preventDefault()
         if (asked === "conversation")
           return state.setThreadOpen(!state.threadOpen)
-        // (held down, it would put them away and bring them back by turns)
-        if (!event.repeat) state.setBare(!state.bare)
+        // (held down, it would go through the steps and round again)
+        if (!event.repeat) state.clearView()
         return
       }
       event.preventDefault()

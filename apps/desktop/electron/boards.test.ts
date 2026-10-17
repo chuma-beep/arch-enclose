@@ -4,7 +4,7 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { boardsIn, findBoards } from "./boards"
+import { boardsIn, findBoards, Following } from "./boards"
 import { Projects } from "./projects"
 
 let root: string
@@ -174,5 +174,76 @@ describe("a project's boards", () => {
     projects.refresh(id)
     expect(boards()).toBe(first! + 1)
     projects.close()
+  })
+})
+
+describe("Following", () => {
+  /** the board built as it is at `at` (s), with these on it */
+  const build = (at: number, ...types: string[]) => {
+    const file = "pcb/build/main.circuit.json"
+    write(file, JSON.stringify(types.map((type) => ({ type }))))
+    fs.utimesSync(path.join(root, file), at, at)
+  }
+  const stepsOf = (following: Following) =>
+    following.gone.map(({ step, at }) => `${step}@${at}`)
+
+  it("goes a step on as each build gets further, and counts the builds", () => {
+    write("pcb/main.circuit.tsx", "")
+    const following = new Following(root, "main", 500_000)
+    expect(following.rough).toBe(false)
+    expect(following.made).toBeNull()
+    expect(following.look()).toBe(false)
+    expect(following.builds).toBe(0)
+
+    build(1000, "source_component")
+    expect(following.look()).toBe(true)
+    // (looked at again with nothing built since: it is the same build)
+    expect(following.look()).toBe(false)
+    build(2000, "source_component", "source_trace")
+    expect(following.look()).toBe(true)
+    // (built again, and got no further)
+    build(3000, "source_component", "source_trace")
+    expect(following.look()).toBe(false)
+    build(4000, "source_component", "source_trace", "pcb_trace")
+    expect(following.look()).toBe(true)
+    expect(following.builds).toBe(4)
+    expect(stepsOf(following)).toEqual([
+      "placing@500000",
+      "connecting@1000000",
+      "routing@2000000",
+      "checking@4000000",
+    ])
+    expect(following.made).toMatchObject({ step: "routed", parts: 1 })
+  })
+
+  it("has a board already built be a rough one, and a build that gets further skip ahead", () => {
+    build(1000, "source_component")
+    const following = new Following(root, "main", 1_500_000)
+    expect(following.rough).toBe(true)
+    expect(following.made).toMatchObject({ step: "placed" })
+    expect(following.look()).toBe(false)
+    build(2000, "source_component", "source_trace", "pcb_trace")
+    expect(following.look()).toBe(true)
+    expect(stepsOf(following)).toEqual(["placing@1500000", "checking@2000000"])
+  })
+
+  it("goes by what the agent says once it says anything, back as well as on", () => {
+    write("pcb/main.circuit.tsx", "")
+    const following = new Following(root, "main", 0)
+    expect(following.say("connecting", 10)).toBe(true)
+    expect(following.say("connecting", 20)).toBe(false)
+    // its builds no longer move it
+    build(1000, "source_component", "source_trace", "pcb_trace")
+    expect(following.look()).toBe(false)
+    expect(following.builds).toBe(1)
+    expect(following.say("checking", 30)).toBe(true)
+    expect(following.say("routing", 40)).toBe(true)
+    expect(following.step).toBe("routing")
+    expect(stepsOf(following)).toEqual([
+      "placing@0",
+      "connecting@10",
+      "checking@30",
+      "routing@40",
+    ])
   })
 })

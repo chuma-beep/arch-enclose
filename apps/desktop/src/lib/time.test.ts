@@ -32,10 +32,11 @@ describe("elapsed", () => {
     expect(elapsed(-300)).toBe("0 s")
   })
 
-  it("counts in whole minutes from then on", () => {
+  it("counts in minutes and seconds from then on, up to an hour", () => {
     expect(elapsed(60_000)).toBe("1 min")
-    expect(elapsed(21 * 60_000 + 40_000)).toBe("21 min")
-    expect(elapsed(59 * 60_000 + 59_000)).toBe("59 min")
+    expect(elapsed(83_400)).toBe("1 min 23 s")
+    expect(elapsed(21 * 60_000 + 40_000)).toBe("21 min 40 s")
+    expect(elapsed(59 * 60_000 + 59_000)).toBe("59 min 59 s")
   })
 
   it("says the hours, and the minutes over them", () => {

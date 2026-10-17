@@ -14,6 +14,7 @@ import {
   NEED_ICONS,
   type GuideGiven,
 } from "../shared/assembly-format"
+import { MAKING_STEPS, type MakingStep } from "../shared/board-format"
 import type { Arrangement } from "./imports"
 
 /** What a tool gives back: words, or a picture. */
@@ -403,6 +404,29 @@ export function boardTools(job: {
       "Stop the circuit board being made in the background: only when the user agrees to it, so that the model can be changed now. What was made of the board so far stays in its files.",
       {},
       async () => job.stop().then(words, failed)
+    ),
+  ]
+}
+
+/**
+ * What the agent making a circuit board in detail in the background says how far it has
+ * got with: which step of making it it is at now, which the user watches at the foot of
+ * PCB mode.
+ */
+export function makingTools(say: (step: MakingStep) => void): AppTool[] {
+  return [
+    appTool(
+      "step",
+      "Say which step of making the board you are at now, as kit/pcb.md sets them out: placing (its outline, holes and every part), connecting (every connection, still unrouted), routing, or checking (the checks it is ordered by, and putting right what they find). Call it as you begin each one, and again whenever you go back to an earlier one: to routing again after a check failed, say. The user sees the steps at the foot of PCB mode, with how long each has taken.",
+      {
+        step: z
+          .enum(MAKING_STEPS as [MakingStep, ...MakingStep[]])
+          .describe("The step you are beginning now."),
+      },
+      async ({ step }) => {
+        say(step)
+        return words(`The user sees that you are ${step} now.`)
+      }
     ),
   ]
 }

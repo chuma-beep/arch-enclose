@@ -6,12 +6,15 @@ import path from "node:path"
 
 import type { BoardSummary } from "../shared/api"
 import {
+  AFTER,
   BOARD_FOLDER,
   BOARD_SOURCE,
   boardFileOf,
   BUILT_FOLDER,
   builtOf,
   calledFrom,
+  madeOf,
+  MAKING_STEPS,
   MOST_BOARD_BYTES,
   MOST_BOARDS,
   MOST_CIRCUIT_BYTES,
@@ -20,6 +23,9 @@ import {
   sizeOf,
   unsourcedOf,
   type Building,
+  type MadeOf,
+  type MakingStep,
+  type StepsGone,
 } from "../shared/board-format"
 
 /** The boards in a folder's pcb/, by what each is known by, in the order of their files. */
@@ -73,20 +79,24 @@ export function boardsWritten(root: string): string {
 }
 
 /**
- * How big a built board is, as `sizeOf` has it, and the parts its BOM has no JLCPCB
- * number for (`unsourcedOf`): read once for each time it is built, since the boards are
- * read again as often as a build says how far it has got.
+ * How big a built board is, as `sizeOf` has it, the parts its BOM has no JLCPCB number
+ * for (`unsourcedOf`), and what it has on it (`madeOf`): read once for each time it is
+ * built, since the boards are read again as often as a build says how far it has got.
  */
-type Read = { size: [number, number] | null; unsourced: string[] }
+type Read = { size: [number, number] | null; unsourced: string[]; made: MadeOf }
 const reads = new Map<string, { at: number; read: Read }>()
 function readAt(file: string, stat: fs.Stats): Read {
   const had = reads.get(file)
   if (had?.at === stat.mtimeMs) return had.read
-  let read: Read = { size: null, unsourced: [] }
+  let read: Read = { size: null, unsourced: [], made: madeOf(null) }
   if (stat.size <= MOST_CIRCUIT_BYTES)
     try {
       const circuit: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
-      read = { size: sizeOf(circuit), unsourced: unsourcedOf(circuit) }
+      read = {
+        size: sizeOf(circuit),
+        unsourced: unsourcedOf(circuit),
+        made: madeOf(circuit),
+      }
     } catch {
       // half written, or not tscircuit's: it is shown when it is built again
     }
@@ -154,3 +164,83 @@ export function boardsIn(root: string): BoardSummary[] {
 /** The folder in a project's pcb/ that what is built of its boards goes in. */
 export const builtFolder = (root: string) =>
   path.join(root, BOARD_FOLDER, BUILT_FOLDER)
+
+/**
+ * A board as it was last built: when (ms), and what it has on it. Null while it has not
+ * been built.
+ */
+function lastBuilt(
+  root: string,
+  id: string
+): { at: number; made: MadeOf } | null {
+  const file = path.join(root, BOARD_FOLDER, builtOf(id).circuit)
+  const built = statOf(file)
+  return built ? { at: built.mtimeMs, made: readAt(file, built).made } : null
+}
+
+/**
+ * A board an agent is making, followed as it goes: which step of making it the agent is
+ * at, as it says so (`say`), and each time it is built, what it has on it (see
+ * `madeOf`). Where the agent says nothing of its steps, how far each build got says it
+ * instead: a board built with its parts placed is being connected, and so on, only ever
+ * forward. It is looked at after each thing the agent does, which is when a build of it
+ * would be over, and once more at the end.
+ */
+export class Following {
+  private readonly root: string
+  private readonly id: string
+  /** when it was last built (ms), as it was last looked at: null while it is not */
+  private last: number | null
+  /** the agent has said which step it is at: from then on, that is what goes */
+  private told = false
+  /** it had been built before it was begun on: a rough board, made in detail from */
+  readonly rough: boolean
+  /** how many times it has been built since */
+  builds = 0
+  /** what it has on it, as it was last built: null while it has not been */
+  made: MadeOf | null
+  /** the steps it has gone through since `since`, the one it is at last */
+  readonly gone: StepsGone
+
+  constructor(root: string, id: string, since: number) {
+    this.root = root
+    this.id = id
+    const built = lastBuilt(root, id)
+    this.last = built?.at ?? null
+    this.rough = built !== null
+    this.made = built?.made ?? null
+    this.gone = [{ step: "placing", at: since }]
+  }
+
+  /** The step it is at now. */
+  get step(): MakingStep {
+    return this.gone[this.gone.length - 1].step
+  }
+
+  /**
+   * The agent says it is at this step now, whichever it was at before: whether that is
+   * another than it was at.
+   */
+  say(step: MakingStep, at = Date.now()): boolean {
+    this.told = true
+    if (step === this.step) return false
+    this.gone.push({ step, at })
+    return true
+  }
+
+  /** Whether it is at another step than it was, by how far a new build of it got. */
+  look(): boolean {
+    const built = lastBuilt(this.root, this.id)
+    if (!built || built.at === this.last) return false
+    this.last = built.at
+    this.builds += 1
+    this.made = built.made
+    if (this.told || !built.made.step) return false
+    const next = AFTER[built.made.step]
+    // (a build that got further than the step after the one it is at skips to it)
+    if (MAKING_STEPS.indexOf(next) <= MAKING_STEPS.indexOf(this.step))
+      return false
+    this.gone.push({ step: next, at: built.at })
+    return true
+  }
+}

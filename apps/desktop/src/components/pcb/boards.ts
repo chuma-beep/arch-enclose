@@ -11,6 +11,7 @@ import {
 } from "@shared/api"
 import { builtOf } from "@shared/board-format"
 import { useStore } from "@/lib/store"
+import type { BoardJob } from "./making"
 
 /** Stable while a project has no boards. */
 const NONE: BoardSummary[] = []
@@ -142,19 +143,26 @@ export function sizeSaid(board: BoardSummary): string | null {
   return `${round(board.size[0])} × ${round(board.size[1])} mm`
 }
 
+/** The agent making a board in detail in the background: null while none is. */
+export function useJobOn(
+  projectId: string,
+  board: BoardSummary
+): BoardJob | null {
+  return useStore(
+    (state) =>
+      state.projects
+        .find((project) => project.id === projectId)
+        ?.conversations.find(
+          (conversation) => conversation.job?.board === board.id
+        )?.job ?? null
+  )
+}
+
 /**
  * Whether there is still work being done on a board: an agent making it in detail in
  * the background, or a build of it under way. What is shown of it meanwhile is not what
  * it is going to be, and is shown so.
  */
 export function useBeingMade(projectId: string, board: BoardSummary): boolean {
-  const made = useStore(
-    (state) =>
-      state.projects
-        .find((project) => project.id === projectId)
-        ?.conversations.some(
-          (conversation) => conversation.job?.board === board.id
-        ) ?? false
-  )
-  return made || board.building !== null
+  return useJobOn(projectId, board) !== null || board.building !== null
 }

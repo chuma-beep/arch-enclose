@@ -134,6 +134,12 @@ export type View = {
    */
   tools: boolean
   /**
+   * They have been at work since the project was opened, by themselves, and not brought
+   * up: Esc, meant for something else, does not let go of them. Once they are brought
+   * up it does, as it does of whatever else the view was put into.
+   */
+  toolsQuiet: boolean
+  /**
    * The circuit board that is looked at, by what it is known by, and not the model: PCB
    * mode, which has the view's place as a blueprint's sheets do. Never with the
    * blueprint or the guides: one of them at a time has the view's place. Null while it
@@ -183,6 +189,12 @@ export function exploding(view: View, further: boolean): Partial<View> {
   if (further) return { alone: !view.alone }
   return { exploded: false }
 }
+
+/**
+ * How much of what is over the view is put away (Cmd+.): the cards of the other projects,
+ * or all of it. Null: none of it.
+ */
+export type Cleared = "others" | "all" | null
 
 /** How wide the conversation is, px: at the least, and until its edge is dragged. */
 export const THREAD_WIDTH = { min: 320, initial: 400 }
@@ -489,6 +501,7 @@ const homeView = (): View => ({
   assembly: false,
   reference: null,
   tools: false,
+  toolsQuiet: false,
   board: null,
   // a board is first seen in 3D, whichever way it was looked at before
   boardAs: "3d",
@@ -517,7 +530,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     blueprint: view.blueprint,
     assembly: view.assembly,
     reference: view.reference !== null,
-    tools: view.tools,
+    tools: view.tools && !view.toolsQuiet,
     board: view.board !== null,
   }
   const still = before.filter((name) => on[name])
@@ -594,11 +607,13 @@ type State = {
   /** whether the settings are over the window */
   settingsOpen: boolean
   /**
-   * Whether the view has the window to itself: the cards at its left, with what is at
-   * their foot, and the buttons down its right are put away. The conversation is not
-   * the view's, and stays as it is.
+   * How much of what is over the view has been put away, a step at a time (Cmd+.): the
+   * cards of the other projects, with the button that adds one, so that the open
+   * project's card is all there is of them; or all of it, so that the view has the
+   * window to itself: the cards, with what is at their foot, and the buttons down its
+   * right. The conversation is not the view's, and stays as it is.
    */
-  bare: boolean
+  cleared: Cleared
   /** where the app is with a newer version of itself, as the app last said */
   update: Update
   /** GitHub, as projects are backed up to it, and how far backing them all up has got */
@@ -868,7 +883,8 @@ type State = {
   pickScene(sceneId: string): void
   setFigure(shown: boolean): void
   setSettingsOpen(open: boolean): void
-  setBare(bare: boolean): void
+  /** Cmd+.: put away one more step of what is over the view, and after all of it, none. */
+  clearView(): void
   /**
    * What Esc does: stop looking for parts by name, if they are being looked for; put the
    * parts list away, if it is up, or the list of reference scenes, the project's tools
@@ -1089,7 +1105,7 @@ export const useStore = create<State>()((set, get) => ({
   sceneOf: savedScenes(),
   figure: saved(FIGURE_KEY) === "shown",
   settingsOpen: false,
-  bare: false,
+  cleared: null,
   update: { state: "none" },
   github: { connection: { state: "unavailable" }, backingUp: null },
   access: savedAccess(saved(ACCESS_KEY)),
@@ -1738,7 +1754,9 @@ export const useStore = create<State>()((set, get) => ({
         : { toolsOpen }
     )
     // brought up, they are at work: and stay so, put away, until they are left
-    if (toolsOpen && !get().view.tools) get().setView({ tools: true })
+    const { view, setView } = get()
+    if (toolsOpen && (!view.tools || view.toolsQuiet))
+      setView({ tools: true, toolsQuiet: false })
   },
 
   setBoardsOpen(boardsOpen) {
@@ -1853,8 +1871,15 @@ export const useStore = create<State>()((set, get) => ({
     set({ settingsOpen })
   },
 
-  setBare(bare) {
-    set({ bare })
+  clearView() {
+    set((state) => ({
+      cleared:
+        state.cleared === null
+          ? "others"
+          : state.cleared === "others"
+            ? "all"
+            : null,
+    }))
   },
 
   leave() {

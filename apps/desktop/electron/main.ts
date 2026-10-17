@@ -946,6 +946,10 @@ const mannerSaid = ({ provider, model, effort, access }: Manner) => ({
   access,
 })
 
+/** How long something took, in minutes to the tenth, as events say it. */
+const minutesOf = (ms: number | null) =>
+  ms === null ? null : Math.round(ms / 6_000) / 10
+
 /** The same, for the window: it is told when nothing came of what it gave. */
 async function openFor(paths: string[]): Promise<Project | null> {
   let id: string | null = null
@@ -1983,6 +1987,27 @@ if (!app.requestSingleInstanceLock()) {
         // a turn may be over: the folder it was had in is free to be another's
         follow()
       },
+      // (how long it took, how far it got and how much is on it: nothing of what the
+      // board is or is called)
+      onBoardMade: (_, made) =>
+        analytics?.record("board made", {
+          ...mannerSaid(made.manner),
+          outcome: made.outcome,
+          minutes: minutesOf(made.took),
+          placing: minutesOf(made.steps.placing),
+          connecting: minutesOf(made.steps.connecting),
+          routing: minutesOf(made.steps.routing),
+          checking: minutesOf(made.steps.checking),
+          back: made.back,
+          steps: made.did,
+          builds: made.builds,
+          rough: made.rough,
+          finished: made.finished,
+          parts: made.made?.parts ?? null,
+          nets: made.made?.nets ?? null,
+          connections: made.made?.connections ?? null,
+          vias: made.made?.vias ?? null,
+        }),
       onSignedOut: (id) => providers.signedOut(id),
     })
     drafts = new Drafts({
