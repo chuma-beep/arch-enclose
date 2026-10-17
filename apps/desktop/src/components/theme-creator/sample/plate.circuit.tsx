@@ -999,5 +999,7 @@ export default () => (
     {label("12V", -39.4, -18.5, 0.6)}
     {label("UART", -9.6, -28, 0.8)}
     {label("EXP", 46.5, 10.4, 0.8)}
+    {/* ground poured over the top, round everything else on it */}
+    <copperpour connectsTo="net.GND" layer="top" clearance="0.3mm" />
   </board>
 )

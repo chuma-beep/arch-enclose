@@ -104,6 +104,14 @@ export const SLOTS = [
     token: "--board-traces",
   },
   {
+    id: "board-pour",
+    area: "3D view",
+    label: "Copper pour",
+    detail:
+      "Wide fills of copper under the mask, as ground: as the traces, unless given its own",
+    token: "--board-pour",
+  },
+  {
     id: "board-pads",
     area: "3D view",
     label: "Pads",

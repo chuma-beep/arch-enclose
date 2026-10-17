@@ -28,8 +28,11 @@ const COLOURS: readonly (readonly [
 ])[] = [
   // the mask
   ["#0f4f30", "board-mask"],
-  // the mask over copper: traces and pours
+  // the mask over copper: traces
   ["#17613b", "board-traces"],
+  // and a pour of copper: drawn as copper half seen through, and over that the mask over
+  // copper, nine tenths of it (circuit-to-svg's way, in sRGB)
+  ["#22663c", "board-pour"],
   // bare copper: pads
   ["#ffe066", "board-pads"],
   // the lettering

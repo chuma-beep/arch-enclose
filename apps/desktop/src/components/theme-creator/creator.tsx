@@ -37,7 +37,13 @@ import {
 } from "@/components/ui/tooltip"
 import { hexOf } from "@/lib/css-color"
 import type { BoardAs } from "@/lib/store"
-import { paletteOf, useLook, useThemes, type Making } from "@/lib/themes"
+import {
+  paletteOf,
+  propertiesOf,
+  useLook,
+  useThemes,
+  type Making,
+} from "@/lib/themes"
 import { Mockup, MOCKUP } from "./mockup"
 import { ColourPicker } from "./picker"
 
@@ -73,16 +79,25 @@ const LOOKS = [
 ] as const
 
 /**
- * What each thing a theme colours is drawn in, in one look of the app's own: as it has
- * been changed, or (`base`) as src/index.css has it.
+ * What each thing a theme colours is drawn in, in one look, with the theme's colours for
+ * it (`colours`) over the app's own: as that has been changed, or (`base`) as
+ * src/index.css has it. What the theme gives no colour is drawn as the app has it, which
+ * for some is as something else is (a pour of copper as the traces): as the theme has
+ * that.
  */
-function defaultsOf(mode: Mode, base: boolean): Record<SlotId, string> {
+function shownOf(
+  mode: Mode,
+  base: boolean,
+  colours: ThemeColours
+): Record<SlotId, string> {
   // read off something of that look that no theme the window is in reaches
   const probe = document.createElement("div")
   probe.dataset.themePreview = ""
   if (base) probe.dataset.themeBase = ""
   probe.className = mode
   probe.hidden = true
+  for (const [token, value] of Object.entries(propertiesOf(colours)))
+    probe.style.setProperty(token, value)
   document.body.append(probe)
   const style = getComputedStyle(probe)
   const read = Object.fromEntries(
@@ -238,16 +253,19 @@ export function ThemeCreator({
   const naming = React.useRef<HTMLInputElement>(null)
   const parts = React.useRef<HTMLDivElement>(null)
 
-  const defaults = React.useMemo(() => defaultsOf(mode, base), [mode, base])
   const colours = made[mode]
+  const shown = React.useMemo(
+    () => shownOf(mode, base, colours),
+    [mode, base, colours]
+  )
   const palette = base ? paletteOf(colours) : paletteOf(colours, under[mode])
   // a board's colours as they are picked, over what they are over
   const boardColours = React.useMemo(
     () =>
       Object.fromEntries(
-        PCB_SLOTS.map(({ id }) => [id, colours[id] ?? defaults[id]])
+        PCB_SLOTS.map(({ id }) => [id, shown[id]])
       ) as PcbColours,
-    [colours, defaults]
+    [shown]
   )
   const anything = changes(made.light) || changes(made.dark)
   // what is picked or called that is not as it was saved last
@@ -452,7 +470,7 @@ export function ThemeCreator({
                   >
                     <ColourPicker
                       label={`${area}, ${slot.label}`}
-                      value={colours[slot.id] ?? defaults[slot.id]}
+                      value={shown[slot.id]}
                       onChange={(value) => colour(slot.id, value)}
                     />
                   </Row>
@@ -546,7 +564,7 @@ export function ThemeCreator({
                     as: boardAs,
                     onAs: setBoardAs,
                     colours: boardColours,
-                    ground: colours.viewer ?? defaults.viewer,
+                    ground: shown.viewer,
                   }
                 : null
             }
