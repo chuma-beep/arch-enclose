@@ -249,10 +249,11 @@ export function useThumbnails(
   /** the colours the user has given parts, by part: the pictures are in them too */
   colours: Record<string, string>
 ): Record<string, string> {
-  const { dark } = useThemeColors()
+  const { dark, palette } = useThemeColors()
   const [drawn, setDrawn] = React.useState<{
     of: LoadedModel
     dark: boolean
+    palette: Record<string, string>
     colours: Record<string, string>
     urls: Record<string, string>
   } | null>(null)
@@ -273,10 +274,12 @@ export function useThumbnails(
         setDrawn((before) => ({
           of: loaded,
           dark,
+          palette,
           colours,
           urls:
             before?.of === loaded &&
             before.dark === dark &&
+            before.palette === palette &&
             before.colours === colours
               ? { ...before.urls, [partId]: url }
               : { [partId]: url },
@@ -287,7 +290,8 @@ export function useThumbnails(
     return () => {
       stopped = true
     }
-  }, [go, loaded, dark, colours])
+    // (palette: drawn again in a theme's colours, the palette is read as they are drawn)
+  }, [go, loaded, dark, palette, colours])
 
   // while they are drawn again in a colour newly given, the ones there are stay up
   return drawn?.of === loaded && drawn.dark === dark ? drawn.urls : {}

@@ -54,6 +54,12 @@ import {
 import { BOARD_FOLDER, builtOf } from "../shared/board-format"
 import { archiveOf, EXAMPLES, EXAMPLES_URL } from "../shared/examples"
 import { PICTURE_TYPES } from "../shared/pictures"
+import {
+  readTheme,
+  THEME_FOLDER,
+  type Defaults,
+  type Theme,
+} from "../shared/theme-format"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
@@ -112,6 +118,13 @@ import {
   type Boarded,
   type Referenced,
 } from "./threads"
+import {
+  listThemes,
+  readDefaults,
+  removeTheme,
+  saveDefaults,
+  saveTheme,
+} from "./themes"
 import { ToolServer } from "./tools"
 import { Updates } from "./update"
 
@@ -238,6 +251,8 @@ const TOP = app.isPackaged
 const KIT = path.join(TOP, "kit", "enclose.py")
 /** where the examples are when the app is run from its source: at the top, in examples/ */
 const EXAMPLES_HERE = path.join(TOP, "examples")
+/** where the themes are, which a checkout writes and takes away (see themes.ts) */
+const THEMES = path.join(TOP, THEME_FOLDER)
 /** the reference scenes the app has of its own, for a model to be seen in */
 const SCENES = appScenes(path.join(TOP, "kit", "scenes"))
 /** quick looks at the boards an agent writes, as it writes them */
@@ -1781,6 +1796,51 @@ function wire() {
     if (!next.analytics) analytics?.forget()
     return next
   })
+  ipcMain.handle(CHANNEL.themesList, (): Theme[] => listThemes(THEMES))
+  ipcMain.handle(CHANNEL.themesDefaults, (): Defaults => readDefaults(THEMES))
+  ipcMain.handle(CHANNEL.themesSaveDefaults, (_, given: unknown): Defaults => {
+    if (app.isPackaged)
+      throw new Error("The app's own look is changed as it is worked on.")
+    return saveDefaults(THEMES, given as Defaults)
+  })
+  // (a packaged app's themes are what it came with: it neither writes nor takes away any)
+  ipcMain.handle(
+    CHANNEL.themesSave,
+    (_, given: unknown, replacing: unknown): Theme => {
+      if (app.isPackaged)
+        throw new Error("Themes are made in the app as it is worked on.")
+      // what the window sends is read as a file would be, and only a theme is written
+      const theme = readTheme("new", given)
+      if (!theme) throw new Error("That is not a theme the app can write.")
+      return saveTheme(
+        THEMES,
+        theme,
+        typeof replacing === "string" ? replacing : undefined
+      )
+    }
+  )
+  ipcMain.handle(
+    CHANNEL.themesRemove,
+    async (_, id: unknown): Promise<Theme[]> => {
+      if (app.isPackaged)
+        throw new Error("Themes are taken away in the app as it is worked on.")
+      const theme = listThemes(THEMES).find((one) => one.id === String(id))
+      // its file goes, which nothing in the app brings back: that is asked about first
+      if (theme && win && !CAPTURE) {
+        const { response } = await dialog.showMessageBox(win, {
+          type: "warning",
+          message: `Remove the theme “${theme.name}”?`,
+          detail: `Its file, ${THEME_FOLDER}/${theme.id}.json, is deleted.`,
+          buttons: ["Remove", "Cancel"],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        if (response !== 0) return listThemes(THEMES)
+      }
+      removeTheme(THEMES, String(id))
+      return listThemes(THEMES)
+    }
+  )
   // (only what is on the list is counted: the window cannot have anything else sent)
   ipcMain.on(CHANNEL.analyticsUsed, (_, feature: unknown) => {
     const which = FEATURES.find((one) => one === feature)

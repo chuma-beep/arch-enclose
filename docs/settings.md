@@ -24,5 +24,41 @@ click on the app puts them away.
 | | Open one for its models: the switch on each is whether the message box offers it, and a star has it come first there |
 | | **Show advanced settings**, under the models, has the rest: the binary to run, the arguments and variables it is started with, a model it does not list and, for Claude and Codex, where it keeps its settings and sign-in |
 | Connections | **GitHub**: **Connect** backs every project up to [private repositories on your GitHub account](projects.md#history-and-backup). A dialog shows a code to enter on GitHub's site (**Copy code and open GitHub**), where an account can be made on the way, and then asks for Enclose to be installed on the account; Esc or **Cancel** stops. Once connected it says which account, and **Disconnect** forgets it: what is on GitHub stays there |
-| Appearance | The theme: the system's, light or dark |
+| Appearance | Beside the section's name, the look: **System**, **Light** or **Dark** |
+| | **Theme**: the app's own colours, or those of one of the [themes](#themes) beside them, each shown as the window would be drawn in it in the look chosen (light and dark side by side, for **System**) |
 | About | The app's version |
+
+## Themes
+
+A theme colours some of the window in its own way, in the light look and in the dark:
+the projects' cards and the line round them, the words on one that is working or needs
+you, and the light that runs across those while it works; the view behind the model,
+and the colours its parts are drawn in; the conversation's ground, and the bubble of
+what you say in it; and the project's own tools. What a theme leaves out is the app's
+own. A theme is chosen in **Appearance**, and stays chosen across light and
+dark: **System**, **Light** or **Dark**, beside the section's name, says which of its two
+looks is shown. The app's own colours, **Default**, are always there, and cannot be
+removed.
+
+Each theme is a file in [`themes/`](../themes) at the top of the repository, and goes out
+with the app. To make one, run the app from a checkout (see
+[CONTRIBUTING.md](../CONTRIBUTING.md)): the palette, beside **Appearance**, opens the
+theme creator over the whole window. Down its left are the colours there are to pick;
+on its right, the window drawn in them, with a card in each of the ways a card can be, a
+part in each of the palette's colours, and a conversation. A click on one of those parts
+picks its colour to be changed. **Light** and **Dark**, at the top right, say which look
+is being made, and what is picked in one is that look's alone: the other keeps the
+app's colours until you pick some for it too. The title is the theme's name, up to 20
+characters: click it to name the theme. **Save theme**, which comes up once the theme
+has a name, writes the theme under that name to `themes/<name>.json`, and the window is
+drawn in it. The theme creator stays open: **Save theme** is on again once something
+differs from what was saved, and saving again updates the same file, renamed with the
+theme. Open a pull request with that file to put it in the app for everyone. Run from a
+checkout, each theme's card has a cross to remove it, which deletes its file.
+
+The app's own colours are changed the same way. Run from a checkout, the **Default** card
+has a pencil that opens the theme creator on the app's own colours, in the look chosen,
+with its title the name the card shows. **Save default theme** writes
+`themes/default.json`, which every theme is drawn over; a pull request with it changes
+the app's colours for everyone.
+

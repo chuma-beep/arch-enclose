@@ -19,11 +19,21 @@ takes the name of its model and its folder is renamed to match:
 
 ## Renaming a project
 
-Right-click a project's card for **Rename project**, and write over its name where it is
+Right-click a project's card for **Rename**, and write over its name where it is
 on the card: Enter, or a click anywhere else, keeps what is written, and Esc leaves the
 name as it was. It is the project that is renamed, in the app: what its card says, and
 what Claude is told it is called. Its folder keeps the name it has. A project that still
 goes by its stand-in keeps the name you give it, and no longer takes its model's.
+
+## Recoloring a project
+
+A project keeps its own copy of the app's exporter, so a project made before the app
+changed how it draws a model goes on being drawn the old way: one made before circuit
+boards were drawn in green, for one. Right-click its card for **Recolor**, and
+Claude brings it up to date, in the conversation its panel shows: it copies the app's
+exporter in again, takes out the colours that now go against the app's (green on
+anything that is not a board), builds the model again and checks it. Nothing else about
+the model is changed. See [How a model is drawn](view.md#colours).
 
 ## Removing a project
 

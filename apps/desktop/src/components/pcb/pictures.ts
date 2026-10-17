@@ -7,8 +7,8 @@ import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 
 import type { BoardSummary } from "@shared/api"
-import { PALETTE } from "@shared/palette"
 import { frame, stage } from "@/components/viewport/thumbnails"
+import { useThemeColors } from "@/lib/css-color"
 import { boardUrl } from "./boards"
 import { BOARD_ITSELF } from "./colours"
 
@@ -51,8 +51,6 @@ export async function loadBoard(url: string): Promise<THREE.Group> {
  * light still shows each part's shape, and dark against the board's light green.
  */
 const ON_BOARD = "#262626"
-/** The colour the board itself is drawn in: the green the app draws a part in. */
-const BOARD_GREEN = new THREE.Color(PALETTE.green)
 /**
  * How light tscircuit's own green is, which most of a board is (its mask): of white, as
  * light is counted before it is shown. Each of the board's colours is drawn as much
@@ -72,13 +70,18 @@ const MARKED_AT = 4
  * darker than tscircuit's own green, or the lighter it was the nearer what is on it:
  * copper a little darker green, pads and lettering near black.
  */
-function inOurGreen(board: THREE.Object3D) {
+function inOurGreen(
+  board: THREE.Object3D,
+  /** the green the app draws a part in, as the theme the window is in has it */
+  boardGreen: string
+) {
   const glsl = (colour: THREE.Color) =>
     `vec3(${colour
       .toArray()
       .map((value) => value.toFixed(4))
       .join(", ")})`
-  const green = glsl(BOARD_GREEN)
+  const greenColour = new THREE.Color(boardGreen)
+  const green = glsl(greenColour)
   const marked = glsl(new THREE.Color(ON_BOARD))
   board.traverse((thing) => {
     if (!(thing instanceof THREE.Mesh)) return
@@ -99,7 +102,7 @@ function inOurGreen(board: THREE.Object3D) {
       }
       // its edge has no picture on it, only a colour: the app's green, a little darker
       if (!material.map) {
-        material.color.copy(BOARD_GREEN).multiplyScalar(0.8)
+        material.color.copy(greenColour).multiplyScalar(0.8)
         return material
       }
       material.onBeforeCompile = (shader) => {
@@ -112,22 +115,27 @@ function inOurGreen(board: THREE.Object3D) {
             : mix(${green}, ${marked}, min(1.0, (lighter - 1.0) / ${(MARKED_AT - 1).toFixed(1)}));`
         )
       }
-      material.customProgramCacheKey = () => "board in the app's green"
+      material.customProgramCacheKey = () =>
+        `board in the app's green ${boardGreen}`
       return material
     })
     thing.material = Array.isArray(thing.material) ? painted : painted[0]
   })
 }
 
-/** The pictures drawn, by board and by when it was built: drawn again only when it is. */
+/**
+ * The pictures drawn, by board, by when it was built and by the green it was drawn in:
+ * drawn again only when it is built again, or the window is put in a theme of another.
+ */
 const pictured = new Map<string, string>()
-const pictureOf = (projectId: string, board: BoardSummary) =>
-  `${projectId}:${board.id}:${board.built}`
+const pictureOf = (projectId: string, board: BoardSummary, green: string) =>
+  `${projectId}:${board.id}:${board.built}:${green}`
 
 /** A picture of each of some boards, handed over as a data URL as each is drawn. */
 async function draw(
   projectId: string,
   boards: BoardSummary[],
+  green: string,
   each: (board: BoardSummary, url: string) => void,
   stopped: () => boolean
 ) {
@@ -148,7 +156,7 @@ async function draw(
         break
       }
       if (!loaded) continue
-      inOurGreen(loaded)
+      inOurGreen(loaded, green)
       scene.add(loaded)
       loaded.updateMatrixWorld(true)
       frame(camera, new THREE.Box3().setFromObject(loaded), BOARD_FROM, FILL)
@@ -174,20 +182,22 @@ export function useBoardPictures(
 ): Record<string, string> {
   // (counts the pictures drawn since this was up, to show each as it is drawn)
   const [, setDrawn] = React.useState(0)
+  const { green } = useThemeColors().palette
   React.useEffect(() => {
     const wanted = boards.filter(
       (board) =>
         board.model &&
         board.built !== null &&
-        !pictured.has(pictureOf(projectId, board))
+        !pictured.has(pictureOf(projectId, board, green))
     )
     if (wanted.length === 0) return
     let stopped = false
     void draw(
       projectId,
       wanted,
+      green,
       (board, url) => {
-        pictured.set(pictureOf(projectId, board), url)
+        pictured.set(pictureOf(projectId, board, green), url)
         if (!stopped) setDrawn((count) => count + 1)
       },
       () => stopped
@@ -195,10 +205,10 @@ export function useBoardPictures(
     return () => {
       stopped = true
     }
-  }, [projectId, boards])
+  }, [projectId, boards, green])
   return Object.fromEntries(
     boards.flatMap((board) => {
-      const url = pictured.get(pictureOf(projectId, board))
+      const url = pictured.get(pictureOf(projectId, board, green))
       return url ? [[board.id, url]] : []
     })
   )

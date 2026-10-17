@@ -259,6 +259,12 @@ export const REBUILD = "Rebuild this model as an editable design."
 /** What is asked of the agent when a board was changed after its Gerbers were made. */
 export const REBUILD_BOARD = "Build this board again: its Gerbers are outdated."
 
+/**
+ * What is asked of the agent when a project's model is to be drawn in the app's colours
+ * as they are now, by its own copy of the exporter and what its scripts name.
+ */
+export const RECOLOUR = "Recolor this model in the app's current colors."
+
 /** What was saved under a key. */
 const saved = (key: string) => localStorage.getItem(key)
 
@@ -918,6 +924,12 @@ type State = {
    * conversation the panel shows, the way a message would be.
    */
   rebuildBoard(projectId: string, board: string): void
+  /**
+   * Have the agent bring a project's model to the app's colours as they are now (see
+   * `RECOLOUR`): the project is opened, and it is asked in the conversation its panel
+   * shows, the way a message would be.
+   */
+  recolour(projectId: string): void
   /** Keep a project's mesh as it is: building it again is not offered for it any more. */
   keepMesh(projectId: string): void
   /**
@@ -2059,6 +2071,11 @@ export const useStore = create<State>()((set, get) => ({
 
   rebuildBoard(projectId, board) {
     ask(projectId, REBUILD_BOARD, board)
+  },
+
+  recolour(projectId) {
+    get().activate(projectId)
+    ask(projectId, RECOLOUR)
   },
 
   keepMesh(projectId) {

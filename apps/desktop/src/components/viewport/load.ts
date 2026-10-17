@@ -40,6 +40,8 @@ export type LoadedPart = {
   solid: boolean
   /** its group's place among the model's groups: what gives a part with no colour one */
   turn: number
+  /** the model has a circuit board in it, whose colour no other part is drawn in then */
+  boards: boolean
   /** in the part's own frame */
   box: THREE.Box3
   /** where the part sits in the model */
@@ -219,6 +221,7 @@ async function loadPart(
     contours: contours(skins, edges !== null),
     solid: enclose(skins),
     turn: 0,
+    boards: false,
     box,
     home,
     piece: 0,
@@ -379,11 +382,14 @@ export async function loadModel(
       return loaded
     })
   )
-  for (const part of parts)
+  const boards = model.parts.some((part) => part.board !== null)
+  for (const part of parts) {
     part.turn = Math.max(
       0,
       model.groups.findIndex((group) => group.id === part.part.group)
     )
+    part.boards = boards
+  }
   const box = new THREE.Box3()
   for (const part of parts) box.union(part.box.clone().applyMatrix4(part.home))
   const worked = parts.every((part) => part.away.lengthSq() === 0)
@@ -637,6 +643,7 @@ export function standInModel(): LoadedModel {
     metal: false,
     clear: false,
     mesh: false,
+    board: null,
   }
   const box = geometry.boundingBox!.clone()
   const nowhere = new THREE.Vector3()
@@ -663,6 +670,7 @@ export function standInModel(): LoadedModel {
         contours: contours([skin], false),
         solid: enclose([skin]),
         turn: 0,
+        boards: false,
         box,
         home: new THREE.Matrix4(),
         piece: 0,

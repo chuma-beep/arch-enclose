@@ -181,6 +181,8 @@ const CLEAR = 0.28
 async function shownOf(
   part: Part,
   turn: number,
+  /** the model has a circuit board in it (see paint.ts) */
+  boards: boolean,
   chosen: string | null,
   stands: Stand[]
 ): Promise<Shown> {
@@ -216,7 +218,7 @@ async function shownOf(
     whole.add(new THREE.LineSegments(geometry, lines), seen)
   }
   const surfaces = skins.map(({ geometry, color }) => {
-    const own = skinColour({ part, turn }, { color }, true, chosen)
+    const own = skinColour({ part, turn, boards }, { color }, true, chosen)
     const material = new THREE.MeshStandardMaterial({
       color: own,
       ...finish({ part }),
@@ -339,6 +341,7 @@ export async function stageOf(
   let done = 0
   progress(0, wanted.length)
   const shown = new Map<string, Shown>()
+  const boards = model!.parts.some((part) => part.board !== null)
   await Promise.all(
     wanted.map(async (part) => {
       // its group's place among the groups: what gives a part with no colour one
@@ -350,6 +353,7 @@ export async function stageOf(
         const one = await shownOf(
           part,
           turn,
+          boards,
           looks.colours[part.id] ?? null,
           stands.get(part.id) ?? []
         )

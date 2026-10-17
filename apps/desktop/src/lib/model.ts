@@ -33,6 +33,11 @@ export type Part = {
    * each face, and what was curved is drawn smooth from flats that meet at a slight angle
    */
   mesh: boolean
+  /**
+   * The name of the project's circuit board it has in it, if it has one: it is drawn in
+   * green then, the colour boards are drawn in (see src/lib/palette.ts)
+   */
+  board: string | null
 }
 
 export type Keepout = {
@@ -125,6 +130,7 @@ export function readModel(manifest: unknown): Model {
       metal: raw.finish === "metal" || (!declared && group === "screws"),
       clear: raw.finish === "glass",
       mesh: raw.mesh === true,
+      board: text(raw.board),
     }
   })
   if (parts.length === 0) throw new Error("The manifest lists no parts.")

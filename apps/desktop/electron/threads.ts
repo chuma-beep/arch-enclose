@@ -775,6 +775,13 @@ const MESHES = [
 ]
 
 /**
+ * What an agent is told of bringing a model to the app's colours as they are now: what
+ * the app asks for from a project's menu, in the words `RECOLOUR` has in the window.
+ */
+const recolouring = (kit: string) =>
+  `- To recolor the model is to bring it to the app's colours as they are now, and only that: change no shape, part, name or group. Copy the app's exporter in again first (cp "${kit}" enclose.py): an older copy does not mark the part a circuit board is put in as one, and the board is not drawn in green. Where the model is built some other way, have its build write "board" on each part that is a board, as the manifest format has it. Then go through every colour the model's script names. A part that is a board takes none. A part that is not one and is named green, or a colour drawn as green: where that was to match another part, name the colour that part is drawn in now (a group that was green by its turn is indigo now); otherwise leave its colour out. Do the same where one of the project's tools (${TOOLS_FOLDER}/) colours such a part green. Keep every other colour as it is. Build the model, take a screenshot, see that each board is green and nothing else is, and say in a few words what you changed.`
+
+/**
  * What an agent is told of the project's history, where the app keeps it in git: that
  * the app commits, and pushes, and the agent leaves git to it.
  */
@@ -841,7 +848,7 @@ function guide(
     "- The model is made of parts. Each separate component is one part: a thing that is made, bought or fitted on its own, such as a lid, a board or a screw. Whatever the user asks you to add as a thing of its own is a part of its own. The app lists the parts under groups, and the user can pick one part or one group to look at alone.",
     "- Grouping the parts is your job, not the user's. Whenever you add, split, merge or remove parts, put each one in the group a person would look for it in, by what it belongs to or what it does (the enclosure, the electronics, the fasteners), and add a group when none fits. Keep group and part labels short and plain. Do this without being asked and without asking. Regroup only when the user asks for a different arrangement, or when the model has changed so much that the old one no longer makes sense; if the user arranges the groups themselves, keep to their arrangement.",
     "- When the user pulls the model apart (Explode), a model that gives its parts no explode of their own comes apart by its groups. The parts of a group that touch one another go as one piece, so that a circuit board keeps its components and a switch its pins. The parts of the outside (a group made with shell=True) each go their own way, and so do parts in no group. So keep what is one object in one group, and make the group that encloses the rest the outside.",
-    `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is.`,
+    `- Colour is the app's job. It draws every part in one of its own colours (${PALETTE_NAMES.join(", ")}), and a part given no colour takes the one that falls to its group, so parts that belong together match and groups differ. Leave colour out unless the user asks for one or parts within a group need telling apart; then name one of those. Any other colour is drawn as the nearest of them, unless it is a grey, white or black, which is drawn as it is. A part with a circuit board in it (as read_board gives it) is drawn in green, and green is then the boards' alone: whatever else would be green is drawn in indigo, so do not name green for anything else.`,
     ...referring(tool, kit, scenes),
     ...(trying ? tooling(tool, kit) : []),
     // (there is nothing to write a guide to until there is a model)
@@ -866,6 +873,7 @@ function guide(
       '- The groups are what the manifest says they are: its "groups" list, and the "group" each part names. Like the rest of the manifest they are written by the build.',
       `- The user can also arrange the parts by hand in the app: make a group of some (Cmd+G), take some out of their groups (Shift+Cmd+G), call a group something else. That is kept by the app and not in the project's files, and it is how the model is listed and handled from then on, whatever the manifest says. ${tool(VIEWPORT, "parts")} gives each part's group as the user has it, with what the group goes by, and marks with byHand the parts they moved. Take that as how the user wants the model arranged: never put it back as it was unless asked, and when you next change the model's script for some other reason, give it the same groups and names, so that what is built agrees with what the user sees.`,
       ...(meshes ? MESHES : []),
+      recolouring(kit),
       "- After a change to geometry: rebuild, take a screenshot, and check the result yourself before you report it."
     )
   } else if (build) {

@@ -70,11 +70,13 @@ kit/           the exporter a project copies in to write its model (Python), the
                written, and how its circuit boards are made, with the script that
                builds them
 spikes/        experiments kept for their measurements
+themes/        the themes there are beside the app's own colours, a file to each,
+               and what is changed of those (default.json)
 ```
 
-Run from a checkout, the app finds `kit/` and `examples/` at the top of the repository,
-two folders up from itself. Installed, it has the kit among its own resources and no
-examples: those it fetches.
+Run from a checkout, the app finds `kit/`, `themes/` and `examples/` at the top of the
+repository, two folders up from itself. Installed, it has the kit and the themes among
+its own resources and no examples: those it fetches.
 
 ## What is built from what
 

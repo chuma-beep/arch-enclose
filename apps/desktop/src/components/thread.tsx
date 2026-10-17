@@ -120,7 +120,7 @@ function Bubble({
         "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap",
         waiting
           ? "border border-dashed border-foreground/25 text-muted-foreground"
-          : "bg-muted",
+          : "bg-user-message",
         className
       )}
     >
@@ -1039,7 +1039,7 @@ export function Thread({ project }: { project: Project }) {
       ref={panel}
       // (a ground of its own, for the light that goes across it to go behind the rest;
       // and its icons in the lines of the buttons over the view)
-      className="thin-icons relative isolate flex shrink-0 flex-col border-l bg-background"
+      className="thin-icons relative isolate flex shrink-0 flex-col border-l bg-chat"
       // however wide it was dragged, the view keeps its share of a narrower window
       style={{
         width,

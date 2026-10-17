@@ -48,7 +48,8 @@ its own.
       "matrix": null,                    // optional: 16 numbers, row-major, placing the part
       "explode": [0, 0, 46],             // optional: where it goes when exploded, mm (worked out when no part says: the parts of a group that touch go together)
       "finish": "metal",                 // optional: "metal" is drawn as bare metal (screws, pins), "glass" see-through whatever the view (a window, a lens)
-      "mesh": false                      // optional: true for a part made of a mesh's triangles (STL, OBJ): its file is one primitive, shaded smooth where triangles meet at under 20°, with no face to trace a click to
+      "mesh": false,                     // optional: true for a part made of a mesh's triangles (STL, OBJ): its file is one primitive, shaded smooth where triangles meet at under 20°, with no face to trace a click to
+      "board": "main"                    // optional: the name of the project's circuit board the part has in it (pcb/main.circuit.tsx); it is drawn in green, and no other part is then
     }
   ],
   "keepouts": [                          // optional: space something needs that is not modelled

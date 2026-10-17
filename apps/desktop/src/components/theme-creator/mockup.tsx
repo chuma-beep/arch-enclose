@@ -1,0 +1,431 @@
+// The window in a theme being made, for its colours to be seen as they are picked: the
+// projects' cards in each of the ways a card can be, a part in each of the palette's
+// colours in the view, the project's tools, and a conversation with what the user says in
+// it in each of its bubbles. It is drawn as the window is, in the same classes and
+// tokens, but of nothing real: none of it does anything but show a colour, apart from
+// the parts, which pick their colour to be changed.
+import * as React from "react"
+import * as THREE from "three"
+import { Canvas } from "@react-three/fiber"
+import { cn } from "cn"
+import {
+  ArrowUpIcon,
+  BookOpenIcon,
+  BoxesIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CpuIcon,
+  DownloadIcon,
+  Grid3x3Icon,
+  HammerIcon,
+  MessageSquareIcon,
+  MoveVerticalIcon,
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
+} from "lucide-react"
+
+import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
+import type { Mode, ThemeColours } from "@shared/theme-format"
+import { EDGE } from "@/components/viewport/paint"
+import { propertiesOf } from "@/lib/themes"
+import { CORNER, LIGHTS, LOOKING_FROM, PLACES, shapeOf } from "./parts"
+
+/** How big the window is drawn, before it is made to fit where it is shown. */
+export const MOCKUP = { width: 1280, height: 800 }
+
+// as the sidebar draws a card (sidebar.tsx)
+const CARD =
+  "glass relative flex w-full flex-col rounded-xl px-3 py-2.5 text-left ring-1"
+const LIT = "bg-sidebar-accent/90 shadow-sm ring-card-outline"
+const UNLIT = "bg-sidebar-accent/45 ring-card-outline/35"
+const SMALL = "text-[12px] leading-[1.4]"
+
+/** The cards down the side: one in each of the ways a card can be. */
+const CARDS: {
+  name: string
+  said: string
+  lit?: boolean
+  when?: string
+  news?: { label: string; className: string; going?: string }
+}[] = [
+  {
+    name: "Split-flap cube",
+    said: "Rebuilding the plate board with the new connector",
+    lit: true,
+    news: {
+      label: "Working",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
+      going: "2m 14s",
+    },
+  },
+  {
+    name: "Table clock",
+    said: "Which movement should the hands fit?",
+    news: { label: "Needs you", className: "text-attention" },
+  },
+  {
+    name: "Desk lamp",
+    said: "Making the switch board",
+    news: {
+      label: "Making a board",
+      className: "text-attention shimmer shimmer-color-attention-shimmer",
+      going: "48s",
+    },
+  },
+  {
+    name: "Cloque",
+    said: "Box ends built; solder wires first",
+    news: { label: "Done", className: "text-foreground" },
+  },
+  {
+    name: "IEC power connectors",
+    said: "Start a new session",
+    when: "1d",
+  },
+  {
+    name: "meedee-device",
+    said: "The case could not be built",
+    news: { label: "Failed", className: "text-destructive" },
+  },
+]
+
+function Cards() {
+  return (
+    <div className="absolute top-12 left-4.5 flex w-56 flex-col items-start gap-1.5">
+      {CARDS.map((card) => (
+        <div key={card.name} className={cn(CARD, card.lit ? LIT : UNLIT)}>
+          <span
+            className={cn(
+              "flex flex-col gap-0.5",
+              card.news &&
+                "[mask-image:linear-gradient(to_right,black_calc(100%-6.75rem),rgb(0_0_0/0.04)_calc(100%-4.375rem))]"
+            )}
+          >
+            <span className="flex items-baseline justify-between gap-2">
+              <span className={cn(SMALL, "truncate font-medium")}>
+                {card.name}
+              </span>
+              {card.when && (
+                <span className={cn(SMALL, "text-muted-foreground/60")}>
+                  {card.when}
+                </span>
+              )}
+            </span>
+            <span
+              className={cn(
+                SMALL,
+                "line-clamp-2 min-h-[2lh] text-muted-foreground"
+              )}
+            >
+              {card.said}
+            </span>
+          </span>
+          {card.news && (
+            <span
+              className={cn(
+                SMALL,
+                "absolute top-1/2 right-3 flex -translate-y-1/2 flex-col items-end font-medium",
+                card.news.className
+              )}
+            >
+              {card.news.label}
+              {card.news.going && (
+                <span className="font-normal tabular-nums">
+                  {card.news.going}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+      ))}
+      <span className="mt-0.5 flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10">
+        <PlusIcon className="size-4.5" strokeWidth={1.5} />
+      </span>
+    </div>
+  )
+}
+
+/** One of them, in its colour, with its edges drawn where it has corners. */
+function Part({
+  name,
+  colour,
+  picked,
+  position,
+  onPick,
+}: {
+  name: PaletteName
+  colour: string
+  picked: boolean
+  position: [number, number, number]
+  onPick: () => void
+}) {
+  const geometry = React.useMemo(() => shapeOf(name), [name])
+  const edges = React.useMemo(
+    () => new THREE.EdgesGeometry(geometry, CORNER),
+    [geometry]
+  )
+  React.useEffect(
+    () => () => {
+      geometry.dispose()
+      edges.dispose()
+    },
+    [geometry, edges]
+  )
+  return (
+    <group
+      position={position}
+      onClick={(event) => {
+        event.stopPropagation()
+        onPick()
+      }}
+      onPointerOver={() => (document.body.style.cursor = "pointer")}
+      onPointerOut={() => (document.body.style.cursor = "")}
+    >
+      <mesh geometry={geometry}>
+        <meshStandardMaterial color={colour} metalness={0.1} roughness={0.62} />
+      </mesh>
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color={picked ? "#ffffff" : EDGE} />
+      </lineSegments>
+    </group>
+  )
+}
+
+/** A part in each of the palette's colours, in rows, lit as the view lights a model. */
+function Parts({
+  palette,
+  picked,
+  onPick,
+}: {
+  palette: Record<PaletteName, string>
+  picked: PaletteName | null
+  onPick: (name: PaletteName) => void
+}) {
+  return (
+    <Canvas
+      orthographic
+      camera={{ position: LOOKING_FROM, zoom: 52 }}
+      dpr={[1, 2]}
+      gl={{ antialias: true, alpha: true }}
+      // (it is drawn scaled down to fit: sized by its own box, not as it is seen)
+      resize={{ offsetSize: true }}
+    >
+      <ambientLight intensity={LIGHTS.ambient} />
+      <hemisphereLight args={LIGHTS.sky} />
+      <directionalLight {...LIGHTS.key} />
+      <directionalLight {...LIGHTS.fill} />
+      {PALETTE_NAMES.map((name) => (
+        <Part
+          key={name}
+          name={name}
+          colour={palette[name]}
+          picked={picked === name}
+          position={PLACES[name]}
+          onPick={() => onPick(name)}
+        />
+      ))}
+    </Canvas>
+  )
+}
+
+/** Down the view's right-hand edge: how it is looked at, and the project's own tools, open. */
+function Rail() {
+  const round =
+    "flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10"
+  return (
+    <>
+      <div className="absolute top-3 right-3 flex flex-col gap-2">
+        <span className={cn(round, "bg-primary text-primary-foreground")}>
+          <MessageSquareIcon className="size-4" strokeWidth={1.5} />
+        </span>
+        <span className={round}>
+          <DownloadIcon className="size-4" strokeWidth={1.5} />
+        </span>
+      </div>
+      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 flex-col gap-2">
+        {[
+          BoxesIcon,
+          Grid3x3Icon,
+          MoveVerticalIcon,
+          CpuIcon,
+          BookOpenIcon,
+          SearchIcon,
+        ].map((Icon, index) => (
+          <span key={index} className={round}>
+            <Icon className="size-4" strokeWidth={1.5} />
+          </span>
+        ))}
+        <span className={cn(round, "bg-tool text-white ring-2 ring-white")}>
+          <HammerIcon className="size-4" strokeWidth={1.5} />
+        </span>
+      </div>
+      {/* the tools' panel, as one of them opens it */}
+      <div className="absolute right-15 bottom-6 flex w-72 flex-col overflow-hidden rounded-2xl bg-tool-panel text-white shadow-lg ring-1 ring-tool-line">
+        <div className="flex gap-5 border-b border-white/15 px-4 pt-3 text-sm">
+          <span className="pb-2.5 text-white/60">Flaps</span>
+          <span className="border-b-2 border-white pb-2.5">Grid</span>
+          <span className="pb-2.5 text-white/60">Housing</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 border-b border-white/15 px-4 py-3">
+          <span className="flex flex-col text-[13px]">
+            Grid
+            <span className="text-white/60">Copies round the cube</span>
+          </span>
+          <span className="relative h-5 w-9 rounded-full bg-white">
+            <span className="absolute top-0.5 right-0.5 size-4 rounded-full bg-tool" />
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <span className="text-[13px]">Across</span>
+          <span className="relative h-5 w-36 rounded-full bg-white/25">
+            <span className="absolute top-0.5 left-12 size-4 rounded-full bg-white" />
+          </span>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** What the user says, in its bubble: as the conversation draws it (thread.tsx). */
+function Said({
+  children,
+  waiting,
+}: {
+  children: React.ReactNode
+  waiting?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "max-w-[85%] self-end rounded-2xl px-3.5 py-2 text-sm leading-relaxed",
+        waiting
+          ? "border border-dashed border-foreground/25 text-muted-foreground"
+          : "bg-user-message"
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+const Worked = ({ took }: { took: string }) => (
+  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    Worked for {took}
+    <ChevronDownIcon className="size-3.5 opacity-60" />
+  </span>
+)
+
+/** The conversation beside the view, with what the user says in each of its bubbles. */
+function Conversation() {
+  return (
+    <aside className="flex w-95 shrink-0 flex-col border-l bg-chat">
+      <div className="flex h-12 shrink-0 items-center px-5 text-[13px] font-medium">
+        Rework the split-flap cube
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-5 pt-2 text-sm leading-relaxed">
+        <Said>Make the wall plate take two cubes side by side</Said>
+        <Worked took="1m 48s" />
+        <p>
+          The plate is 200 mm wide now, with two cells on it and the main board
+          under the right-hand one. Its power lead comes down at the right edge.
+        </p>
+        <div className="flex flex-col items-end gap-1.5">
+          <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs">
+            <CpuIcon className="size-3" strokeWidth={1.5} />
+            Main plate board
+          </span>
+          <Said>Build this board again: its Gerbers are outdated.</Said>
+        </div>
+        <Worked took="1m 11s" />
+        <p>
+          I rebuilt the main plate board, and its Gerbers now match the board as
+          it is. All five ordering checks pass.
+        </p>
+        <Said>
+          Can the cube come apart for the flaps to be changed? Screws are fine,
+          as long as none show from the front.
+        </Said>
+        <div className="flex flex-col items-end gap-1">
+          <Said waiting>And round the housing&apos;s front edge a little</Said>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <ClockIcon className="size-3" strokeWidth={1.5} />
+            Queued
+          </span>
+        </div>
+      </div>
+      <div className="m-3 mt-2 flex flex-col gap-3 rounded-2xl border border-input bg-input/30 px-3.5 py-3">
+        <span className="text-sm text-muted-foreground">
+          Ask anything, @tag parts, $use skills or / for commands
+        </span>
+        <span className="flex items-center justify-between text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-[#d97757]" />
+            Opus 5.5, High, Full access
+          </span>
+          <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <ArrowUpIcon className="size-3.5" />
+          </span>
+        </span>
+      </div>
+    </aside>
+  )
+}
+
+/**
+ * The window drawn in a theme's colours for one look, at its own size (MOCKUP). It shows
+ * that theme whatever the window it is in is drawn in.
+ */
+export function Mockup({
+  mode,
+  colours,
+  base,
+  palette,
+  picked,
+  onPick,
+}: {
+  mode: Mode
+  colours: ThemeColours
+  /** the colours are of the app's own look, over it as src/index.css has it */
+  base: boolean
+  /** the palette as the colours have it, over what they are over */
+  palette: Record<PaletteName, string>
+  /** the part colour being changed, if one is */
+  picked: PaletteName | null
+  onPick: (name: PaletteName) => void
+}) {
+  return (
+    <div
+      data-theme-preview=""
+      data-theme-base={base ? "" : undefined}
+      className={cn(
+        mode,
+        "thin-icons flex overflow-hidden rounded-xl bg-sidebar text-foreground shadow-2xl ring-1 ring-foreground/15"
+      )}
+      style={{ ...propertiesOf(colours), ...MOCKUP }}
+    >
+      <div className="relative min-w-0 flex-1">
+        {/* between the cards and the buttons down the right */}
+        <div className="absolute inset-y-0 right-16 left-62">
+          <Parts palette={palette} picked={picked} onPick={onPick} />
+        </div>
+        {/* the window's own buttons, in its corner */}
+        <div className="absolute top-4 left-4.5 flex gap-2">
+          {["#ff5f57", "#febc2e", "#28c840"].map((colour) => (
+            <span
+              key={colour}
+              className="size-3 rounded-full"
+              style={{ background: colour }}
+            />
+          ))}
+        </div>
+        <Cards />
+        <span className="absolute bottom-4 left-4.5 flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10">
+          <SettingsIcon className="size-4" strokeWidth={1.5} />
+        </span>
+        <Rail />
+      </div>
+      <Conversation />
+    </div>
+  )
+}

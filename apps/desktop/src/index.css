@@ -8,8 +8,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* What a machine reads is written in Iosevka, medium, where it is tried: in the settings.
-   The one weight is brought in, and as woff2 alone, which is all this window reads. */
+/* What a machine reads is written in Iosevka, medium, where it is tried: in the settings
+   and the theme creator. The one weight is brought in, and as woff2 alone, which is all
+   this window reads. */
 @font-face {
   font-family: "Iosevka";
   font-style: normal;
@@ -58,6 +59,10 @@
   --color-tool: var(--tool);
   --color-tool-panel: var(--tool-panel);
   --color-tool-line: var(--tool-line);
+  --color-chat: var(--chat);
+  --color-user-message: var(--user-message);
+  --color-card-outline: var(--card-outline);
+  --color-attention-shimmer: var(--attention-shimmer);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -117,11 +122,26 @@
   --axis-z: #0f73ff;
   /* What is the project's own and not the app's is blue: the tools made for its model.
        It is the blue of the Z axis. Their panel is a deeper shade of it, for white
-       letters to be read on, and the line round the panel a lighter one. */
+       letters to be read on, and the line round the panel a lighter one: of the tools'
+       colour, whatever a theme makes that (see shared/theme-format.ts). */
   --tool: var(--axis-z);
-  --tool-panel: oklch(from var(--axis-z) calc(l - 0.135) c calc(h + 6));
+  --tool-panel: oklch(from var(--tool) calc(l - 0.135) c calc(h + 6));
   --tool-line: oklch(
-    from var(--axis-z) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
+    from var(--tool) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
+  );
+  /* the conversation's ground, and the bubble of what the user says in it: of their own,
+       for a theme to colour them and nothing else */
+  --chat: var(--background);
+  --user-message: var(--muted);
+  /* the line round a project's card, the open one's (the others' is fainter): of the
+       words' colour, as it shows over the view; and the light that runs across what is
+       going on on one, of what that is said in, as faint as it shows on the card. Opaque,
+       for a theme to set them as it sets the others */
+  --card-outline: color-mix(in oklab, var(--foreground) 15%, var(--sidebar));
+  --attention-shimmer: color-mix(
+    in oklab,
+    var(--attention) 20%,
+    var(--sidebar-accent)
   );
   /* what a floating card does to the 3D view behind it, so its text stays readable
        whatever the model's colour */
@@ -164,6 +184,16 @@
   --section: oklch(0.7 0.17 250);
   --attention: oklch(0.82 0.15 80);
   --unfinished: oklch(0.76 0.16 55);
+  /* (said again for the dark, so that inside it they are of its colours) */
+  --tool-panel: oklch(from var(--tool) calc(l - 0.135) c calc(h + 6));
+  --tool-line: oklch(
+    from var(--tool) calc(l + 0.066) calc(c - 0.056) calc(h + 2)
+  );
+  --chat: var(--background);
+  --user-message: var(--muted);
+  --card-outline: color-mix(in oklab, var(--foreground) 15%, var(--sidebar));
+  /* (lighter than what is going on, in the dark) */
+  --attention-shimmer: oklch(from var(--attention) max(0.8, calc(l + 0.4)) c h);
   --glass: blur(20px) saturate(1.3) brightness(0.55);
 }
 
@@ -180,11 +210,14 @@
 }
 
 /* In the settings, a path, a version and a model's name as its maker has it are in
-   Iosevka, and in its medium: lighter, its narrow letters read thin beside Inter. */
-.settings {
+   Iosevka, and in its medium: lighter, its narrow letters read thin beside Inter. So is
+   a colour typed in the theme creator. */
+.settings,
+.theme-creator {
   --font-mono: "Iosevka", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.settings .font-mono {
+.settings .font-mono,
+.theme-creator .font-mono {
   font-weight: 500;
 }
 
