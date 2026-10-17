@@ -2,7 +2,7 @@
 // projects' cards in each of the ways a card can be, a part in each of the palette's
 // colours in the view, the project's tools, and a conversation with what the user says in
 // it in each of its bubbles. Or, for a circuit board's colours, the view in PCB mode,
-// with a board in it. It is drawn as the window is, in the same classes and tokens, but
+// with a board in it, and the cards put away for it. It is drawn as the window is, in the same classes and tokens, but
 // of nothing real: none of it does anything but show a colour, apart from the parts,
 // which pick their colour to be changed, and PCB mode's buttons for the ways a board is
 // looked at, which change it.
@@ -506,22 +506,23 @@ export function Mockup({
       style={{ ...propertiesOf(colours), ...MOCKUP }}
     >
       <div className="relative min-w-0 flex-1">
-        {/* between the cards and the buttons down the right */}
-        <div className="absolute inset-y-0 right-16 left-62">
-          {board ? (
-            <>
-              <SampleBoard
-                as={board.as}
-                colours={board.colours}
-                dark={mode === "dark"}
-                ground={board.ground}
-              />
-              <BoardTitle />
-            </>
-          ) : (
+        {board ? (
+          // the whole of the view, as PCB mode has it, the cards put away
+          <div className="absolute inset-0">
+            <SampleBoard
+              as={board.as}
+              colours={board.colours}
+              dark={mode === "dark"}
+              ground={board.ground}
+            />
+            <BoardTitle />
+          </div>
+        ) : (
+          // between the cards and the buttons down the right
+          <div className="absolute inset-y-0 right-16 left-62">
             <Parts palette={palette} picked={picked} onPick={onPick} />
-          )}
-        </div>
+          </div>
+        )}
         {/* the window's own buttons, in its corner */}
         <div className="absolute top-4 left-4.5 flex gap-2">
           {["#ff5f57", "#febc2e", "#28c840"].map((colour) => (
@@ -532,7 +533,7 @@ export function Mockup({
             />
           ))}
         </div>
-        <Cards />
+        {!board && <Cards />}
         <span className="absolute bottom-4 left-4.5 flex size-9 items-center justify-center rounded-full bg-background/60 ring-1 ring-foreground/10">
           <SettingsIcon className="size-4" strokeWidth={1.5} />
         </span>

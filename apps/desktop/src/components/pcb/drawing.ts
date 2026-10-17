@@ -114,6 +114,54 @@ function pcbLook(
 }
 
 /**
+ * How far up each layer of a board is drawn, as circuit-to-svg puts them, the lowest
+ * first: but with its two sides the other way round, its bottom over its top, for the
+ * board seen from under it.
+ */
+function fromUnder(layer: string | null): number {
+  if (layer === null) return 500
+  if (layer === "global") return -100
+  if (layer === "board") return 2
+  if (layer === "soldermask-top" || layer === "soldermask-bottom") return 3
+  if (layer === "top") return 4
+  if (layer.startsWith("inner"))
+    return 5 + (Number(/\d+/.exec(layer)?.[0]) || 0)
+  if (layer === "bottom") return 17
+  if (layer === "through") return 18
+  if (layer === "drill") return 30
+  if (layer === "overlay") return 40
+  return 10
+}
+
+/**
+ * A drawing of the whole of a board, its top over its bottom, made into one of its
+ * bottom over its top: everything in it put in order again by `fromUnder`, keeping the
+ * order of what is on one layer. A group of things is on the layer of what is in it.
+ * What draws nothing (its styles, and what is used by name) stays first.
+ */
+function bottomUp(markup: string): string {
+  const svg = new DOMParser().parseFromString(
+    markup,
+    "image/svg+xml"
+  ).documentElement
+  const layerOf = (element: Element) =>
+    element.getAttribute("data-pcb-layer") ??
+    element.querySelector("[data-pcb-layer]")?.getAttribute("data-pcb-layer") ??
+    null
+  const ordered = [...svg.children]
+    .map((element, index) => ({
+      element,
+      index,
+      up: ["style", "defs"].includes(element.localName)
+        ? -1000
+        : fromUnder(layerOf(element)),
+    }))
+    .sort((a, b) => a.up - b.up || a.index - b.index)
+  for (const { element } of ordered) svg.append(element)
+  return new XMLSerializer().serializeToString(svg)
+}
+
+/**
  * A drawing of the bottom of a board turned over, as the board is when it is turned
  * over to be looked at from under: left is right, and its print reads as it should.
  */
@@ -142,13 +190,16 @@ export function drawingOf(
 ): string {
   const elements = circuit as unknown as AnyCircuitElement[]
   if (as === "pcb" && side === "bottom")
+    // all of it, as from over it, but its bottom over its top: seen from under the
+    // board, as its top is with its bottom under it from over it
     return turnedOver(
       holesEdged(
-        convertCircuitJsonToPcbSvg(elements, {
-          ...pcbLook(elements, colours, ground),
-          // what is on the bottom, and what goes through: seen from under the board
-          layer: "bottom",
-        }),
+        bottomUp(
+          convertCircuitJsonToPcbSvg(
+            elements,
+            pcbLook(elements, colours, ground)
+          )
+        ),
         colours
       )
     )

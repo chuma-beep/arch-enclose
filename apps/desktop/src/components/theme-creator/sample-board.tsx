@@ -59,14 +59,68 @@ export function sampleSize(board: Circuit | null): string | null {
 const FIT = 0.86
 
 /**
- * How much of the board's drawing is shown, from where across it and how far across,
- * each against the whole: all of the board as it is made; and of its schematic, which
- * is wide and would be small, the left of it (its power, and its stepper drive), where
- * every one of its colours is.
+ * What of the board's schematic is shown, which whole is wide and would be small: its
+ * stepper drive, where the most is drawn, by the names of what is in it. And how much
+ * room is left round that, in the schematic's own units.
  */
-const SHOWN: Record<"pcb" | "schematic", [number, number]> = {
-  pcb: [0, 1],
-  schematic: [0, 0.52],
+const SCHEMATIC_SHOWN = new Set([
+  "U3",
+  "U4",
+  "U6",
+  "U7",
+  "U8",
+  "J3",
+  "J4",
+  "J5",
+  "J6",
+  "Q1",
+  "R16",
+  "R17",
+  "C7",
+  "C8",
+  "C11",
+])
+const AROUND = 1
+
+/**
+ * The part of a drawing of the board's schematic that SCHEMATIC_SHOWN is in, in its own
+ * pixels, as a viewBox: by where each of those is in the schematic, and how the drawing
+ * says the schematic is put on it. Null where it does not say.
+ */
+function schematicShown(board: Circuit, svg: SVGSVGElement): string | null {
+  const said = /matrix\(([^)]+)\)/.exec(
+    svg.getAttribute("data-real-to-screen-transform") ?? ""
+  )
+  if (!said) return null
+  const [a, b, c, d, e, f] = said[1].split(",").map(Number)
+  const shown = new Set(
+    board.flatMap((element) =>
+      element.type === "source_component" &&
+      SCHEMATIC_SHOWN.has(String(element.name))
+        ? [element.source_component_id]
+        : []
+    )
+  )
+  const box = new THREE.Box2()
+  for (const element of board) {
+    if (
+      element.type !== "schematic_component" ||
+      !shown.has(element.source_component_id)
+    )
+      continue
+    const { center, size } = element as {
+      center: { x: number; y: number }
+      size: { width: number; height: number }
+    }
+    for (const [x, y] of [
+      [center.x - size.width / 2 - AROUND, center.y - size.height / 2 - AROUND],
+      [center.x + size.width / 2 + AROUND, center.y + size.height / 2 + AROUND],
+    ])
+      box.expandByPoint(new THREE.Vector2(a * x + c * y + e, b * x + d * y + f))
+  }
+  if (box.isEmpty()) return null
+  const { x, y } = box.getSize(new THREE.Vector2())
+  return `${box.min.x} ${box.min.y} ${x} ${y}`
 }
 
 /** The board's own colours changed, drawn again in them. */
@@ -197,13 +251,13 @@ function Drawn({
     const read = readDrawing(markup)
     if (!read) return
     // as much of it as is shown, as big as it fits
-    const [x, width] = SHOWN[as]
     read.svg.setAttribute(
       "viewBox",
-      `${x * read.width} 0 ${width * read.width} ${read.height}`
+      (as === "schematic" && schematicShown(board, read.svg)) ||
+        `0 0 ${read.width} ${read.height}`
     )
     held.replaceChildren(read.svg)
-  }, [markup, as])
+  }, [markup, as, board])
   // (another way of drawing it starts afresh)
   React.useEffect(() => holder.current?.replaceChildren(), [as])
   return (
