@@ -2,7 +2,7 @@
 // parts list.
 import * as THREE from "three"
 
-import { drawnIn } from "@/lib/palette"
+import { BOARD, drawnIn } from "@/lib/palette"
 import type { LoadedPart, Skin } from "./load"
 
 /** Bare metal that is given no colour. */
@@ -18,26 +18,29 @@ const CLEAR = "#ffffff"
  * shared/palette.ts): the one the user gave the part, or the one the model names, or the
  * nearest to the colour the model or its file gives, or, if none gives any, the one that
  * falls to the part's group. Metal is the exception, unless the user gave it a colour:
- * it is the colour of its metal.
+ * it is the colour of its metal. So is a circuit board: it is the boards' green, which no
+ * other part in a model with one in it is drawn in.
  */
 export function skinColour(
-  { part, turn }: Pick<LoadedPart, "part" | "turn">,
+  { part, turn, boards }: Pick<LoadedPart, "part" | "turn" | "boards">,
   skin: Pick<Skin, "color">,
   dark: boolean,
   /** the colour the user has given the part, if they have given it one */
   chosen: string | null = null
 ): THREE.Color {
   if (chosen) return new THREE.Color(drawnIn(chosen, turn))
-  // what is clear has no colour but one it was given: its group's is not its own
-  if (part.clear && !part.color) return new THREE.Color(CLEAR)
   const ofFile =
     part.paint === "bare" && skin.color ? `#${skin.color.getHexString()}` : null
+  // what the file colours on a board is what is on it, not the board
+  if (part.board) return new THREE.Color(drawnIn(ofFile ?? BOARD, turn))
+  // what is clear has no colour but one it was given: its group's is not its own
+  if (part.clear && !part.color) return new THREE.Color(CLEAR)
   if (part.metal) {
     const color = new THREE.Color(ofFile ?? part.color ?? UNCOLOURED)
     if (dark && color.getHSL({ h: 0, s: 0, l: 0 }).l < 0.25) color.set(STEEL)
     return color
   }
-  return new THREE.Color(drawnIn(ofFile ?? part.color, turn))
+  return new THREE.Color(drawnIn(ofFile ?? part.color, turn, boards))
 }
 
 /** How a part's surface takes the light. */

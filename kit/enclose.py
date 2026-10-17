@@ -813,6 +813,21 @@ def read_files(*files: str) -> list[Found]:
 # beside the script being run.
 _BOARDS = os.path.join("pcb", "build")
 
+# The board itself, of each board read, by the board's name: so that a part it is put in
+# is known for a board's (see `_board_in`), wherever it was moved to on the way.
+_BOARDS_READ: list[tuple[str, object]] = []
+
+
+def _board_in(shape) -> str | None:
+    """The name of the circuit board a part's shape has in it, as `read_board` gave it;
+    None, if it has none. A solid moved to another place is still made of what it was,
+    so the board is known by its own body, however it was placed."""
+    solids = [solid.wrapped for solid in shape.solids()]
+    for name, board in _BOARDS_READ:
+        if any(solid.IsPartner(board) for solid in solids):
+            return name
+    return None
+
 
 def read_board(name: str) -> list[Found]:
     """One of the project's circuit boards, as it was last built, as parts to hand to
@@ -834,6 +849,9 @@ def read_board(name: str) -> list[Found]:
             f"There is no {os.path.join(_BOARDS, name)}.step: build the board first."
         )
     found = read_step(step)
+    # the first is the board itself, as against what is on it
+    if found:
+        _BOARDS_READ.extend((name, solid.wrapped) for solid in found[0].shape.solids())
     listed = os.path.join(folder, f"{name}.parts.json")
     if not os.path.exists(listed):
         return found
@@ -941,7 +959,9 @@ class Model:
         its own. Give one to have a part some other colour: by name, from the app's own
         (red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink, white,
         lightgrey, grey), or as "#rrggbb", which is drawn as the nearest of those unless
-        it is a grey.
+        it is a grey. A part with one of the project's circuit boards in it, as
+        `read_board` gives it, is drawn in green, whatever its `color`: green is the
+        boards' then, and what else would be drawn in it is drawn in indigo.
         `finish="metal"` draws bare metal, and `finish="glass"` what is made of
         something clear, a window or a lens: it is seen through, whatever the view.
         `explode` is where the part goes when the model is pulled apart, in mm; leave
@@ -967,7 +987,11 @@ class Model:
             entry["explode"] = [float(v) for v in explode]
         if mesh:
             entry["mesh"] = True
-        self._shapes[id] = _shape(shape)
+        shape = _shape(shape)
+        board = _board_in(shape)
+        if board:
+            entry["board"] = board
+        self._shapes[id] = shape
         self._parts.append(entry)
 
     def keepout(self, id: str, label: str, low, high) -> None:

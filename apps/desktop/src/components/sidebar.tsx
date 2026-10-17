@@ -567,6 +567,7 @@ function ProjectMenu({
   children: [React.ReactElement, ...React.ReactNode[]]
 }) {
   const removeProject = useStore((state) => state.removeProject)
+  const recolour = useStore((state) => state.recolour)
   const [card, ...inside] = children
   return (
     <ContextMenu>
@@ -579,13 +580,22 @@ function ProjectMenu({
           >
             Open folder
           </ContextMenuItem>
-          <ContextMenuItem onClick={onRename}>Rename project</ContextMenuItem>
+          <ContextMenuItem onClick={onRename}>Rename</ContextMenuItem>
+          {/* the agent brings its model to the app's colours as they are now */}
+          {project.manifest && (
+            <ContextMenuItem onClick={() => recolour(project.id)}>
+              Recolor
+            </ContextMenuItem>
+          )}
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>
           {/* the folder stays; what was said about it goes, which is asked about first */}
-          <ContextMenuItem onClick={() => void removeProject(project.id)}>
-            Remove project
+          <ContextMenuItem
+            variant="destructive"
+            onClick={() => void removeProject(project.id)}
+          >
+            Remove
           </ContextMenuItem>
         </ContextMenuGroup>
       </ContextMenuContent>

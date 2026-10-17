@@ -6,8 +6,11 @@ import { drawnIn } from "@/lib/palette"
 import { PALETTE } from "@shared/palette"
 import { finish, skinColour } from "./paint"
 
-/** A part of the second group, as plain as one comes, with what is said of it here. */
-const part = (said: Partial<Part> = {}) => ({
+/**
+ * A part of the second group, as plain as one comes, with what is said of it here; in a
+ * model with a circuit board in it, if `boards`.
+ */
+const part = (said: Partial<Part> = {}, boards = false) => ({
   part: {
     id: "lid",
     label: "Lid",
@@ -21,9 +24,11 @@ const part = (said: Partial<Part> = {}) => ({
     metal: false,
     clear: false,
     mesh: false,
+    board: null,
     ...said,
   },
   turn: 1,
+  boards,
 })
 /** A skin that came with this colour in its file, or with none. */
 const skin = (color: string | null = null) => ({
@@ -82,6 +87,38 @@ describe("skinColour", () => {
     const black = part({ metal: true, color: "#1c1c1c" })
     expect(hex(skinColour(black, skin(), true))).toBe("#aab0b8")
     expect(hex(skinColour(black, skin(), false))).toBe("#1c1c1c")
+  })
+
+  it("draws a circuit board in green, whatever the model names", () => {
+    const board = part({ board: "main", color: "blue" }, true)
+    expect(hex(skinColour(board, skin(), true))).toBe(PALETTE.green)
+    // what its file colours is what is on it, in its own colours
+    expect(
+      hex(
+        skinColour(
+          part({ board: "main", paint: "bare" }, true),
+          skin("#0000ff"),
+          true
+        )
+      )
+    ).toBe(drawnIn("#0000ff", 1))
+    expect(hex(skinColour(board, skin(), true, "red"))).toBe(PALETTE.red)
+  })
+
+  it("keeps green for the boards, in a model with one", () => {
+    expect(hex(skinColour(part({ color: "green" }, true), skin(), true))).toBe(
+      PALETTE.indigo
+    )
+    expect(hex(skinColour({ ...part({}, true), turn: 2 }, skin(), true))).toBe(
+      PALETTE.indigo
+    )
+    expect(hex(skinColour(part({ color: "green" }), skin(), true))).toBe(
+      PALETTE.green
+    )
+    // what the user gives a part is what it is drawn in
+    expect(hex(skinColour(part({}, true), skin(), true, "green"))).toBe(
+      PALETTE.green
+    )
   })
 })
 

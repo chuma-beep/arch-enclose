@@ -35,7 +35,7 @@ const { kept, used, sent, turned } = vi.hoisted(() => {
 })
 
 import type { Project, Vec3 } from "@shared/api"
-import { useStore, type Section } from "./store"
+import { RECOLOUR, useStore, type Section } from "./store"
 
 const fresh = useStore.getState()
 const state = () => useStore.getState()
@@ -396,5 +396,23 @@ describe("words picked out of the conversation", () => {
     // nothing waiting is nothing to send
     state().send()
     expect(sent).toHaveLength(1)
+  })
+})
+
+describe("recolouring a project", () => {
+  it("opens it, and asks the agent in the conversation its panel shows", () => {
+    useStore.setState({
+      projects: [
+        { id: "clock", conversations: [] },
+        { id: "lamp", conversations: [] },
+      ] as never,
+    })
+    state().recolour("lamp")
+    expect(state()).toMatchObject({ activeId: "lamp", threadOpen: true })
+    expect(sent).toHaveLength(1)
+    expect(sent[0][0]).toBe("lamp")
+    // in a new conversation, there being none
+    expect(sent[0][1]).toBeNull()
+    expect(sent[0][2]).toBe(RECOLOUR)
   })
 })

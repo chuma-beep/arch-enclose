@@ -15,6 +15,7 @@ const part = (id: string, label: string, group: string) => ({
   metal: false,
   clear: false,
   mesh: false,
+  board: null,
 })
 
 const model = {

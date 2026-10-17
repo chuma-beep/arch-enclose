@@ -365,7 +365,8 @@ model.part(
 ```
 
 An `enclose.py` with no `read_board` in it is an older copy: copy the app's in again
-first. Give a part of the board a part of its own (`found.label` is its name on the
+first. The part the board is put in is known for one, and drawn in green, the colour the
+app draws boards in: give it no `color`, and give green to nothing else. Give a part of the board a part of its own (`found.label` is its name on the
 board, U1 or J2) only where it is to be told apart in the model: a button that comes out
 through the case, say.
 

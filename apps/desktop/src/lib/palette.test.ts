@@ -41,6 +41,18 @@ describe("drawnIn", () => {
     expect(drawnIn(null, 10)).toBe(given[0])
   })
 
+  it("keeps green for the boards, in a model with one, drawing indigo in its place", () => {
+    expect(drawnIn(null, 2)).toBe(PALETTE.green)
+    expect(drawnIn(null, 2, true)).toBe(PALETTE.indigo)
+    expect(drawnIn("green", 0, true)).toBe(PALETTE.indigo)
+    expect(drawnIn("#00a040", 0, true)).toBe(PALETTE.indigo)
+    // and every other colour as before
+    for (let turn = 0; turn < 10; turn++)
+      if (turn !== 2)
+        expect(drawnIn(null, turn, true)).toBe(drawnIn(null, turn))
+    expect(drawnIn("#d9d9d4", 0, true)).toBe("#d9d9d4")
+  })
+
   it("leaves alone what it cannot read as a colour", () => {
     expect(drawnIn("rebeccapurple", 0)).toBe("rebeccapurple")
   })
