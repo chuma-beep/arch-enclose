@@ -120,7 +120,20 @@ function ask() {
 const found = await ask()
 post.close()
 post.closeAllConnections()
-fs.rmSync(scratch, { recursive: true, force: true })
+// The app can leave something going in its folder that is still at it once the app is
+// gone, its Python being made there say, and adding files as they are taken away: what
+// cannot be, after a while of trying, is left for the system to clear, as it says
+// nothing of the tool.
+try {
+  fs.rmSync(scratch, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 500,
+  })
+} catch {
+  console.log(`(${scratch} is left: something was still writing into it)`)
+}
 
 // What is wrong, a thing to a line: nothing, of a tool that is shut in.
 const wrong = []
