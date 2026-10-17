@@ -15,13 +15,30 @@
 // Only the AppImage updates itself in place. On Linux, electron-updater tells
 // DebUpdater, RpmUpdater or PacmanUpdater from the `package-type` file electron-builder
 // writes into the app for those targets, and writes each of them into latest-linux.yml,
-// which an installed app reads. A target-specific `publish: null` is electron-builder's
-// supported way to turn both off for one target: getPublishConfigs then answers null, so
-// no package-type, no app-update.yml of its own and no entry in the feed. With it on
-// deb, rpm and pacman, only the AppImage is left in the feed, and so only it offers an
-// in-app update. (electron-builder's own afterPack still writes an app-update.yml into
-// every Linux app; without the package-type file the updater stays the AppImage one,
-// which does nothing unless it was run as an AppImage.)
+// which an installed app reads.
+//
+// Two things keep it to the AppImage, and they are at two different steps.
+//
+// The `publish: null` under deb, rpm and pacman below keeps those three out of the feed:
+// the step that writes latest-linux.yml does ask a target for its own options, so they get
+// no entry and the feed names the AppImage alone.
+//
+// It does not reach the step before that one. FpmTarget hands
+// getAppUpdatePublishConfiguration its own options, and that function asks for the
+// platform's instead, so the platform's GitHub provider resolves there: all three are
+// still written with a `package-type` file naming their own kind and an app-update.yml
+// beside it (app-builder-lib 26.15.3: FpmTarget.js, PublishManager.js). On Linux
+// electron-updater reads that file before anything else, and DebUpdater, RpmUpdater or
+// PacmanUpdater is what it then uses in place of the AppImage updater. So an installed
+// deb, rpm or pacman asks for an update of its own kind, in a feed that has no file of
+// that kind.
+//
+// What keeps that from happening is the app: it asks for a newer version only where it was
+// run as an AppImage (`process.env.APPIMAGE`, electron/main.ts).
+//
+// The AppImage is made first (linuxKinds below), so it is packed before any of the three
+// writes its `package-type` and goes out with none: the updater it gets is the AppImage
+// one, which is the one that works.
 //
 // A Mac opens an app that was downloaded only if a developer Apple knows has signed it
 // and Apple has looked it over (notarized it). Both are done here where they can be:
@@ -189,9 +206,9 @@ try {
     })
     feeds = ["latest-mac.yml"]
   } else {
-    // Building a deb takes dpkg-deb, and an rpm takes rpmbuild: on Arch both come from
-    // the system (`sudo pacman -S dpkg rpm-tools`). An AppImage and a pacman package
-    // need nothing but what npm installs.
+    // Building a deb takes dpkg-deb and ar (from binutils), and an rpm takes rpmbuild: on
+    // Arch they come from the system (`sudo pacman -S dpkg rpm-tools`). An AppImage and
+    // a pacman package need nothing but what npm installs.
     kinds = askedKinds.length > 0 ? askedKinds : linuxKinds
     made = await build({
       projectDir: ROOT,
@@ -236,10 +253,11 @@ try {
             },
           },
         },
-        // Only the AppImage updates itself in place: see the top of this file. A null
-        // publish config is electron-builder's supported way to keep a target out of
-        // the update feed and from writing the `package-type` file that would make the
-        // app update itself as a deb, rpm or pacman install.
+        // Only the AppImage updates itself in place. This keeps these three out of the
+        // update feed and does not keep them out of the `package-type` file they are
+        // written with, which is written at a step this does not reach (see the top of this
+        // file). What keeps a deb, rpm or pacman install from asking for an update of its
+        // own kind is the app.
         deb: { publish: null },
         rpm: { publish: null },
         pacman: {
