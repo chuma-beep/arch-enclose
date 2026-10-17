@@ -545,6 +545,23 @@ function direct(stage: {
       stage.redraw()
     },
 
+    /**
+     * What there is to see has changed all at once (see Rig's `refit`): frame it as the
+     * model opens, where the camera has not been moved from that; or else take in what
+     * there is, from the side the camera is on. Not while it is brought to a part, which
+     * it stays with.
+     */
+    refit(ratio: number) {
+      if (subject) return
+      if (atHome) {
+        this.home(true, ratio, seen)
+        return
+      }
+      controls.smoothTime = SMOOTH.turn
+      takeIn(stage.box())
+      stage.redraw()
+    },
+
     /** The view changed shape: keep the model framed, unless the user chose their own view. */
     reshape(ratio: number) {
       if (atHome && mode === "lens") this.home(false, ratio, seen)
@@ -994,6 +1011,7 @@ function direct(stage: {
 export function Rig({
   box,
   homeKey,
+  refit = "",
   circling = false,
   around = null,
   more = null,
@@ -1003,6 +1021,12 @@ export function Rig({
   /** all there is to see: the model, with whatever it is set in */
   box: THREE.Box3
   homeKey: string
+  /**
+   * Changes when what there is to see changes all at once, as the model's own tools put
+   * parts out of sight or back: the camera takes in what there is then. (Not so as the
+   * user hides a part: that is no reason to move the camera.)
+   */
+  refit?: string
   /** the camera goes slowly round the model by itself, for as long as this is so */
   circling?: boolean
   /**
@@ -1046,6 +1070,13 @@ export function Rig({
     latest.current = box
     director.current?.resized()
   }, [box])
+  // (after what there is to see is known afresh, above)
+  const refitted = React.useRef(refit)
+  React.useEffect(() => {
+    if (refit === refitted.current) return
+    refitted.current = refit
+    director.current?.refit(shape.current)
+  }, [refit])
   const floor = React.useRef(ground)
   React.useEffect(() => {
     floor.current = ground

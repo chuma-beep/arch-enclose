@@ -186,6 +186,20 @@ describe("what Esc steps back through", () => {
     expect(esc()).toBe(false)
   })
 
+  it("leaves the project's tools at work, where they have been since it opened, until they are brought up", () => {
+    // at work by themselves, from when the project opened
+    state().setView({ tools: true, toolsQuiet: true })
+    expect(esc()).toBe(false)
+    expect(view().tools).toBe(true)
+    // brought up, and put away: Esc then lets go of them, as of the rest of the view
+    state().setToolsOpen(true)
+    expect(view()).toMatchObject({ tools: true, toolsQuiet: false })
+    expect(esc()).toBe(true)
+    expect(state().toolsOpen).toBe(false)
+    expect(esc()).toBe(true)
+    expect(view().tools).toBe(false)
+  })
+
   it("puts a model that is pulled apart together before anything else, whenever it was", () => {
     state().setView({ exploded: true })
     state().setView({ section: cut })

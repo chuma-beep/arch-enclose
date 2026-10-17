@@ -141,6 +141,19 @@ function boxRound(loaded: LoadedModel | null, ids: string[], explode: number) {
   return boxes.length > 0 ? boxes.reduce((all, box) => all.union(box)) : null
 }
 
+/**
+ * Those of these parts that are on show: not put out of sight, by the user or by the
+ * model's own tools. What is out of sight is nothing for the camera to go to or turn
+ * about.
+ */
+function shownOf(ids: string[]): string[] {
+  const hidden = new Set([
+    ...useStore.getState().view.hidden,
+    ...useTools.getState().looks.hidden,
+  ])
+  return ids.filter((id) => !hidden.has(id))
+}
+
 /** How much of the view's right side the list of parts lies over, in pixels. */
 function underList(): number {
   const list = document.querySelector<HTMLElement>("[data-parts-list]")
@@ -777,10 +790,11 @@ function Model({ project }: { project: Project }) {
     if (atWorkHere || view.reference !== null) pickScene(OWN_SCENE)
   }, [scenes, ownScene, atWorkHere])
   // The project can have tools of its own, made for its model: controls that move it
-  // and try it out, each a file in the project's folder (see lib/custom-tools). Brought
-  // up, they are set to work on the model, and stay at work with their panel put away,
-  // until they are left with Esc: the parts are then where the tools have them. They
-  // are started again when one of them is written, and when the model is built.
+  // and try it out, each a file in the project's folder (see lib/custom-tools). They
+  // are at work on the model from when it opens (below), and stay at work with their
+  // panel put away; brought up, they are left with Esc: the parts are then where the
+  // model has them. They are started again when one of them is written, and when the
+  // model is built.
   const toolsOpen = useStore((s) => s.toolsOpen)
   const hasTools = project.tools !== null
   const tooling = view.tools && real !== null && hasTools && !lookingOver
@@ -809,6 +823,16 @@ function Model({ project }: { project: Project }) {
     if (!tooling) stopTools()
   }, [tooling])
   React.useEffect(() => stopTools, [])
+  // They are at work from when the project opens, as soon as its model is there, so
+  // that what they put out of sight is out of sight from the first: by themselves,
+  // and not let go of by an Esc meant for something else (see View's `toolsQuiet`).
+  const toolsStarted = React.useRef(false)
+  React.useEffect(() => {
+    if (toolsStarted.current || !real || !hasTools || lookingOver) return
+    toolsStarted.current = true
+    const { view, setView } = useStore.getState()
+    if (!view.tools) setView({ tools: true, toolsQuiet: true })
+  }, [real, hasTools, lookingOver])
   // With the last of them taken away there is nothing to be at work, or to bring up.
   React.useEffect(() => {
     if (hasTools) return
@@ -843,6 +867,12 @@ function Model({ project }: { project: Project }) {
         ? { ...view, hidden: [...view.hidden, ...toolLooks.hidden] }
         : view,
     [view, toolLooks.hidden]
+  )
+  // what the tools have out of sight, by which the camera knows to take in afresh what
+  // is left on show when they change it
+  const toolsHid = React.useMemo(
+    () => [...toolLooks.hidden].sort().join("\n"),
+    [toolLooks.hidden]
   )
   // A guide to putting the model together that Claude has just written, at work in the
   // project, is brought up with the rest of them: what was asked for is there to be
@@ -1426,7 +1456,7 @@ function Model({ project }: { project: Project }) {
         if (view.blueprint || spaceTaken(event)) return
         const box = boxRound(
           loaded,
-          pickedOut(),
+          shownOf(pickedOut()),
           view.exploded ? view.spread : 0
         )
         if (!box) return
@@ -1545,7 +1575,7 @@ function Model({ project }: { project: Project }) {
 
   // what the camera turns about, where it is to turn about what is picked out
   React.useEffect(() => {
-    bridge.picked = () => boxRound(loaded, pickedOut(), explode)
+    bridge.picked = () => boxRound(loaded, shownOf(pickedOut()), explode)
     return () => {
       bridge.picked = null
     }
@@ -1706,6 +1736,7 @@ function Model({ project }: { project: Project }) {
             plain={plain}
             // the first model made takes the cube's place, and is framed afresh
             homeKey={`${project.id}:${loaded.standIn ? "cube" : "model"}:${homeRequests}`}
+            refit={toolsHid}
             // the stand-in is nothing to ask about: it is not picked, and does not light up
             onPick={loaded.standIn ? nothing : pick}
             onSweep={loaded.standIn ? nothing : sweepTo}

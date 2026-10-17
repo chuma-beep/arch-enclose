@@ -535,6 +535,9 @@ export function onShow(
   )
 }
 
+/** The same, by a name the scene's own `onShow`, a thing to call, does not hide. */
+const isOnShow = onShow
+
 /**
  * Whether a part is drawn at all, and how, under the current view. The shading that is
  * chosen is every part's alike: in glass the whole model is seen through, and no part
@@ -1932,6 +1935,7 @@ export function Scene({
   notes,
   colours,
   homeKey,
+  refit,
   onPick,
   onSweep,
   onTake,
@@ -1995,6 +1999,8 @@ export function Scene({
   plain: boolean
   /** changes when the camera should go back to its home view */
   homeKey: string
+  /** changes when the model's own tools change what is on show (see Rig) */
+  refit: string
   onPick: (selection: Selection | null, add: boolean, alone: boolean) => void
   /** a box is being drawn across the view, and takes these in so far; null once it is not */
   onSweep: (partIds: string[] | null, add: boolean) => void
@@ -2014,11 +2020,21 @@ export function Scene({
   )
   const radius = loaded.box.getSize(new THREE.Vector3()).length() / 2
   const explode = view.exploded ? view.spread : 0
-  // all there is to see, which is what the camera frames: the model, and whatever it
-  // is set in
+  // what is on show of the model, out of all of it: what the camera frames and keeps
+  // to, as it turns and zooms. All of it, where none of it is.
+  const { hidden, only } = view
+  const shownBox = React.useMemo(() => {
+    const box = new THREE.Box3()
+    for (const part of loaded.parts)
+      if (isOnShow(part, { hidden, only }))
+        box.union(part.box.clone().applyMatrix4(part.home))
+    return box.isEmpty() ? loaded.box : box
+  }, [loaded, hidden, only])
+  // all there is to see, which is what the camera frames: that, or the model with
+  // whatever it is set in (all of it, which stands where it does whatever is on show)
   const stage = React.useMemo(
-    () => (reference ? setIn(reference, loaded.box) : loaded.box),
-    [reference, loaded.box]
+    () => (reference ? setIn(reference, loaded.box) : shownBox),
+    [reference, loaded.box, shownBox]
   )
   // and the ground that stands on, which the camera keeps above: lower, with the model
   // pulled apart, by as far as the scene goes down under it
@@ -2157,6 +2173,7 @@ export function Scene({
       <Rig
         box={stage}
         homeKey={homeKey}
+        refit={refit}
         circling={reading}
         around={reference?.scene.id ?? null}
         // (with the figure of a person in it, there is more of a scene to take in)

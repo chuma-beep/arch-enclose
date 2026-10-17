@@ -134,6 +134,12 @@ export type View = {
    */
   tools: boolean
   /**
+   * They have been at work since the project was opened, by themselves, and not brought
+   * up: Esc, meant for something else, does not let go of them. Once they are brought
+   * up it does, as it does of whatever else the view was put into.
+   */
+  toolsQuiet: boolean
+  /**
    * The circuit board that is looked at, by what it is known by, and not the model: PCB
    * mode, which has the view's place as a blueprint's sheets do. Never with the
    * blueprint or the guides: one of them at a time has the view's place. Null while it
@@ -495,6 +501,7 @@ const homeView = (): View => ({
   assembly: false,
   reference: null,
   tools: false,
+  toolsQuiet: false,
   board: null,
   // a board is first seen in 3D, whichever way it was looked at before
   boardAs: "3d",
@@ -523,7 +530,7 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
     blueprint: view.blueprint,
     assembly: view.assembly,
     reference: view.reference !== null,
-    tools: view.tools,
+    tools: view.tools && !view.toolsQuiet,
     board: view.board !== null,
   }
   const still = before.filter((name) => on[name])
@@ -1747,7 +1754,9 @@ export const useStore = create<State>()((set, get) => ({
         : { toolsOpen }
     )
     // brought up, they are at work: and stay so, put away, until they are left
-    if (toolsOpen && !get().view.tools) get().setView({ tools: true })
+    const { view, setView } = get()
+    if (toolsOpen && (!view.tools || view.toolsQuiet))
+      setView({ tools: true, toolsQuiet: false })
   },
 
   setBoardsOpen(boardsOpen) {
