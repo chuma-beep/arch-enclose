@@ -13,9 +13,9 @@ export const BOARD_ITSELF = /^(TopMaterial|BottomMaterial|GreenSideMaterial)/
 /** Each colour tscircuit draws a board's sides in, and the app's in its place. */
 const COLOURS: readonly (readonly [theirs: string, ours: string])[] = [
   // the mask
-  ["#0f4f30", "#363632"],
+  ["#0f4f30", "#005413"],
   // the mask over copper: traces and pours
-  ["#17613b", "#50504c"],
+  ["#17613b", "#006116"],
   // bare copper: pads
   ["#ffe066", "#e1cf4d"],
   // the lettering
@@ -25,8 +25,8 @@ const COLOURS: readonly (readonly [theirs: string, ours: string])[] = [
   // holes, shaded darker over the rest
   ["#000000", "#000000"],
 ]
-/** The board's edge, which has no picture on it: the lighter of the greys. */
-const EDGE = "#50504c"
+/** The board's edge, which has no picture on it: the lighter of the greens. */
+const EDGE = "#006116"
 
 const glsl = (colour: string) =>
   `vec3(${new THREE.Color(colour)
