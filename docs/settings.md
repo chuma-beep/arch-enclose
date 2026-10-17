@@ -35,9 +35,9 @@ the projects' cards and the line round them, the words on one that is working or
 you, and the light that runs across those while it works; the view behind the model,
 and the colours its parts are drawn in; the conversation's ground, and the bubble of
 what you say in it; the project's own tools; and a circuit board in PCB mode, in each of
-its three views: its mask, traces, pads and print in 3D, its copper on each side, print
-and edge in the technical view, and the lines, fill, wires, names and values of its
-schematic. What a theme leaves out is the app's own. A theme is chosen in **Appearance**, and stays chosen across light and
+its three views: its mask, traces, pads and print in 3D, and the light, mid and dark
+greys of the components on it; its copper on each side, print and edge in the technical
+view; and the lines, fill, wires, names and values of its schematic. What a theme leaves out is the app's own. A theme is chosen in **Appearance**, and stays chosen across light and
 dark: **System**, **Light** or **Dark**, beside the section's name, says which of its two
 looks is shown. The app's own colours, **Default**, are always there, and cannot be
 removed.

@@ -2,7 +2,9 @@
 // the window is in has them, in place of those tscircuit gives it. Its 3D file has each
 // side of the board as a picture, of its mask, copper and lettering in tscircuit's
 // colours, and its edge as one colour: each of those is drawn in the app's colour for it
-// instead, and drawn again in another as soon as the theme changes it.
+// instead, and drawn again in another as soon as the theme changes it. What is on the
+// board is in its makers' colours, which are mostly greys: each grey is drawn in the
+// theme's shade for greys as light, as much lighter or darker than that as it was.
 import * as THREE from "three"
 
 import type { PcbColours } from "@shared/theme-format"
@@ -39,6 +41,65 @@ const COLOURS: readonly (readonly [
 ]
 /** The board's edge, which has no picture on it: the lighter of the greens. */
 const EDGE: BoardColour = "board-traces"
+
+/**
+ * The shades of grey of what is on a board, from the lightest, each with the grey it is
+ * when the theme gives none (as src/index.css has it), and how light a grey is to be
+ * drawn in it: at least this much, of 255, at its lightest. Mid is chips' packages;
+ * light, what is lighter (connectors, pins, shields); dark, what is darker (resistors,
+ * headers' plastic).
+ */
+const SHADES: readonly (readonly [
+  shade: Extract<keyof PcbColours, `components-${string}`>,
+  own: string,
+  from: number,
+])[] = [
+  ["components-light", "#e7e7e7", 190],
+  ["components-mid", "#9c9c9c", 136],
+  ["components-dark", "#737373", 0],
+]
+/** How far apart, of 255, a colour's channels can be for it still to be a grey. */
+const GREY = 24
+
+/**
+ * What is on a board that is drawn in one of the theme's shades (see SHADES): which, and
+ * how much lighter or darker its own grey is than that shade's own, channel by channel,
+ * for it to be as much lighter or darker than the theme's. Null for what is not a grey:
+ * an LED, gold, a capacitor's tan, which stay as they are.
+ */
+export type Shaded = {
+  shade: (typeof SHADES)[number][0]
+  share: THREE.Color
+}
+
+/** Which of the theme's shades a colour of what is on a board is drawn in, if any. */
+export function shadedOf(colour: THREE.Color): Shaded | null {
+  const seen = colour.getRGB({ r: 0, g: 0, b: 0 }, THREE.SRGBColorSpace)
+  const [r, g, b] = [seen.r, seen.g, seen.b].map((channel) => channel * 255)
+  const light = Math.max(r, g, b)
+  if (light - Math.min(r, g, b) > GREY) return null
+  const [shade, own] = SHADES.find(([, , from]) => light >= from)!
+  const base = new THREE.Color(own)
+  return {
+    shade,
+    share: new THREE.Color(
+      colour.r / base.r,
+      colour.g / base.g,
+      colour.b / base.b
+    ),
+  }
+}
+
+/** The colour something on a board is drawn in, in the theme's shade for it. */
+export const inShade = (
+  { shade, share }: Shaded,
+  theme: PcbColours,
+  colour: THREE.Color
+) =>
+  colour
+    .set(theme[shade])
+    .multiply(share)
+    .setRGB(Math.min(1, colour.r), Math.min(1, colour.g), Math.min(1, colour.b))
 
 const glsl = (colour: string) =>
   `vec3(${new THREE.Color(colour)

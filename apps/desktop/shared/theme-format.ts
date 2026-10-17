@@ -118,6 +118,27 @@ export const SLOTS = [
     token: "--board-print",
   },
   {
+    id: "components-light",
+    area: "3D view",
+    label: "Light components",
+    detail: "The lightest of what is on the board: connectors, pins, shields",
+    token: "--components-light",
+  },
+  {
+    id: "components-mid",
+    area: "3D view",
+    label: "Mid components",
+    detail: "Chips' packages, and what is as light",
+    token: "--components-mid",
+  },
+  {
+    id: "components-dark",
+    area: "3D view",
+    label: "Dark components",
+    detail: "Resistors, headers' plastic, and what is as dark",
+    token: "--components-dark",
+  },
+  {
     id: "technical-top",
     area: "Technical view",
     label: "Top copper",

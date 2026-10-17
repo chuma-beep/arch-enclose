@@ -42,7 +42,14 @@ import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
 import { UnfinishedBadge, WorkingBadge } from "./board-steps"
-import { boardPaint, inOurColours, repaint } from "./colours"
+import {
+  boardPaint,
+  inOurColours,
+  inShade,
+  repaint,
+  shadedOf,
+  type Shaded,
+} from "./colours"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -576,8 +583,14 @@ export function standing(board: THREE.Group, colours: PcbColours) {
   const made: { dispose(): void }[] = []
   const sweep = newSweep()
   const paint = boardPaint(colours)
-  // the faces of the board's edge, whose colour is the app's (see colours.ts)
+  // the faces of the board's edge, whose colour is the app's, and those of what is on
+  // it that are in the theme's shades of grey (see colours.ts)
   const edges: { material: THREE.MeshStandardMaterial; own: THREE.Color }[] = []
+  const greys: {
+    material: THREE.MeshStandardMaterial
+    own: THREE.Color
+    shaded: Shaded
+  }[] = []
   const slight = Math.cos((CREASE * Math.PI) / 180)
   const meshes: THREE.Mesh[] = []
   board.traverse((thing) => {
@@ -607,7 +620,13 @@ export function standing(board: THREE.Group, colours: PcbColours) {
         if (copy instanceof THREE.MeshStandardMaterial) {
           const face = { material: copy, own: copy.color.clone() }
           faces.push(face)
+          const shaded = ours === null ? shadedOf(copy.color) : null
           if (ours === "edge") edges.push(face)
+          else if (shaded) {
+            greys.push({ ...face, shaded })
+            inShade(shaded, colours, face.own)
+            copy.color.copy(face.own)
+          }
         }
         return copy
       })
@@ -699,6 +718,8 @@ export function standing(board: THREE.Group, colours: PcbColours) {
         face.own.copy(paint.edge)
         face.material.color.copy(paint.edge)
       }
+      for (const { material, own, shaded } of greys)
+        material.color.copy(inShade(shaded, colours, own))
     },
     // (and in the view's own frame, for the light to go across no more than the board)
     seen: new THREE.Box3(min.clone(), max.clone()),

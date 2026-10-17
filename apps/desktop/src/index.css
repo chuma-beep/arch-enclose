@@ -149,7 +149,8 @@
        whatever the model's colour */
   --glass: blur(20px) saturate(1.3) brightness(1.2);
   /* A circuit board in PCB mode (shared/theme-format.ts): in 3D, the board as it is
-       made, in the app's greens and not tscircuit's (components/pcb/colours.ts); as it
+       made, in the app's greens and not tscircuit's, and the greys of what is on it, as
+       their makers have them (components/pcb/colours.ts, which has these too); as it
        is drawn, its copper in KiCad's colours for each side, and its print and edge
        dark on the light ground; and its schematic, in one ink, as for paper
        (components/pcb/drawing.ts). Each is said again for the dark, so that a theme's
@@ -158,6 +159,9 @@
   --board-traces: #006116;
   --board-pads: #e1cf4d;
   --board-print: #ffffff;
+  --components-light: #e7e7e7;
+  --components-mid: #9c9c9c;
+  --components-dark: #737373;
   --technical-top: #c83434;
   --technical-bottom: #4d7fc4;
   --technical-print: #1c1c1c;
@@ -220,6 +224,9 @@
   --board-traces: #006116;
   --board-pads: #e1cf4d;
   --board-print: #ffffff;
+  --components-light: #e7e7e7;
+  --components-mid: #9c9c9c;
+  --components-dark: #737373;
   --technical-top: #c83434;
   --technical-bottom: #4d7fc4;
   --technical-print: #ffffff;
