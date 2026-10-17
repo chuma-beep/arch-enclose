@@ -41,6 +41,7 @@ import { flatZoom, FOV, PINCH, REACH, Rig } from "@/components/viewport/rig"
 import { disposeBoard, loadBoard } from "./pictures"
 import { BoardPartMark, onBoard } from "./part-mark"
 import { UnfinishedBadge, WorkingBadge } from "./board-steps"
+import { inOurColours } from "./colours"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -449,10 +450,10 @@ function unpicked(line: LineSegments2) {
 }
 
 /**
- * A board in 3D as the view shows it: as tscircuit built it, in its own colours, with
- * its lines drawn as the model's parts made of a mesh have theirs: wherever two of its
- * triangles meet at an edge, and the outline of its curved faces, wherever that is
- * seen from. It is turned half round, so that its own X and Y are the model's (as its
+ * A board in 3D as the view shows it: as tscircuit built it, in the app's colours (see
+ * colours.ts), with its lines drawn as the model's parts made of a mesh have theirs:
+ * wherever two of its triangles meet at an edge, and the outline of its curved faces,
+ * wherever that is seen from. It is turned half round, so that its own X and Y are the model's (as its
  * STEP file has them) and the view's camera comes to it from its front right corner, as
  * to a model. With the box round it, in the model's frame, which the camera goes by.
  */
@@ -507,6 +508,8 @@ function standing(board: THREE.Group) {
       const face = (material as THREE.MeshStandardMaterial).map
       if (face) face.anisotropy = SLANT
       sweepable(material, sweep)
+      // (the board itself, in the app's colours and not tscircuit's)
+      inOurColours(material)
     }
     const creases = new THREE.EdgesGeometry(mesh.geometry, CREASE)
     const edges = new LineSegmentsGeometry().setPositions(

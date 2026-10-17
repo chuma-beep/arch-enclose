@@ -145,8 +145,9 @@ right change over to the board's, and the cards of the other projects are put aw
 3D; the buttons, or 1, 2 and 3, show it as it is made (**Technical view**), in **3D**, or as its
 **Schematic**. Beside **Technical view**, **Bottom side** (S) turns the board over, to show its bottom as it is seen from under it. A drawing is moved with a swipe or a drag and zoomed with a pinch or the
 wheel, and a double click shows all of it again. The 3D is looked round as the model is,
-with the same camera, in tscircuit's own colours with the edges drawn as the model's
-are. **Parts** (P) lists what is on the board, each kind of part once in a small square
+with the same camera, with the edges drawn as the model's are, and in the app's own
+colours for a board: two greens for its mask, the lighter over copper, a yellow for its
+pads, and white for its lettering and for where nothing may go. **Parts** (P) lists what is on the board, each kind of part once in a small square
 with a picture of it in 3D, what it is, and how many of it there are with their names on
 the board (C1, C2); a part the board has no 3D of is a grey block its size. Pointing at
 one lights those parts on the board in 3D, with the rest of the board darkened round them,

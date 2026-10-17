@@ -10,6 +10,7 @@ import type { BoardSummary } from "@shared/api"
 import { PALETTE } from "@shared/palette"
 import { frame, stage } from "@/components/viewport/thumbnails"
 import { boardUrl } from "./boards"
+import { BOARD_ITSELF } from "./colours"
 
 /** Pixels a side: twice the size they are shown at, for sharp screens. */
 const PICTURE = 400
@@ -44,12 +45,6 @@ export async function loadBoard(url: string): Promise<THREE.Group> {
   const gltf = await new GLTFLoader().loadAsync(url)
   return gltf.scene
 }
-
-/**
- * The materials tscircuit gives the board itself, as against what is on it: its top and
- * its bottom, each a picture of its copper, mask and lettering, and its edge.
- */
-const BOARD_ITSELF = /^(TopMaterial|BottomMaterial|GreenSideMaterial)/
 
 /**
  * The colour of what is on a board, in its picture: near black, short of it so that the
