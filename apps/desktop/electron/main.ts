@@ -2213,7 +2213,7 @@ if (!app.requestSingleInstanceLock()) {
     ) {
       // (on Linux the AppImage's own updater, named: left to itself electron-updater would
       // take a deb's, rpm's or pacman's wherever the app carries their package-type file,
-      // and an AppImage can, as all four are made at once from the one folder)
+      // which an AppImage does not, but only for the order electron-builder makes them in)
       const updater =
         process.platform === "linux"
           ? new electronUpdater.AppImageUpdater()

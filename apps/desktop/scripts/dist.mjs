@@ -35,10 +35,10 @@
 //
 // What keeps that from happening is the app: it asks for a newer version only where it was
 // run as an AppImage (`process.env.APPIMAGE`, electron/main.ts), and then with the
-// AppImage's own updater, named, rather than the one the file would pick. The four are
-// made at once, from the one unpacked app the three write their file into
-// (platformPackager.js, buildAsyncTargets), so the AppImage can go out with one of theirs
-// as well: which of them comes first in linuxKinds says nothing of it.
+// AppImage's own updater, named, rather than the one the file would pick. The AppImage
+// goes out without the file as it is: the three are made one at a time, once it is
+// finished (FpmTarget is not built alongside the others: packageInDistributableFormat in
+// platformPackager.js). Naming the updater keeps that from resting on the order.
 //
 // A Mac opens an app that was downloaded only if a developer Apple knows has signed it
 // and Apple has looked it over (notarized it). Both are done here where they can be:
