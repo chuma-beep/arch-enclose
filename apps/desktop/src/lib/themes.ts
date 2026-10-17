@@ -135,6 +135,8 @@ type ThemesState = {
   creating: Making | null
   /** the look it shows at first: the one the window is in, where none is given */
   creatingIn: Mode | null
+  /** the theme it is changing, if it is one already made: null for a new one */
+  changing: Theme | null
   /**
    * read the themes there are again, and what is changed of the app's own look; one
    * chosen that is gone gives way to the app's own
@@ -148,7 +150,8 @@ type ThemesState = {
   saveDefaults(defaults: Defaults): Promise<void>
   /** take one away: if the window was in it, it goes back to the app's own look */
   remove(id: string): Promise<void>
-  setCreating(creating: Making | null, look?: Mode): void
+  /** the theme creator up, in this look, for a new theme or (`theme`) to change one */
+  setCreating(creating: Making | null, look?: Mode, theme?: Theme): void
 }
 
 const atFirst =
@@ -171,6 +174,7 @@ export const useThemes = create<ThemesState>()((set, get) => {
     ...atFirst,
     creating: null,
     creatingIn: null,
+    changing: null,
 
     async load() {
       if (!window.cad) return
@@ -221,8 +225,8 @@ export const useThemes = create<ThemesState>()((set, get) => {
         get().choose(DEFAULT_THEME)
     },
 
-    setCreating(creating, look) {
-      set({ creating, creatingIn: look ?? null })
+    setCreating(creating, look, theme) {
+      set({ creating, creatingIn: look ?? null, changing: theme ?? null })
     },
   }
 })

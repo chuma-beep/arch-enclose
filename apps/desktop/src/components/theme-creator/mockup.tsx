@@ -2,7 +2,8 @@
 // projects' cards in each of the ways a card can be, a part in each of the palette's
 // colours in the view, the project's tools, and a conversation with what the user says in
 // it in each of its bubbles. Or, for a circuit board's colours, the view in PCB mode,
-// with a board in it, and the cards put away for it. It is drawn as the window is, in the same classes and tokens, but
+// with a board in it, and the cards put away for it; or, for the settings', the window
+// with them open over it. It is drawn as the window is, in the same classes and tokens, but
 // of nothing real: none of it does anything but show a colour, apart from the parts,
 // which pick their colour to be changed, and PCB mode's buttons for the ways a board is
 // looked at, which change it.
@@ -33,6 +34,11 @@ import {
 
 import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
 import type { Mode, PcbColours, ThemeColours } from "@shared/theme-format"
+import { Logo } from "@/components/mark"
+import { Group, Row } from "@/components/setting"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { EDGE } from "@/components/viewport/paint"
 import { BOARD_AS, type BoardAs } from "@/lib/store"
 import { propertiesOf } from "@/lib/themes"
@@ -385,6 +391,135 @@ export type BoardShown = {
   ground: string
 }
 
+/** The sections of the settings, down the side of their panel (settings.tsx). */
+const SETTINGS_SECTIONS = [
+  "General",
+  "Navigation",
+  "Shortcuts",
+  "Providers",
+  "Connections",
+  "Appearance",
+  "About",
+]
+
+/**
+ * The settings, open over the window at their first section, as the settings draw them
+ * (settings.tsx), with their own parts: in their own colours, and doing nothing.
+ */
+function SettingsOver() {
+  return (
+    <div inert className="settings absolute inset-0 text-foreground">
+      {/* the window past the panel, dimmed */}
+      <div className="absolute inset-0 bg-black/30 dark:bg-black/50" />
+      <div className="absolute inset-y-0 left-0 flex w-205 flex-col overflow-hidden rounded-r-xl bg-background shadow-2xl ring-1 ring-foreground/10">
+        <div className="h-12 shrink-0" />
+        <div className="flex min-h-0 flex-1">
+          <nav className="flex w-41.25 shrink-0 flex-col items-start pt-2.75 pl-7.5">
+            <div className="mb-7.75 -ml-1.5 flex h-8 items-center">
+              <Logo size={28} />
+            </div>
+            {SETTINGS_SECTIONS.map((section, index) => (
+              <span
+                key={section}
+                className={cn(
+                  "flex h-5.75 items-center text-[13px]",
+                  index === 0 ? "text-foreground" : "text-muted-foreground/75"
+                )}
+              >
+                {section}
+              </span>
+            ))}
+          </nav>
+          <div className="flex min-w-0 flex-1 flex-col gap-8 pt-2.75 pr-12 pb-10">
+            <h1 className="px-0.5 text-2xl font-medium">General</h1>
+            <Group title="New projects">
+              <Row
+                title="Projects folder"
+                detail={
+                  <>
+                    Where new projects are saved.
+                    <span className="mt-1 block font-mono text-[13px]">
+                      ~/Documents/Enclose · 1.9 GB
+                    </span>
+                  </>
+                }
+              >
+                <Button variant="ghost" size="sm">
+                  Show
+                </Button>
+                <Button variant="outline" size="sm">
+                  Change…
+                </Button>
+              </Row>
+              <Row
+                title="Opened files"
+                detail="Names and groups the parts of CAD files you open."
+              >
+                <Switch checked />
+              </Row>
+            </Group>
+            <Group title="Conversations">
+              <Row title="Permissions" detail="Never asks.">
+                <ToggleGroup
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  value={["full"]}
+                >
+                  {["Supervised", "Edits", "Auto", "Full"].map((label) => (
+                    <ToggleGroupItem
+                      key={label}
+                      value={label.toLowerCase()}
+                      className="aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </Row>
+              <Row
+                title="Versions"
+                detail="Each conversation keeps its own version of the project. Off, they all change the same one."
+              >
+                <Switch checked />
+              </Row>
+              <Row
+                title="Token usage"
+                detail="While Claude thinks, shows about how many tokens it has used."
+              >
+                <Switch checked={false} />
+              </Row>
+            </Group>
+            <Group title="Blueprints">
+              <Row title="Units" detail="The unit dimensions are shown in.">
+                <ToggleGroup
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  value={["mm"]}
+                >
+                  {["mm", "in"].map((label) => (
+                    <ToggleGroupItem
+                      key={label}
+                      value={label}
+                      className="aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </Row>
+            </Group>
+          </div>
+        </div>
+        <span className="absolute bottom-3 left-4 flex size-9 items-center justify-center rounded-full bg-muted">
+          <XIcon className="size-5.5" strokeWidth={1.25} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
 /** What the user says, in its bubble: as the conversation draws it (thread.tsx). */
 function Said({
   children,
@@ -480,6 +615,7 @@ export function Mockup({
   base,
   palette,
   board,
+  settings = false,
   picked,
   onPick,
 }: {
@@ -491,6 +627,8 @@ export function Mockup({
   palette: Record<PaletteName, string>
   /** the view is in PCB mode, with this board: null for the model's parts */
   board: BoardShown | null
+  /** the settings are open over the window */
+  settings?: boolean
   /** the part colour being changed, if one is */
   picked: PaletteName | null
   onPick: (name: PaletteName) => void
@@ -501,7 +639,7 @@ export function Mockup({
       data-theme-base={base ? "" : undefined}
       className={cn(
         mode,
-        "thin-icons flex overflow-hidden rounded-xl bg-sidebar text-foreground shadow-2xl ring-1 ring-foreground/15"
+        "thin-icons relative flex overflow-hidden rounded-xl bg-sidebar text-foreground shadow-2xl ring-1 ring-foreground/15"
       )}
       style={{ ...propertiesOf(colours), ...MOCKUP }}
     >
@@ -540,6 +678,7 @@ export function Mockup({
         {board ? <BoardRail as={board.as} onAs={board.onAs} /> : <Rail />}
       </div>
       <Conversation />
+      {settings && <SettingsOver />}
     </div>
   )
 }

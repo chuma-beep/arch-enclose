@@ -1,8 +1,9 @@
 // The theme creator, which the app has only as it is worked on: over the whole window, a
 // colour picker for each thing a theme colours down the left, and the window drawn in
 // what is picked on the right, in the light look or the dark. The window's own colours
-// are on one tab, and a circuit board's in PCB mode on another, where the window is
-// drawn in PCB mode with a board of its own, looked at the way of what is being picked.
+// are on one tab; a circuit board's in PCB mode on another, where the window is drawn
+// in PCB mode with a board of its own, looked at the way of what is being picked; and
+// the settings' on a third, where the window has them open over it.
 // What is picked in one look is that look's alone; what is not picked is the app's own. Saved, the theme is a file
 // in themes/ at the top of the repository, to be put to the app in a pull request. It
 // changes the app's own look as well, in themes/default.json, put to the app the same
@@ -26,6 +27,7 @@ import {
   type ThemeColours,
   type ThemeLooks,
   type SlotId,
+  type Theme,
 } from "@shared/theme-format"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -58,6 +60,7 @@ const AREAS = ["Sidebar", "Viewer", "Chat", "Tools"] as const
 const TABS = [
   { value: "general", label: "General", areas: AREAS },
   { value: "pcb", label: "PCB", areas: PCB_AREAS },
+  { value: "settings", label: "Settings", areas: ["Settings"] },
 ] as const
 type Tab = (typeof TABS)[number]["value"]
 
@@ -211,10 +214,13 @@ function Row({
 export function ThemeCreator({
   making,
   look: given,
+  changing = null,
 }: {
   making: Making
   /** the look shown at first: the one the window is in, where none is given */
   look?: Mode
+  /** the theme it changes, where it is one already made: null for a new one */
+  changing?: Theme | null
 }) {
   const setCreating = useThemes((state) => state.setCreating)
   const save = useThemes((state) => state.save)
@@ -224,18 +230,23 @@ export function ThemeCreator({
   const base = making === "defaults"
   // the look being made: the one asked for, or the one the window is in
   const [mode, setMode] = React.useState<Mode>(given ?? look)
-  // what was saved last: for a theme, nothing at first, from nothing of its own; for the
-  // app's own look, what is changed of it now
+  // what was saved last: for a new theme, nothing at first, from nothing of its own; for
+  // one already made, it as it is; for the app's own look, what is changed of it now
   const [kept, setKept] = React.useState<{ name: string; looks: ThemeLooks }>(
-    () => ({
-      name: base ? under.name : "",
-      looks: base
-        ? structuredClone({ light: under.light, dark: under.dark })
-        : { light: {}, dark: {} },
-    })
+    () => {
+      const from = base ? under : changing
+      return {
+        name: from?.name ?? "",
+        looks: from
+          ? structuredClone({ light: from.light, dark: from.dark })
+          : { light: {}, dark: {} },
+      }
+    }
   )
   // and what the theme saved last was called, which saving it again writes in place of
-  const [savedAs, setSavedAs] = React.useState<string | null>(null)
+  const [savedAs, setSavedAs] = React.useState<string | null>(
+    base ? null : (changing?.id ?? null)
+  )
   const [made, setMade] = React.useState<ThemeLooks>(kept.looks)
   const [name, setName] = React.useState(kept.name)
   const [part, setPart] = React.useState<PaletteName>("blue")
@@ -425,7 +436,7 @@ export function ThemeCreator({
             <span className="sr-only">Close the theme creator</span>
           </Button>
         </header>
-        {/* the window's own colours, or a board's */}
+        {/* the window's own colours, a board's, or the settings' */}
         <Tabs
           value={tab}
           onValueChange={(value) => setTab(value as Tab)}
@@ -568,6 +579,7 @@ export function ThemeCreator({
                   }
                 : null
             }
+            settings={tab === "settings"}
             picked={part}
             onPick={(name) => {
               setPart(name)

@@ -206,6 +206,7 @@ export function App() {
   // (as the app is worked on: made into a package, it has no theme creator)
   const creating = useThemes((state) => state.creating)
   const creatingIn = useThemes((state) => state.creatingIn)
+  const changing = useThemes((state) => state.changing)
   const setSettingsOpen = useStore((state) => state.setSettingsOpen)
   const dropping = useFolderDrop()
   useViewportRequests()
@@ -249,9 +250,10 @@ export function App() {
         {settingsOpen && <Settings />}
         {creating && import.meta.env.DEV && (
           <ThemeCreator
-            key={creating}
+            key={`${creating}:${changing?.id ?? ""}`}
             making={creating}
             look={creatingIn ?? undefined}
+            changing={changing}
           />
         )}
         {dropping && (

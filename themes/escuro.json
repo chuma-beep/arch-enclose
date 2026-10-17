@@ -1,0 +1,46 @@
+{
+  "name": "Escuro",
+  "light": {
+    "cards": "#f4f4f4",
+    "outline": "#cecece",
+    "attention": "#0e8f00",
+    "shimmer": "#43be00",
+    "viewer": "#ffffff",
+    "tools": "#0065ff",
+    "parts": {
+      "red": "#ff130f",
+      "orange": "#ff8e0f",
+      "yellow": "#fcce01",
+      "lime": "#7eff00",
+      "green": "#00ff3c",
+      "cyan": "#00f8ff",
+      "blue": "#1d5bff",
+      "indigo": "#3f27ff",
+      "violet": "#b033f9",
+      "pink": "#ff1c95",
+      "white": "#ffffff"
+    }
+  },
+  "dark": {
+    "cards": "#171717",
+    "viewer": "#000000",
+    "chat": "#000000",
+    "tools": "#0066ff",
+    "settings-background": "#000000",
+    "settings-card": "#0a0a0a",
+    "parts": {
+      "red": "#ff3935",
+      "orange": "#ff9a29",
+      "yellow": "#fcea10",
+      "lime": "#7ffe00",
+      "green": "#03ff40",
+      "cyan": "#2bfaff",
+      "blue": "#396df7",
+      "indigo": "#5c47ff",
+      "violet": "#b83eff",
+      "pink": "#f74fa8",
+      "white": "#ffffff",
+      "grey": "#404040"
+    }
+  }
+}

@@ -34,7 +34,8 @@ A theme colours some of the window in its own way, in the light look and in the 
 the projects' cards and the line round them, the words on one that is working or needs
 you, and the light that runs across those while it works; the view behind the model,
 and the colours its parts are drawn in; the conversation's ground, and the bubble of
-what you say in it; the project's own tools; and a circuit board in PCB mode, in each of
+what you say in it; the project's own tools; the settings' panel, its cards, what is on
+or chosen in it, and its text; and a circuit board in PCB mode, in each of
 its three views: its mask, traces, copper pour, pads and print in 3D (a pour is drawn
 as the traces are, unless it is given a colour of its own), and the light, mid and dark
 greys of the components on it; its copper on each side, print and edge in the technical
@@ -49,10 +50,11 @@ with the app. To make one, run the app from a checkout (see
 theme creator over the whole window. Down its left are the colours there are to pick;
 on its right, the window drawn in them, with a card in each of the ways a card can be, a
 part in each of the palette's colours, and a conversation. A click on one of those parts
-picks its colour to be changed. The window's own colours are under **General**, and a
+picks its colour to be changed. The window's own colours are under **General**; a
 circuit board's under **PCB**, where the window is drawn in PCB mode with a board of its
 own: it turns to the view whose colour you are picking, and PCB mode's buttons down its
-right change the view too. **Light** and **Dark**, at the top right, say which look
+right change the view too; and the settings' under **Settings**, where the window has
+them open over it. **Light** and **Dark**, at the top right, say which look
 is being made, and what is picked in one is that look's alone: the other keeps the
 app's colours until you pick some for it too. The title is the theme's name, up to 20
 characters: click it to name the theme. **Save theme**, which comes up once the theme
@@ -60,7 +62,9 @@ has a name, writes the theme under that name to `themes/<name>.json`, and the wi
 drawn in it. The theme creator stays open: **Save theme** is on again once something
 differs from what was saved, and saving again updates the same file, renamed with the
 theme. Open a pull request with that file to put it in the app for everyone. Run from a
-checkout, each theme's card has a cross to remove it, which deletes its file.
+checkout, each theme's card has a pencil, which opens the theme creator on that theme
+to change it (saving it again updates its file), and a cross to remove it, which deletes
+its file.
 
 The app's own colours are changed the same way. Run from a checkout, the **Default** card
 has a pencil that opens the theme creator on the app's own colours, in the look chosen,

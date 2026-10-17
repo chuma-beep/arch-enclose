@@ -88,6 +88,42 @@ export const SLOTS = [
     detail: "The project's own tools, and their panel",
     token: "--tool",
   },
+  // the settings, in their panel over the window
+  {
+    id: "settings-background",
+    area: "Settings",
+    label: "Background",
+    detail: "Behind the settings, in their panel",
+    token: "--settings-background",
+  },
+  {
+    id: "settings-card",
+    area: "Settings",
+    label: "Cards",
+    detail: "Each group of settings",
+    token: "--settings-card",
+  },
+  {
+    id: "settings-active",
+    area: "Settings",
+    label: "Active",
+    detail: "What is on or chosen: a switch, a choice",
+    token: "--settings-active",
+  },
+  {
+    id: "settings-text",
+    area: "Settings",
+    label: "Text",
+    detail: "Each setting's name, and the headings",
+    token: "--settings-text",
+  },
+  {
+    id: "settings-muted",
+    area: "Settings",
+    label: "Secondary text",
+    detail: "What each setting does, and the groups' names",
+    token: "--settings-muted",
+  },
   // and a circuit board in PCB mode, each of the three ways it is looked at
   {
     id: "board-mask",

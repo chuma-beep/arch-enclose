@@ -369,15 +369,18 @@ const MODES = [
 const PICTURED =
   "group flex w-full flex-col gap-2 rounded-2xl bg-card p-1.5 pb-2.5 ring-1 ring-foreground/10 outline-none hover:ring-foreground/25 focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-primary"
 
-/** What is done to a theme from a button on its card's corner, shown with the pointer on it. */
+/**
+ * What is done to a theme from a button on its card's corner, shown with the pointer on
+ * it: side by side, where there is more than one.
+ */
 const CORNER =
-  "absolute top-3 right-3 flex size-6 cursor-pointer items-center justify-center rounded-full bg-background/85 opacity-0 ring-1 ring-foreground/10 transition-[opacity,color,background-color] outline-none group-hover/theme:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  "flex size-6 cursor-pointer items-center justify-center rounded-full bg-background/85 opacity-0 ring-1 ring-foreground/10 transition-[opacity,color,background-color] outline-none group-hover/theme:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
 /**
  * A theme, as the window would be drawn in it in the look chosen beside the section's
  * name: light and dark side by side, for the system's. Where no theme is given, it is the
- * app's own, which has a pencil on its corner as the app is worked on; one that can be
- * taken away has a cross there.
+ * app's own. As the app is worked on, each has a pencil on its corner, to change it, and
+ * one that can be taken away a cross beside that.
  */
 function ThemeCard({
   theme,
@@ -422,43 +425,45 @@ function ThemeCard({
           {name}
         </span>
       </button>
-      {onRemove && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={onRemove}
-                className={cn(CORNER, "hover:bg-red-600 hover:text-white")}
-              />
-            }
-          >
-            <XIcon className="size-3.5" />
-            <span className="sr-only">Remove {name}</span>
-          </TooltipTrigger>
-          <TooltipContent>Remove</TooltipContent>
-        </Tooltip>
-      )}
-      {onEdit && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                onClick={onEdit}
-                className={cn(
-                  CORNER,
-                  "hover:bg-foreground hover:text-background"
-                )}
-              />
-            }
-          >
-            <PencilIcon className="size-3" />
-            <span className="sr-only">Change {name}</span>
-          </TooltipTrigger>
-          <TooltipContent>Change</TooltipContent>
-        </Tooltip>
-      )}
+      <div className="absolute top-3 right-3 flex gap-1.5">
+        {onEdit && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className={cn(
+                    CORNER,
+                    "hover:bg-foreground hover:text-background"
+                  )}
+                />
+              }
+            >
+              <PencilIcon className="size-3" />
+              <span className="sr-only">Change {name}</span>
+            </TooltipTrigger>
+            <TooltipContent>Change</TooltipContent>
+          </Tooltip>
+        )}
+        {onRemove && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  className={cn(CORNER, "hover:bg-red-600 hover:text-white")}
+                />
+              }
+            >
+              <XIcon className="size-3.5" />
+              <span className="sr-only">Remove {name}</span>
+            </TooltipTrigger>
+            <TooltipContent>Remove</TooltipContent>
+          </Tooltip>
+        )}
+      </div>
     </div>
   )
 }
@@ -502,6 +507,18 @@ function Appearance() {
             onChoose={() => choose(one.id)}
             onRemove={
               import.meta.env.DEV ? () => void remove(one.id) : undefined
+            }
+            onEdit={
+              import.meta.env.DEV
+                ? () => {
+                    close(false)
+                    setCreating(
+                      "theme",
+                      mode === "system" ? undefined : mode,
+                      one
+                    )
+                  }
+                : undefined
             }
           />
         ))}

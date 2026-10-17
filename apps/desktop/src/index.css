@@ -164,6 +164,13 @@
   --components-light: #e7e7e7;
   --components-mid: #9c9c9c;
   --components-dark: #737373;
+  /* the settings' own colours: the window's, unless a theme gives them others (see
+       .settings, below) */
+  --settings-background: var(--background);
+  --settings-card: var(--card);
+  --settings-active: var(--primary);
+  --settings-text: var(--foreground);
+  --settings-muted: var(--muted-foreground);
   --technical-top: #c83434;
   --technical-bottom: #4d7fc4;
   --technical-print: #1c1c1c;
@@ -230,6 +237,11 @@
   --components-light: #e7e7e7;
   --components-mid: #9c9c9c;
   --components-dark: #737373;
+  --settings-background: var(--background);
+  --settings-card: var(--card);
+  --settings-active: var(--primary);
+  --settings-text: var(--foreground);
+  --settings-muted: var(--muted-foreground);
   --technical-top: #c83434;
   --technical-bottom: #4d7fc4;
   --technical-print: #ffffff;
@@ -251,6 +263,22 @@
   html {
     @apply font-sans;
   }
+}
+
+/* The settings are in colours of their own, for a theme to colour them and nothing else
+   (shared/theme-format.ts): the window's own unless it does. What is drawn on what is
+   active is near white on a dark colour for it and near black on a light one, as the
+   window's own are. */
+.settings {
+  --background: var(--settings-background);
+  --card: var(--settings-card);
+  --primary: var(--settings-active);
+  --primary-foreground: oklch(
+    from var(--settings-active)
+      calc(0.205 + 0.78 * clamp(0, (0.6 - l) * 1000, 1)) 0 0
+  );
+  --foreground: var(--settings-text);
+  --muted-foreground: var(--settings-muted);
 }
 
 /* In the settings, a path, a version and a model's name as its maker has it are in
