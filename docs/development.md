@@ -148,11 +148,16 @@ kind instead: `release/Enclose-<version>-x86_64.AppImage` and its kin (on an aar
 machine the AppImage and the deb end in `arm64`, and the pacman package and the rpm in
 `aarch64`), with `latest-linux.yml` beside them (`latest-linux-arm64.yml` on aarch64).
 One kind at a time can be made (`npm run dist -- --appimage`, and `--deb`, `--pacman`,
-`--rpm` likewise). A deb takes `dpkg-deb` and an rpm takes `rpmbuild`, from the system
-(`sudo pacman -S dpkg rpm-tools` on Arch); an AppImage and a pacman package need nothing
-but what npm installs. Only the AppImage [updates itself](#updates) in place: electron-
-builder writes a deb, pacman package or rpm so the app would update itself as that, and
-`scripts/dist.mjs` turns that off for all three.
+`--rpm` likewise). A deb takes `dpkg-deb` and `ar`, from binutils, and an rpm takes
+`rpmbuild`, from the system (`sudo pacman -S dpkg rpm-tools` on Arch); an AppImage and a
+pacman package need nothing but what npm installs. Only the AppImage
+[updates itself](#updates) in place, and it takes two things to keep it so. The
+target-specific `publish: null` under deb, rpm and pacman keeps those three out of
+`latest-linux.yml`; it does not stop the `package-type` file they are written with, and
+that file is what makes an installed deb, rpm or pacman ask for an update of its own kind,
+from a feed that has no file of that kind. What keeps that from happening is the app, which
+asks for a newer version only where it was run as an AppImage. `scripts/dist.mjs` says
+which step each of the two belongs to.
 
 [`scripts/dist.mjs`](../apps/desktop/scripts/dist.mjs) says what goes in, and three
 things follow from it:
