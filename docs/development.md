@@ -150,9 +150,10 @@ kind instead: `release/Enclose-<version>-x86_64.AppImage` and its kin (on an aar
 machine the AppImage and the deb end in `arm64`, and the pacman package and the rpm in
 `aarch64`), with `latest-linux.yml` beside them (`latest-linux-arm64.yml` on aarch64).
 One kind at a time can be made (`npm run dist -- --appimage`, and `--deb`, `--pacman`,
-`--rpm` likewise). A deb takes `dpkg-deb` and `ar`, from binutils, and an rpm takes
-`rpmbuild`, from the system (`sudo pacman -S dpkg rpm-tools` on Arch); an AppImage and a
-pacman package need nothing but what npm installs. Only the AppImage
+`--rpm` likewise). A deb takes `dpkg-deb` and `ar`, from binutils, an rpm takes
+`rpmbuild`, and a pacman package `bsdtar`, from the system (`sudo pacman -S dpkg
+rpm-tools` on Arch, which has `bsdtar` already; `libarchive-tools` on Ubuntu); an
+AppImage needs nothing but what npm installs. Only the AppImage
 [updates itself](#updates) in place, and it takes two things to keep it so. The
 target-specific `publish: null` under deb, rpm and pacman keeps those three out of
 `latest-linux.yml`; it does not stop the `package-type` file they are written with, and

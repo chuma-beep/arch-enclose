@@ -208,9 +208,10 @@ try {
     })
     feeds = ["latest-mac.yml"]
   } else {
-    // Building a deb takes dpkg-deb and ar (from binutils), and an rpm takes rpmbuild: on
-    // Arch they come from the system (`sudo pacman -S dpkg rpm-tools`). An AppImage and
-    // a pacman package need nothing but what npm installs.
+    // Building a deb takes dpkg-deb and ar (from binutils), an rpm takes rpmbuild, and a
+    // pacman package takes bsdtar (from libarchive, which Arch has already): on Arch the
+    // rest come from the system (`sudo pacman -S dpkg rpm-tools`). An AppImage needs
+    // nothing but what npm installs.
     kinds = askedKinds.length > 0 ? askedKinds : linuxKinds
     made = await build({
       projectDir: ROOT,

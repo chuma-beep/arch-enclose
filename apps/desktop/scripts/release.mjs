@@ -14,8 +14,8 @@
 //
 // What the Mac release says has changed is the commits since the version before, a line
 // to each. It needs a Mac and what notarizes the app: see scripts/dist.mjs. On Linux a
-// deb takes dpkg-deb and ar, from binutils, and an rpm takes rpmbuild (`sudo pacman -S
-// dpkg rpm-tools` on Arch).
+// deb takes dpkg-deb and ar, from binutils, an rpm rpmbuild, and a pacman package bsdtar
+// (`sudo pacman -S dpkg rpm-tools` on Arch, which has bsdtar already).
 //
 //   On a Mac
 //   npm run release                the next version: 0.0.4 after 0.0.3
@@ -232,7 +232,7 @@ async function attachLinux() {
   )
   if (missing.length > 0)
     stop(
-      `Not everything was made: ${missing.join(", ")}. A deb takes dpkg-deb and ar (from binutils), and an rpm takes rpmbuild. Nothing was uploaded.`
+      `Not everything was made: ${missing.join(", ")}. A deb takes dpkg-deb and ar (from binutils), an rpm rpmbuild, and a pacman package bsdtar. Nothing was uploaded.`
     )
 
   step(`${tag}: the Linux files, attached`)
