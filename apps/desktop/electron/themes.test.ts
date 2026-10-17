@@ -65,6 +65,16 @@ describe("saveTheme", () => {
     ])
   })
 
+  it("writes no more of its name than a name may have", () => {
+    const theme = saveTheme(dir, {
+      name: "  A theme with a very long name  ",
+      light: {},
+      dark: { chat: "#101010" },
+    })
+    expect(theme.name).toBe("A theme with a very")
+    expect(theme.id).toBe("a-theme-with-a-very")
+  })
+
   it("will not write one with no name", () => {
     expect(() => saveTheme(dir, { name: " ", light: {}, dark: {} })).toThrow()
   })
@@ -87,12 +97,14 @@ describe("removeTheme", () => {
 
 describe("the app's own look", () => {
   it("is changed in a file of its own, which is no theme on the list", () => {
-    expect(readDefaults(dir)).toEqual({ light: {}, dark: {} })
+    expect(readDefaults(dir)).toEqual({ name: "Default", light: {}, dark: {} })
     const saved = saveDefaults(dir, {
+      name: "Paper",
       light: { chat: "#FAFAF7" },
       dark: { parts: { green: "#99eeaa" } },
     })
     expect(saved).toEqual({
+      name: "Paper",
       light: { chat: "#fafaf7" },
       dark: { parts: { green: "#99eeaa" } },
     })

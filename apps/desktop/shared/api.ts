@@ -2,7 +2,7 @@
 // change here is checked on both ends.
 
 import type { Building, StepsGone } from "./board-format"
-import type { Theme, ThemeLooks } from "./theme-format"
+import type { Defaults, Theme } from "./theme-format"
 
 export type Vec3 = [number, number, number]
 
@@ -1044,10 +1044,10 @@ export type CadApi = {
     save(theme: Omit<Theme, "id">): Promise<Theme>
     /** take one away, likewise from a checkout only; resolves to the themes left */
     remove(id: string): Promise<Theme[]>
-    /** what is changed of the app's own look, under every theme */
-    defaults(): Promise<ThemeLooks>
+    /** what is changed of the app's own look, under every theme, and what it is called */
+    defaults(): Promise<Defaults>
     /** write that, likewise from a checkout only, and give it back as written */
-    saveDefaults(looks: ThemeLooks): Promise<ThemeLooks>
+    saveDefaults(defaults: Defaults): Promise<Defaults>
   }
   github: {
     get(): Promise<GitHubState>

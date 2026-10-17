@@ -89,8 +89,9 @@ describe("changes", () => {
 describe("readLooks", () => {
   it("reads what is changed of the app's own look, and nothing from what says nothing", () => {
     expect(
-      readLooks({ name: "Default", light: { chat: "#FAFAFA" }, dark: [] })
-    ).toEqual({ light: { chat: "#fafafa" }, dark: {} })
-    expect(readLooks(null)).toEqual({ light: {}, dark: {} })
+      readLooks({ name: " Paper ", light: { chat: "#FAFAFA" }, dark: [] })
+    ).toEqual({ name: "Paper", light: { chat: "#fafafa" }, dark: {} })
+    expect(readLooks(null)).toEqual({ name: "Default", light: {}, dark: {} })
+    expect(readLooks({ name: "  " }).name).toBe("Default")
   })
 })

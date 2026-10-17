@@ -3,9 +3,9 @@
 // theme is a file to itself in themes/ at the top of the repository, which goes out with
 // the app; run from a checkout, the app's theme creator writes one there, for it to be
 // put to the app in a pull request. The app's own look, light and dark, is no theme
-// that can be chosen or taken away: it is src/index.css and the palette, with what
-// themes/default.json changes of them, under every theme. That file is changed in the
-// theme creator too, from one checkout alone (see src/lib/themes.ts).
+// that can be taken away: it is src/index.css and the palette, with what
+// themes/default.json changes of them, under every theme. That file is written in the
+// theme creator too, and put to the app the same way.
 import { PALETTE_NAMES, type PaletteName } from "./palette"
 
 /** The folder at the top of the repository that the themes are in. */
@@ -13,6 +13,15 @@ export const THEME_FOLDER = "themes"
 
 /** The app's own look, which no theme is called; what is changed of it is in a file of this name. */
 export const DEFAULT_THEME = "default"
+
+/** What the app's own look is called, where its file does not say. */
+export const DEFAULT_NAME = "Default"
+
+/** How long a theme's name may be, in characters. */
+export const NAME_LENGTH = 20
+
+/** A name as a theme is written under it: trimmed, and no longer than NAME_LENGTH. */
+export const nameOf = (name: string) => name.trim().slice(0, NAME_LENGTH).trim()
 
 /** The two looks a theme has colours for. */
 export type Mode = "light" | "dark"
@@ -88,6 +97,9 @@ export type Theme = {
 /** A theme's colours for each look, or what is changed of the app's own. */
 export type ThemeLooks = Pick<Theme, "light" | "dark">
 
+/** What is changed of the app's own look, and what it is called. */
+export type Defaults = Omit<Theme, "id">
+
 /** A colour as a theme gives one. */
 const HEX = /^#[0-9a-f]{6}$/i
 
@@ -136,10 +148,18 @@ export function readTheme(id: string, written: unknown): Theme | null {
   }
 }
 
-/** What is changed of the app's own look, from what its file says: nothing, where it says nothing of it. */
-export function readLooks(written: unknown): ThemeLooks {
+/**
+ * What is changed of the app's own look, and what it is called, from what its file says:
+ * nothing, and DEFAULT_NAME, where it says nothing of them.
+ */
+export function readLooks(written: unknown): Defaults {
   const looks = isObject(written) ? written : {}
-  return { light: readColours(looks.light), dark: readColours(looks.dark) }
+  const name = typeof looks.name === "string" ? looks.name.trim() : ""
+  return {
+    name: name || DEFAULT_NAME,
+    light: readColours(looks.light),
+    dark: readColours(looks.dark),
+  }
 }
 
 /** What a theme's file says: its name and its colours, without what the file is called. */

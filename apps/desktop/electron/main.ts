@@ -57,8 +57,8 @@ import { PICTURE_TYPES } from "../shared/pictures"
 import {
   readTheme,
   THEME_FOLDER,
+  type Defaults,
   type Theme,
-  type ThemeLooks,
 } from "../shared/theme-format"
 import { Analytics, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
@@ -1792,15 +1792,12 @@ function wire() {
     return next
   })
   ipcMain.handle(CHANNEL.themesList, (): Theme[] => listThemes(THEMES))
-  ipcMain.handle(CHANNEL.themesDefaults, (): ThemeLooks => readDefaults(THEMES))
-  ipcMain.handle(
-    CHANNEL.themesSaveDefaults,
-    (_, given: unknown): ThemeLooks => {
-      if (app.isPackaged)
-        throw new Error("The app's own look is changed as it is worked on.")
-      return saveDefaults(THEMES, given as ThemeLooks)
-    }
-  )
+  ipcMain.handle(CHANNEL.themesDefaults, (): Defaults => readDefaults(THEMES))
+  ipcMain.handle(CHANNEL.themesSaveDefaults, (_, given: unknown): Defaults => {
+    if (app.isPackaged)
+      throw new Error("The app's own look is changed as it is worked on.")
+    return saveDefaults(THEMES, given as Defaults)
+  })
   // (a packaged app's themes are what it came with: it neither writes nor takes away any)
   ipcMain.handle(CHANNEL.themesSave, (_, given: unknown): Theme => {
     if (app.isPackaged)

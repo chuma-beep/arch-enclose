@@ -178,8 +178,8 @@ const api: CadApi = {
     save: (theme) => ipcRenderer.invoke(CHANNEL.themesSave, theme),
     remove: (id) => ipcRenderer.invoke(CHANNEL.themesRemove, id),
     defaults: () => ipcRenderer.invoke(CHANNEL.themesDefaults),
-    saveDefaults: (looks) =>
-      ipcRenderer.invoke(CHANNEL.themesSaveDefaults, looks),
+    saveDefaults: (defaults) =>
+      ipcRenderer.invoke(CHANNEL.themesSaveDefaults, defaults),
   },
   github: {
     get: () => ipcRenderer.invoke(CHANNEL.githubGet),

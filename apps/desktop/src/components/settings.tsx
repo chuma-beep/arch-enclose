@@ -1,6 +1,14 @@
 import * as React from "react"
 import { cn } from "cn"
-import { ChevronDownIcon, PaletteIcon, PencilIcon, XIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  MonitorIcon,
+  MoonIcon,
+  PaletteIcon,
+  PencilIcon,
+  SunIcon,
+  XIcon,
+} from "lucide-react"
 
 import type { Settings as AppSettings } from "@shared/api"
 import { DEFAULT_THEME, type Theme } from "@shared/theme-format"
@@ -45,7 +53,7 @@ import { MAC } from "@/lib/platform"
 import { TURN_SPEED, usePreferences, ZOOM_SPEED } from "@/lib/preferences"
 import { dated } from "@/lib/saved"
 import { useStore } from "@/lib/store"
-import { EDIT_DEFAULTS, previewOf, useLook, useThemes } from "@/lib/themes"
+import { paletteOf, previewOf, useThemes } from "@/lib/themes"
 
 /** The sections, in the order they are listed: what is turned to most comes first. */
 const SECTIONS = [
@@ -352,9 +360,9 @@ function General() {
 
 /** The looks the window can be drawn in, in the order they are offered. */
 const MODES = [
-  { value: "system", label: "System" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+  { value: "system", label: "System", Icon: MonitorIcon },
+  { value: "light", label: "Light", Icon: SunIcon },
+  { value: "dark", label: "Dark", Icon: MoonIcon },
 ] as const
 
 /** What a card of the settings that is chosen by its picture is drawn as. */
@@ -366,9 +374,10 @@ const CORNER =
   "absolute top-3 right-3 flex size-6 cursor-pointer items-center justify-center rounded-full bg-background/85 opacity-0 ring-1 ring-foreground/10 transition-[opacity,color,background-color] outline-none group-hover/theme:opacity-100 focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
 /**
- * A theme, as the window would be drawn in it in the look it is in now: the app's own,
- * where none is given. One that can be taken away has a cross for it, on its corner, and
- * the app's own a pencil, where this checkout changes it.
+ * A theme, as the window would be drawn in it in the look chosen beside the section's
+ * name: light and dark side by side, for the system's. Where no theme is given, it is the
+ * app's own, which has a pencil on its corner as the app is worked on; one that can be
+ * taken away has a cross there.
  */
 function ThemeCard({
   theme,
@@ -383,8 +392,17 @@ function ThemeCard({
   onRemove?: () => void
   onEdit?: () => void
 }) {
-  const look = useLook()
-  const name = theme?.name ?? "Default"
+  const { theme: mode } = useTheme()
+  const defaults = useThemes((state) => state.defaults)
+  const name = theme?.name ?? defaults.name
+  // what its parts are drawn in, in each look: its own colours over the app's
+  const palettes = React.useMemo(
+    () => ({
+      light: paletteOf(theme?.light, defaults.light),
+      dark: paletteOf(theme?.dark, defaults.dark),
+    }),
+    [theme, defaults]
+  )
   return (
     <div className="group/theme relative">
       <button
@@ -394,7 +412,11 @@ function ThemeCard({
         className={PICTURED}
       >
         <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
-          <Miniature theme={look} colours={previewOf(theme)} />
+          <Miniature
+            theme={mode}
+            colours={previewOf(theme)}
+            palettes={palettes}
+          />
         </span>
         <span className="truncate px-1 text-sm text-muted-foreground group-aria-pressed:text-foreground">
           {name}
@@ -442,7 +464,7 @@ function ThemeCard({
 }
 
 function Appearance() {
-  const { theme, setTheme } = useTheme()
+  const { theme: mode } = useTheme()
   const themes = useThemes((state) => state.themes)
   const chosen = useThemes((state) => state.chosen)
   const choose = useThemes((state) => state.choose)
@@ -453,85 +475,105 @@ function Appearance() {
   // (as they are now: one may have been written or taken away since)
   React.useEffect(() => void load(), [load])
   return (
-    <>
-      <section className="flex flex-col gap-2">
-        <h2 className="px-1 text-sm text-muted-foreground">Mode</h2>
-        <div className="grid grid-cols-3 gap-3">
-          {MODES.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={theme === value}
-              onClick={() => setTheme(value)}
-              className={PICTURED}
-            >
-              {/* the window as the look draws it, its corners following the card's */}
-              <span className="block overflow-hidden rounded-[0.75rem] ring-1 ring-foreground/10">
-                <Miniature theme={value} />
-              </span>
-              <span className="text-sm text-muted-foreground group-aria-pressed:text-foreground">
-                {label}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-      {/* the app's own look, which stays, and the themes beside it; as it is worked on,
-          the app can take those away, as it makes them */}
-      <section className="flex flex-col gap-2">
-        <h2 className="px-1 text-sm text-muted-foreground">Theme</h2>
-        <div className="grid grid-cols-3 gap-3">
+    // the app's own look, which stays, and the themes beside it; as it is worked on, the
+    // app's own is changed here, and the others taken away, as they are made
+    <section className="flex flex-col gap-2">
+      <h2 className="px-1 text-sm text-muted-foreground">Theme</h2>
+      <div className="grid grid-cols-3 gap-3">
+        <ThemeCard
+          theme={null}
+          chosen={!chosen}
+          onChoose={() => choose(DEFAULT_THEME)}
+          onEdit={
+            import.meta.env.DEV
+              ? () => {
+                  close(false)
+                  // in the look chosen; for the system's, the one the window is in
+                  setCreating("defaults", mode === "system" ? undefined : mode)
+                }
+              : undefined
+          }
+        />
+        {themes.map((one) => (
           <ThemeCard
-            theme={null}
-            chosen={!chosen}
-            onChoose={() => choose(DEFAULT_THEME)}
-            onEdit={
-              EDIT_DEFAULTS
-                ? () => {
-                    close(false)
-                    setCreating("defaults")
-                  }
-                : undefined
+            key={one.id}
+            theme={one}
+            chosen={chosen?.id === one.id}
+            onChoose={() => choose(one.id)}
+            onRemove={
+              import.meta.env.DEV ? () => void remove(one.id) : undefined
             }
           />
-          {themes.map((one) => (
-            <ThemeCard
-              key={one.id}
-              theme={one}
-              chosen={chosen?.id === one.id}
-              onChoose={() => choose(one.id)}
-              onRemove={
-                import.meta.env.DEV ? () => void remove(one.id) : undefined
-              }
-            />
-          ))}
-        </div>
-      </section>
-    </>
+        ))}
+      </div>
+    </section>
   )
 }
 
 /**
- * The theme creator, as the app has it while it is worked on: the settings give way to
- * it, over the whole window.
+ * Beside the section's name: the look the window is drawn in, the system's, light or
+ * dark; and, as the app is worked on, the theme creator, which the settings give way to,
+ * over the whole window.
  */
-function CreateTheme() {
+function Looks() {
+  const { theme, setTheme } = useTheme()
   const close = useStore((state) => state.setSettingsOpen)
   const setCreating = useThemes((state) => state.setCreating)
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      // its words end where the cards under it do
-      className="-mr-3 gap-1.5 text-muted-foreground"
-      onClick={() => {
-        close(false)
-        setCreating("theme")
-      }}
-    >
-      <PaletteIcon />
-      Create theme
-    </Button>
+    <div className="flex items-center gap-2">
+      <ToggleGroup
+        aria-label="Mode"
+        variant="outline"
+        size="sm"
+        spacing={0}
+        value={[theme]}
+        // one is always chosen: pressing the chosen one again changes nothing
+        onValueChange={(picked) => {
+          const next = MODES.find(
+            ({ value }) => value !== theme && picked.includes(value)
+          )
+          if (next) setTheme(next.value)
+        }}
+      >
+        {MODES.map(({ value, label, Icon }) => (
+          <Tooltip key={value}>
+            <TooltipTrigger
+              render={
+                <ToggleGroupItem
+                  value={value}
+                  aria-label={label}
+                  className="px-2.5 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/85 aria-pressed:hover:text-primary-foreground"
+                />
+              }
+            >
+              <Icon />
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </ToggleGroup>
+      {import.meta.env.DEV && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="rounded-full"
+                onClick={() => {
+                  close(false)
+                  setCreating("theme")
+                }}
+              />
+            }
+          >
+            <PaletteIcon />
+            <span className="sr-only">Create a theme</span>
+          </TooltipTrigger>
+          <TooltipContent>Create</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
   )
 }
 
@@ -1058,7 +1100,7 @@ const PAGES: Record<SectionId, () => React.ReactNode> = {
 /** What is done to all of a section, for the ones that have it: beside its name. */
 const BESIDE: Partial<Record<SectionId, () => React.ReactNode>> = {
   providers: CheckAgain,
-  ...(import.meta.env.DEV ? { appearance: CreateTheme } : {}),
+  appearance: Looks,
 }
 
 /**

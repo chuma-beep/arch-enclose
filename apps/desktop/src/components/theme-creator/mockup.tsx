@@ -6,7 +6,6 @@
 // the parts, which pick their colour to be changed.
 import * as React from "react"
 import * as THREE from "three"
-import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js"
 import { Canvas } from "@react-three/fiber"
 import { cn } from "cn"
 import {
@@ -30,6 +29,7 @@ import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
 import type { Mode, ThemeColours } from "@shared/theme-format"
 import { EDGE } from "@/components/viewport/paint"
 import { propertiesOf } from "@/lib/themes"
+import { CORNER, LIGHTS, LOOKING_FROM, PLACES, shapeOf } from "./parts"
 
 /** How big the window is drawn, before it is made to fit where it is shown. */
 export const MOCKUP = { width: 1280, height: 800 }
@@ -146,39 +146,6 @@ function Cards() {
   )
 }
 
-/** A thing to show a colour on, made of nothing but a simple shape. */
-function shapeOf(name: PaletteName): THREE.BufferGeometry {
-  switch (name) {
-    case "red":
-      return new THREE.BoxGeometry(1.3, 1.3, 1.3)
-    case "orange":
-      return new THREE.CylinderGeometry(0.7, 0.7, 1.3, 48)
-    case "yellow":
-      return new THREE.SphereGeometry(0.75, 48, 32)
-    case "lime":
-      return new THREE.ConeGeometry(0.75, 1.4, 48)
-    case "green":
-      // the boards' colour, on a board
-      return new THREE.BoxGeometry(1.7, 0.12, 1.2)
-    case "cyan":
-      return new THREE.TorusGeometry(0.55, 0.22, 24, 64)
-    case "blue":
-      return new THREE.CapsuleGeometry(0.45, 0.6, 12, 32)
-    case "indigo":
-      return new THREE.OctahedronGeometry(0.8)
-    case "violet":
-      return new THREE.DodecahedronGeometry(0.75)
-    case "pink":
-      return new THREE.CylinderGeometry(0.75, 0.75, 1, 6)
-    case "white":
-      return new THREE.BoxGeometry(1.5, 0.7, 1)
-    case "lightgrey":
-      return new THREE.CylinderGeometry(0.8, 0.8, 0.35, 48)
-    case "grey":
-      return new RoundedBoxGeometry(1.1, 1.1, 1.1, 4, 0.18)
-  }
-}
-
 /** One of them, in its colour, with its edges drawn where it has corners. */
 function Part({
   name,
@@ -195,7 +162,7 @@ function Part({
 }) {
   const geometry = React.useMemo(() => shapeOf(name), [name])
   const edges = React.useMemo(
-    () => new THREE.EdgesGeometry(geometry, 20),
+    () => new THREE.EdgesGeometry(geometry, CORNER),
     [geometry]
   )
   React.useEffect(
@@ -225,10 +192,6 @@ function Part({
   )
 }
 
-/** How far apart the parts stand, and how many to a row. */
-const APART = 2.3
-const ACROSS = 5
-
 /** A part in each of the palette's colours, in rows, lit as the view lights a model. */
 function Parts({
   palette,
@@ -239,36 +202,29 @@ function Parts({
   picked: PaletteName | null
   onPick: (name: PaletteName) => void
 }) {
-  const rows = Math.ceil(PALETTE_NAMES.length / ACROSS)
   return (
     <Canvas
       orthographic
-      camera={{ position: [10, 8.5, 10], zoom: 52 }}
+      camera={{ position: LOOKING_FROM, zoom: 52 }}
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true }}
       // (it is drawn scaled down to fit: sized by its own box, not as it is seen)
       resize={{ offsetSize: true }}
     >
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={["#ffffff", "#7d828c", 0.7]} />
-      <directionalLight position={[180, 320, 220]} intensity={1.7} />
-      <directionalLight position={[-240, 160, -180]} intensity={0.55} />
-      {PALETTE_NAMES.map((name, index) => {
-        const row = Math.floor(index / ACROSS)
-        const inRow = Math.min(ACROSS, PALETTE_NAMES.length - row * ACROSS)
-        const x = (index % ACROSS) - (inRow - 1) / 2
-        const z = row - (rows - 1) / 2
-        return (
-          <Part
-            key={name}
-            name={name}
-            colour={palette[name]}
-            picked={picked === name}
-            position={[x * APART - z * 0.6, 0, z * APART + x * 0.6]}
-            onPick={() => onPick(name)}
-          />
-        )
-      })}
+      <ambientLight intensity={LIGHTS.ambient} />
+      <hemisphereLight args={LIGHTS.sky} />
+      <directionalLight {...LIGHTS.key} />
+      <directionalLight {...LIGHTS.fill} />
+      {PALETTE_NAMES.map((name) => (
+        <Part
+          key={name}
+          name={name}
+          colour={palette[name]}
+          picked={picked === name}
+          position={PLACES[name]}
+          onPick={() => onPick(name)}
+        />
+      ))}
     </Canvas>
   )
 }

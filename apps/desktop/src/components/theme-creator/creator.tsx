@@ -2,17 +2,18 @@
 // colour picker for each thing a theme colours down the left, and the window drawn in
 // what is picked on the right, in the light look or the dark. What is picked in one look
 // is that look's alone; what is not picked is the app's own. Saved, the theme is a file
-// in themes/ at the top of the repository, to be put to the app in a pull request. From
-// the one checkout that may (EDIT_DEFAULTS in lib/themes.ts) it changes the app's own
-// look as well, in themes/default.json: then what is not picked is the app's own as
-// src/index.css has it.
+// in themes/ at the top of the repository, to be put to the app in a pull request. It
+// changes the app's own look as well, in themes/default.json, put to the app the same
+// way: then what is not picked is the app's own as src/index.css has it. What the theme
+// is called is its title, changed where it stands.
 import * as React from "react"
 import { cn } from "cn"
-import { MoonIcon, SunIcon, XIcon } from "lucide-react"
+import { MoonIcon, RotateCcwIcon, SunIcon, XIcon } from "lucide-react"
 
 import { PALETTE_NAMES, type PaletteName } from "@shared/palette"
 import {
   changes,
+  NAME_LENGTH,
   SLOTS,
   THEME_FOLDER,
   type Mode,
@@ -20,7 +21,11 @@ import {
   type SlotId,
 } from "@shared/theme-format"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { hexOf } from "@/lib/css-color"
 import { useStore } from "@/lib/store"
 import { paletteOf, useLook, useThemes, type Making } from "@/lib/themes"
@@ -121,13 +126,21 @@ function Row({
           <span className="text-muted-foreground">{label}</span>
         )}
         {changed && (
-          <button
-            type="button"
-            onClick={onReset}
-            className="mt-2 cursor-pointer rounded-sm text-xs text-muted-foreground underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {reset}
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onReset}
+                  className="mt-2 -ml-1 flex size-6 cursor-pointer items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              }
+            >
+              <RotateCcwIcon className="size-3.5" />
+              <span className="sr-only">{reset}</span>
+            </TooltipTrigger>
+            <TooltipContent>{reset}</TooltipContent>
+          </Tooltip>
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-3">{children}</div>
@@ -135,21 +148,31 @@ function Row({
   )
 }
 
-export function ThemeCreator({ making }: { making: Making }) {
+export function ThemeCreator({
+  making,
+  look: given,
+}: {
+  making: Making
+  /** the look shown at first: the one the window is in, where none is given */
+  look?: Mode
+}) {
   const setCreating = useThemes((state) => state.setCreating)
   const save = useThemes((state) => state.save)
   const saveDefaults = useThemes((state) => state.saveDefaults)
   const under = useThemes((state) => state.defaults)
   const look = useLook()
   const base = making === "defaults"
-  // the look being made: the one the window is in, to begin with
-  const [mode, setMode] = React.useState<Mode>(look)
+  // the look being made: the one asked for, or the one the window is in
+  const [mode, setMode] = React.useState<Mode>(given ?? look)
   // a theme from nothing of its own; the app's own look from what is changed of it now
   const [start] = React.useState<ThemeLooks>(() =>
-    base ? structuredClone(under) : { light: {}, dark: {} }
+    base
+      ? structuredClone({ light: under.light, dark: under.dark })
+      : { light: {}, dark: {} }
   )
   const [made, setMade] = React.useState<ThemeLooks>(start)
-  const [name, setName] = React.useState("")
+  const [startName] = React.useState(base ? under.name : "")
+  const [name, setName] = React.useState(startName)
   const [part, setPart] = React.useState<PaletteName>("blue")
   const [said, setSaid] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
@@ -160,7 +183,8 @@ export function ThemeCreator({ making }: { making: Making }) {
   const colours = made[mode]
   const palette = base ? paletteOf(colours) : paletteOf(colours, under[mode])
   const anything = changes(made.light) || changes(made.dark)
-  const changed = JSON.stringify(made) !== JSON.stringify(start)
+  const changed =
+    JSON.stringify(made) !== JSON.stringify(start) || name !== startName
   const reset = base ? "Back to the original" : "Back to the app's"
 
   const colour = (id: SlotId, value: string | null) =>
@@ -178,13 +202,15 @@ export function ThemeCreator({ making }: { making: Making }) {
       return { ...before, [mode]: { ...before[mode], parts: next } }
     })
 
-  // Esc puts it away while nothing has been picked, and is heard by nothing under it
+  // Esc leaves the title, if it is being changed; else puts it all away while nothing
+  // has been picked. Nothing under it hears it
   React.useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
       event.stopPropagation()
       event.preventDefault()
-      if (!changed) setCreating(null)
+      if (event.target === naming.current) naming.current?.blur()
+      else if (!changed) setCreating(null)
     }
     window.addEventListener("keydown", key, true)
     return () => window.removeEventListener("keydown", key, true)
@@ -194,7 +220,7 @@ export function ThemeCreator({ making }: { making: Making }) {
     if (base) {
       setSaving(true)
       try {
-        await saveDefaults(made)
+        await saveDefaults({ name: name.trim() || startName, ...made })
         setCreating(null)
         useStore
           .getState()
@@ -243,8 +269,33 @@ export function ThemeCreator({ making }: { making: Making }) {
         {/* room for the window's traffic lights, and something to drag it by */}
         <div className="drag h-12 shrink-0" />
         <header className="flex items-start justify-between gap-4 px-7 pt-3 pb-6">
-          <div className="flex flex-col text-xl font-medium">
-            <h1>{base ? "Default theme" : "Theme Generator"}</h1>
+          <div className="flex min-w-0 flex-1 flex-col text-xl/[1.2] font-medium">
+            {/* what it is called, changed where it stands */}
+            <input
+              ref={naming}
+              aria-label={
+                base
+                  ? "What the app's own look is called"
+                  : "What the theme is called"
+              }
+              placeholder="Untitled theme"
+              spellCheck={false}
+              maxLength={NAME_LENGTH}
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value)
+                setSaid(null)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur()
+              }}
+              // the app's own look is always called something
+              onBlur={() => {
+                if (base && !name.trim()) setName(startName)
+              }}
+              // as wide as what is in it, or what it asks for
+              className="-ml-1.5 field-sizing-content max-w-full min-w-0 cursor-text self-start rounded-md bg-transparent px-1.5 outline-none placeholder:text-muted-foreground hover:bg-muted focus:bg-muted"
+            />
             <span className="text-muted-foreground">
               {mode === "dark" ? "Dark mode" : "Light mode"}
             </span>
@@ -259,20 +310,6 @@ export function ThemeCreator({ making }: { making: Making }) {
             <span className="sr-only">Close the theme creator</span>
           </Button>
         </header>
-        {!base && (
-          <div className="px-7 pb-5">
-            <Input
-              ref={naming}
-              aria-label="What the theme is called"
-              placeholder="Name your theme"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value)
-                setSaid(null)
-              }}
-            />
-          </div>
-        )}
         <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-8">
           {AREAS.map((area) => (
             <React.Fragment key={area}>

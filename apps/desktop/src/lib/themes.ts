@@ -3,8 +3,8 @@
 // are put in place of the app's tokens wherever the window is in that look, and of the
 // palette's colours in the 3D view. Under every theme is the app's own look, with what
 // themes/default.json changes of it. Run from a checkout, themes are made in the theme
-// creator, and taken away in the settings. The app's own look is changed there only from
-// the one checkout that says so in its .env.local (EDIT_DEFAULTS), and taken away never.
+// creator, and taken away in the settings; the app's own look is changed there too, and
+// taken away never.
 import * as React from "react"
 import { create } from "zustand"
 
@@ -14,6 +14,7 @@ import {
   readLooks,
   readTheme,
   SLOTS,
+  type Defaults,
   type ThemeLooks,
   type Mode,
   type Theme,
@@ -25,14 +26,6 @@ import { setPalettes } from "./palette"
 const CHOSEN_KEY = "enclose:colour-theme"
 /** And what is changed of the app's own look, likewise. */
 const DEFAULTS_KEY = "enclose:theme-defaults"
-
-/**
- * Whether this checkout changes the app's own look, as well as making themes: one whose
- * .env.local says VITE_EDIT_DEFAULT_THEMES=1. A package is never one, even one made
- * from it.
- */
-export const EDIT_DEFAULTS =
-  import.meta.env.DEV && import.meta.env.VITE_EDIT_DEFAULT_THEMES === "1"
 
 /** A theme's colours for one look, as the tokens they are put in place of. */
 export function propertiesOf(colours: ThemeColours): Record<string, string> {
@@ -136,10 +129,12 @@ type ThemesState = {
   themes: Theme[]
   /** the theme the window is drawn in: null for the app's own look */
   chosen: Theme | null
-  /** what is changed of the app's own look, under every theme */
-  defaults: ThemeLooks
+  /** what is changed of the app's own look, under every theme, and what it is called */
+  defaults: Defaults
   /** what the theme creator is up for, over the whole window, if it is */
   creating: Making | null
+  /** the look it shows at first: the one the window is in, where none is given */
+  creatingIn: Mode | null
   /**
    * read the themes there are again, and what is changed of the app's own look; one
    * chosen that is gone gives way to the app's own
@@ -149,11 +144,11 @@ type ThemesState = {
   choose(id: string): void
   /** write a new theme, and draw the window in it */
   save(theme: Omit<Theme, "id">): Promise<Theme>
-  /** write what is changed of the app's own look (from a checkout that does: EDIT_DEFAULTS) */
-  saveDefaults(looks: ThemeLooks): Promise<void>
+  /** write what is changed of the app's own look, and what it is called */
+  saveDefaults(defaults: Defaults): Promise<void>
   /** take one away: if the window was in it, it goes back to the app's own look */
   remove(id: string): Promise<void>
-  setCreating(creating: Making | null): void
+  setCreating(creating: Making | null, look?: Mode): void
 }
 
 const atFirst =
@@ -164,7 +159,7 @@ apply(atFirst.chosen, atFirst.defaults)
 
 export const useThemes = create<ThemesState>()((set, get) => {
   /** Draw the window in what is chosen now, and keep that for the next time. */
-  const put = (chosen: Theme | null, defaults: ThemeLooks) => {
+  const put = (chosen: Theme | null, defaults: Defaults) => {
     if (chosen) localStorage.setItem(CHOSEN_KEY, JSON.stringify(chosen))
     else localStorage.removeItem(CHOSEN_KEY)
     localStorage.setItem(DEFAULTS_KEY, JSON.stringify(defaults))
@@ -175,6 +170,7 @@ export const useThemes = create<ThemesState>()((set, get) => {
     themes: [],
     ...atFirst,
     creating: null,
+    creatingIn: null,
 
     async load() {
       if (!window.cad) return
@@ -209,8 +205,8 @@ export const useThemes = create<ThemesState>()((set, get) => {
       return saved
     },
 
-    async saveDefaults(looks) {
-      put(get().chosen, await window.cad.themes.saveDefaults(looks))
+    async saveDefaults(defaults) {
+      put(get().chosen, await window.cad.themes.saveDefaults(defaults))
     },
 
     async remove(id) {
@@ -220,8 +216,8 @@ export const useThemes = create<ThemesState>()((set, get) => {
         get().choose(DEFAULT_THEME)
     },
 
-    setCreating(creating) {
-      set({ creating })
+    setCreating(creating, look) {
+      set({ creating, creatingIn: look ?? null })
     },
   }
 })
