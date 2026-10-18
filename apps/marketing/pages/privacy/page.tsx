@@ -3,14 +3,14 @@ import { REPOSITORY } from '../../shell/Header'
 
 export default function Privacy() {
   return (
-    <Legal page="privacy" title="Privacy Policy" updated="15 October 2026">
+    <Legal page="privacy" title="Privacy Policy" updated="17 October 2026">
       <p>
         Enclose is an open-source project maintained by Glauber. This page says what the
         Enclose app and this website send anywhere, and what they do not. In short: the app
-        needs no account, your projects stay on your Mac unless you connect GitHub to back
-        them up, and the installed app counts how it is used, without your name, unless you
-        switch that off. This website counts its visits, without cookies and without knowing
-        whose they are.
+        needs no account, your projects stay on your machine unless you connect GitHub to
+        back them up, and the installed app counts how it is used, without your name,
+        unless you switch that off. This website counts its visits, without cookies and
+        without knowing whose they are.
       </p>
 
       <h2>Usage data from the app</h2>
@@ -35,13 +35,18 @@ export default function Privacy() {
           back, or a model or a circuit board saved;
         </li>
         <li>
+          that a circuit board made in detail in the background was done, stopped or failed:
+          the agent, its model, the effort and the permissions, how long it took and how long
+          it was at each of its steps, and how many parts, nets, connections and vias it has;
+        </li>
+        <li>
           that an assembly guide was asked for, written, opened, saved or removed, and how
           many steps it has;
         </li>
         <li>
-          which features the view was put into (a section, the exploded view, the blueprint,
-          the assembly guides, a reference scene, a project’s own tools, a circuit board),
-          once for a run of the app;
+          which features the view was put into (a section, the exploded view, parts shown
+          alone or hidden, the blueprint, the assembly guides, a reference scene, a project’s
+          own tools, a circuit board), once for a run of the app;
         </li>
         <li>
           that an agent was switched on or off or updated, that an update was fetched, and
@@ -49,11 +54,11 @@ export default function Privacy() {
         </li>
       </ul>
       <p>
-        With every event go the app’s version, your macOS version, the kind of processor,
-        and a random name made up for your installation the first time the app runs. That
-        name is tied to no account and to nothing else about you. PostHog keeps what it is
-        sent in the United States. As any server does, it sees the address a request comes
-        from, and works out roughly where that is: a country and a city.
+        With every event go the app’s version, your operating system and its version, the
+        kind of processor, and a random name made up for your installation the first time
+        the app runs. That name is tied to no account and to nothing else about you. PostHog
+        keeps what it is sent in the United States. As any server does, it sees the address
+        a request comes from, and works out roughly where that is: a country and a city.
       </p>
       <p>
         Nothing of a project is sent: not its name, its files, or where it is kept. Nothing
@@ -66,17 +71,19 @@ export default function Privacy() {
         To switch it off: Settings, General, Usage data. Switched off, nothing more is
         counted, and what was waiting to be sent is not sent. The name made up for your
         installation is in <code>analytics-id</code>, in{' '}
-        <code>~/Library/Application Support/Enclose</code>. Delete it and the app makes up
-        another the next time it has something to send.
+        <code>~/Library/Application Support/Enclose</code> on a Mac and in{' '}
+        <code>~/.config/Enclose</code> on Linux. Delete it and the app makes up another the
+        next time it has something to send.
       </p>
 
       <h2>What goes to an agent’s provider</h2>
       <p>
         The app works through a coding agent you installed and signed in to yourself: Claude
-        Code, Codex or Grok. What you write, the pictures you attach and the project files
-        the agent reads go to that agent’s provider, as they would if you ran the agent in a
-        terminal. That is between you and the provider, under its privacy policy and your
-        subscription. None of it goes to the Enclose project.
+        Code, Codex, Grok or opencode. What you write, the pictures you attach and the project
+        files the agent reads go to the provider that agent uses (for opencode, the model
+        provider you set it up with), as they would if you ran the agent in a terminal. That
+        is between you and that provider, under its privacy policy and your own subscription
+        or account with it. None of it goes to the Enclose project.
       </p>
       <p>
         Where Claude Code is installed, the app also asks its quickest model to do a few
@@ -90,8 +97,9 @@ export default function Privacy() {
 
       <h2>What the app fetches from GitHub</h2>
       <p>
-        The app looks for its newer versions on GitHub and downloads them from there, and
-        downloads an example project from there when you ask for one. GitHub sees those
+        The app looks for its newer versions on GitHub and downloads them from there (on
+        Linux, the AppImage does; a deb, rpm or pacman install looks for none), and downloads
+        an example project from there when you ask for one. GitHub sees those
         requests and the address they come from, under{' '}
         <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
           its own privacy statement
@@ -101,7 +109,7 @@ export default function Privacy() {
 
       <h2>Python</h2>
       <p>
-        Models are built with Python and build123d. Where your Mac has no Python with
+        Models are built with Python and build123d. Where your machine has no Python with
         build123d, the app makes one of its own, once: it downloads{' '}
         <a href="https://docs.astral.sh/uv/">uv</a> from GitHub, which downloads Python from
         GitHub and build123d and what it needs from{' '}
@@ -124,9 +132,11 @@ export default function Privacy() {
         project’s name, and is pushed to after every change: its files, every version of
         it, and the history’s messages, which say in a few words what was asked and what
         changed. Your conversations themselves are not pushed. What signs the app in to
-        GitHub is kept on your Mac, sealed with the macOS keychain. Disconnecting forgets
-        it, and leaves the repositories on GitHub, yours to keep or delete. GitHub keeps
-        them under{' '}
+        GitHub is kept on your machine, sealed by the system: with the macOS keychain, or on
+        Linux with its password store, such as GNOME Keyring or KWallet. Where there is none
+        to seal it with, it is not kept, and GitHub cannot be connected. Disconnecting
+        forgets it, and leaves the repositories on GitHub, yours to keep or delete. GitHub
+        keeps them under{' '}
         <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
           its own privacy statement
         </a>
@@ -137,17 +147,17 @@ export default function Privacy() {
       <p>
         Boards are built with <a href="https://tscircuit.com">tscircuit</a>’s command line,
         which the app downloads from npm the first time it builds one. A board is laid out
-        and routed on your Mac. While it is built, tscircuit downloads the footprints and 3D
-        models of the parts on it, from its own servers and from those of the parts’ makers
-        and EasyEDA, and an agent looking for a part may ask tscircuit’s search of JLCPCB’s
-        stock. Those see what is asked for and the address it comes from, not the board.
-        tscircuit’s own usage counting is switched off when the app builds with it.
+        and routed on your machine. While it is built, tscircuit downloads the footprints
+        and 3D models of the parts on it, from its own servers and from those of the parts’
+        makers and EasyEDA, and an agent looking for a part may ask tscircuit’s search of
+        JLCPCB’s stock. Those see what is asked for and the address it comes from, not the
+        board. tscircuit’s own usage counting is switched off when the app builds with it.
       </p>
 
-      <h2>What stays on your Mac</h2>
+      <h2>What stays on your machine</h2>
       <p>
-        Your conversations and your settings are kept on your Mac and nowhere else, and so
-        are your projects, unless you back them up to GitHub. Removing a project from the
+        Your conversations and your settings are kept on your machine and nowhere else, and
+        so are your projects, unless you back them up to GitHub. Removing a project from the
         app forgets what was said about it, and leaves its folder, and its repository on
         GitHub where there is one.
       </p>
@@ -180,7 +190,7 @@ export default function Privacy() {
         because nothing that is kept says who you are. A content blocker stops it.
       </p>
       <p>
-        To point its download button at the newest release, the page asks GitHub which one
+        To point its download buttons at the newest release, the page asks GitHub which one
         that is, from your browser, and the download itself comes from GitHub. It asks
         GitHub the same way how many stars the project has. GitHub sees those requests as
         it sees the app’s.
