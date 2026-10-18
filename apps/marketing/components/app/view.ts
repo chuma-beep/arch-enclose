@@ -13,22 +13,23 @@ import { BUILT, type Look } from './look'
 // model. Nothing here listens to the pointer. The page's scroll says how the model
 // is to be looked at (a Look), and it is drawn once each time that changes.
 
-// The colours parts are drawn in (the app's shared/palette.ts), and the order groups
-// that give none are handed them in.
+// The colours parts are drawn in: the app's own (its shared/palette.ts), as its default
+// theme (themes/default.json) has them in the dark look the window is drawn in; and the
+// order groups that give none are handed them in.
 const PALETTE: Record<string, string> = {
-  red: '#f19c9a',
-  orange: '#f7cd9e',
-  yellow: '#fdf6a3',
-  lime: '#cffda2',
-  green: '#b0fcc2',
-  cyan: '#b0fcfe',
-  blue: '#9eb7f9',
-  indigo: '#a398f8',
-  violet: '#d69af9',
-  pink: '#f19cc9',
+  red: '#ff726f',
+  orange: '#feaf57',
+  yellow: '#fff24f',
+  lime: '#9efb41',
+  green: '#54ff7d',
+  cyan: '#7bfafd',
+  blue: '#7fa2fe',
+  indigo: '#897aff',
+  violet: '#cf7dff',
+  pink: '#fd81c3',
   white: '#fafafa',
   lightgrey: '#d4d4d4',
-  grey: '#4b4b4b',
+  grey: '#464646',
 }
 const IN_TURN = ['blue', 'orange', 'green', 'pink', 'cyan', 'yellow', 'violet', 'lime', 'red', 'indigo']
 const METAL = '#c4c7cc'
