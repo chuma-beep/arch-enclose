@@ -48,7 +48,7 @@ make the tool's worker differently.
 ```
 apps/
   desktop/     the app
-    electron/  its own process: window, project list, the line to Claude
+    electron/  its own process: window, project list, the line to the agents
     src/       the window: project cards, 3D view and its tools, conversation; and
                the page an assembly guide is opened as (src/guide), built by itself
     shared/    types and the manifest format, used by both sides, and the list of

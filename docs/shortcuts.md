@@ -29,11 +29,11 @@ is Ctrl off a Mac.
 | I | Show what is picked out [on its own](selecting.md#on-its-own-close-to-out-of-sight) |
 | H | Put what is picked out out of sight, or bring everything back |
 | B | [Blueprint](blueprints.md) |
-| A | [Assembly guides](working-with-claude.md#assembly-guides) |
-| Shift+P | [Circuit boards](working-with-claude.md#circuit-boards), to open one in PCB mode |
+| A | [Assembly guides](working-with-the-agent.md#assembly-guides) |
+| Shift+P | [Circuit boards](working-with-the-agent.md#circuit-boards), to open one in PCB mode |
 | Cmd+F | [Search](parts.md#search) |
 | T | [Tools of the project's own](project-tools.md) |
-| Cmd+Z | [Take back](working-with-claude.md#taking-a-change-back) the last change to the model, or what was hidden or shown. What an agent did takes a second press |
+| Cmd+Z | [Take back](working-with-the-agent.md#taking-a-change-back) the last change to the model, or what was hidden or shown. What an agent did takes a second press |
 | Cmd+Shift+Z | Put it back |
 | Esc | Close, or step back |
 
@@ -41,7 +41,7 @@ is Ctrl off a Mac.
 
 | | |
 |---|---|
-| 1 | The board's [technical view](working-with-claude.md#circuit-boards) |
+| 1 | The board's [technical view](working-with-the-agent.md#circuit-boards) |
 | 2 | The board in 3D |
 | 3 | Its schematic |
 | S | Its bottom side, turned over as it is seen from under the board, and back |
@@ -127,5 +127,5 @@ still does what it did, so the parts list is still P and the settings still Cmd+
 - T is there only in a project with tools of its own, and B and Cmd+F only once there
   is a model. Cmd+B and Cmd+. need a project to be open.
 - In a reference scene there is no view from below, so Cmd+5 does nothing.
-- No key of the view works with Settings open, or while Claude looks over files that
+- No key of the view works with Settings open, or while the agent looks over files that
   were just opened. Cmd+N, Cmd+O, Cmd+B and Cmd+. wait for Settings to be closed too.

@@ -1,6 +1,6 @@
 # Screws
 
-Screws are parts of the model like any other, and Claude puts them in: when what it
+Screws are parts of the model like any other, and the agent puts them in: when what it
 makes is screwed together (a lid on its box, a board on its posts), and when it is asked
 for them. It does not draw them itself. They come from a library the app keeps beside
 its exporter, [`kit/screws.py`](../kit/screws.py), which a project copies in the same
@@ -26,7 +26,7 @@ into, and the recess a head sinks into.
 
 ## Which screw
 
-Claude chooses the screw and says which it used, in its reply and in the part's name
+The agent chooses the screw and says which it used, in its reply and in the part's name
 ("Lid screws, M3 × 8"), since few people can tell one size from another by looking.
 Asked for a bigger or a smaller one with no size named, it asks which, and says what
 each measures. (Codex and Grok do not ask: they go one size up or down, and say which.)

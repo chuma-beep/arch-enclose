@@ -15,7 +15,7 @@ The key sets the model in the scene that suits it, at once, and again takes it b
 | Person | A thing too big for a room | A man 5 feet 9 tall, standing beside it |
 
 Which of them suits is for whoever builds the model to say, by where the thing is used:
-Claude is told to, with `reference="room"` in the model's script (`"reference"` in a
+the agent is told to, with `reference="room"` in the model's script (`"reference"` in a
 manifest written some other way): the names are `table`, `room` and `person`. Where nothing is said it goes by size, and a model too
 big for the desk is shown in the room, and one too big for the room beside the person.
 
@@ -61,7 +61,7 @@ folder as a project and press Cmd+/.
 Nobody is kept to the app's scenes. With the model set in one, a button at the foot of
 the view, **Improve reference scene in chat**, puts the scene on the message box as a
 chip and opens the conversation. What is written then is about the scene and not the
-model, and Claude changes it: a workbench in place of the desk, the shelf the thing is
+model, and the agent changes it: a workbench in place of the desk, the shelf the thing is
 to stand on.
 
 What comes of that is the project's own scene, kept in its folder and built the way its
@@ -76,5 +76,5 @@ the figure of a person gets into one: it is not built in a script but is a file,
 from Blender Studio's public-domain body meshes ([`kit/figure`](../kit/figure)).
 
 The app's own scenes are written the same way, in [`kit/scenes`](../kit/scenes), and are
-what Claude starts from; `npm run scenes` builds them again after a change, with a
+what the agent starts from; `npm run scenes` builds them again after a change, with a
 Python that has build123d.

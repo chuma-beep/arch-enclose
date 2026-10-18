@@ -13,7 +13,7 @@ reached, over the settings button.
 A new project is given a stand-in name to begin with ("Quiet heron") and a folder to
 match, in `~/Documents/Enclose` unless the settings say elsewhere:
 `2026-10-05-2336-quiet-heron`, which is when it was made and then the name in lower case
-with dashes. Once something has been made in it and Claude has finished, the project
+with dashes. Once something has been made in it and the agent has finished, the project
 takes the name of its model and its folder is renamed to match:
 `2026-10-05-2336-pill-box`. A folder you opened yourself is never renamed.
 
@@ -22,7 +22,7 @@ takes the name of its model and its folder is renamed to match:
 Right-click a project's card for **Rename**, and write over its name where it is
 on the card: Enter, or a click anywhere else, keeps what is written, and Esc leaves the
 name as it was. It is the project that is renamed, in the app: what its card says, and
-what Claude is told it is called. Its folder keeps the name it has. A project that still
+what the agent is told it is called. Its folder keeps the name it has. A project that still
 goes by its stand-in keeps the name you give it, and no longer takes its model's.
 
 ## Recoloring a project
@@ -30,7 +30,7 @@ goes by its stand-in keeps the name you give it, and no longer takes its model's
 A project keeps its own copy of the app's exporter, so a project made before the app
 changed how it draws a model goes on being drawn the old way: one made before circuit
 boards were drawn in green, for one. Right-click its card for **Recolor**, and
-Claude brings it up to date, in the conversation its panel shows: it copies the app's
+the agent brings it up to date, in the conversation its panel shows: it copies the app's
 exporter in again, takes out the colours that now go against the app's (green on
 anything that is not a board), builds the model again and checks it. Nothing else about
 the model is changed. See [How a model is drawn](view.md#colours).
@@ -48,18 +48,18 @@ Every project the app makes keeps its history in git, and so does a folder you o
 that was not a git repository already. A folder that was one is yours, kept your own way,
 and the app commits nothing in it.
 
-After each turn of Claude's, and each Cmd+Z, the app commits what the folder holds. A
+After each turn of the agent's, and each Cmd+Z, the app commits what the folder holds. A
 turn's commit says what it changed, as a change log written by Claude Code's quickest
-model from what was asked, what Claude said and the files that changed ("Added: a
+model, whichever agent answered, from what was asked, what the agent said and the files that changed ("Added: a
 circuit board and a USB-C socket", "Changed: …", "Fixed: …", "Removed: …"); where that
 cannot be had, it says what was asked. Colours you give parts go in too, a few seconds
-after the last of them ("Recolored parts by hand"), or with the turn Claude is at. Each
-conversation that has [its own version](working-with-claude.md#versions) of the project
+after the last of them ("Recolored parts by hand"), or with the turn the agent is at. Each
+conversation that has [its own version](working-with-the-agent.md#versions) of the project
 has a branch of its own: the first is `main`, and each after it `version/<what it began
 with>`, from where the project was when it began. With versions off, everything is on `main`. What the build writes
 (`build/`), a Python of the project's own, Python's caches and `.env` files are left
 out, in `.gitignore`; a file of 50 MB or more is kept with Git LFS. A folder too big to
-have [versions](working-with-claude.md#versions) has no history kept either. The app brings its own git,
+have [versions](working-with-the-agent.md#versions) has no history kept either. The app brings its own git,
 with Git LFS, so nothing has to be installed for it.
 
 Connect GitHub in the settings (Connections) and every project is backed up as well:
@@ -69,20 +69,20 @@ it. Nothing is asked. Connecting backs up every project there is at once, with a
 the foot of the view saying how far it has got. A project renamed renames its repository.
 A push that fails, with no connection say, is tried again a few minutes later.
 
-Claude is told that the app does this, and leaves git alone unless you ask it otherwise.
+The agent is told that the app does this, and leaves git alone unless you ask it otherwise.
 
 ## Starting from nothing
 
 A project can be an empty folder. It opens as any project does, in the viewer, with a
 plain cube standing in for the model there is not yet and the conversation open beside
-it. Say what you want made and Claude sets it up: it copies the app's exporter,
+it. Say what you want made and the agent sets it up: it copies the app's exporter,
 [`kit/enclose.py`](../kit/enclose.py), into the folder, writes a `model.py` that builds
 the parts with [build123d](https://build123d.readthedocs.io) and hands them to it, and
 runs it. The exporter writes the meshes, the edges, a STEP file of each part and the
 manifest, and the model takes the cube's place as soon as it has. The build runs with the
 `python3` a terminal would, where that has build123d, and otherwise with the Python the
 app makes of its own (see [Install](install.md#what-it-needs)), which it puts first on
-the `PATH` of the build and of Claude.
+the `PATH` of the build and of the agent.
 
 ## Starting from an example
 
@@ -93,7 +93,7 @@ change.
 
 | Example | What it is |
 |---|---|
-| [Table clock](../examples/clock) | An electric clock in a drum case on a stand, its hands turned by a stepper motor and [its circuit board](working-with-claude.md#circuit-boards) behind it, with [a tool that sets it and runs it](project-tools.md#examples) |
+| [Table clock](../examples/clock) | An electric clock in a drum case on a stand, its hands turned by a stepper motor and [its circuit board](working-with-the-agent.md#circuit-boards) behind it, with [a tool that sets it and runs it](project-tools.md#examples) |
 | [Robot arm](../examples/arm) | The SO-101, an open-source arm, read from its makers' own CAD file, with [a tool that steers it](project-tools.md#examples) |
 | [Clip lamp](../examples/lamp) | A clip lamp on a wall shelf, with its wire |
 | [Counter stool](../examples/stool) | A counter stool, drawn to the sizes it is sold by, [to see beside a person](reference-scenes.md#an-example) |
@@ -119,7 +119,7 @@ screen a few seconds later.
 
 A file that is an assembly gives a part for each component, and a component that is
 several solids (how Shapr3D exports its bodies) gives a part for each, under the names
-the file has for them. From there it is a project like any other: ask Claude for a
+the file has for them. From there it is a project like any other: ask the agent for a
 change and it edits `model.py`. What was opened is left as it was.
 
 ### Meshes
@@ -133,7 +133,7 @@ when it is taken to be in metres, as 3D programs write it.
 
 What was curved in it stays a run of flat faces, though, and nothing of it is a size any
 more: a hole cannot be made wider, nor an edge rounded. So beside the conversation the
-app offers to **Rebuild as editable design**. Claude then builds each part again with
+app offers to **Rebuild as editable design**. The agent then builds each part again with
 build123d, as its designer would have drawn it: it measures the mesh, takes its sizes
 from that, checks the new part against the mesh, and puts it in the mesh's place. From
 then on its sizes are in `model.py`, to be changed like any other project's. A scan or
@@ -150,21 +150,21 @@ as it stands and is opened where it is. So is a folder with no CAD file in it.
 
 The build needs a Python with build123d. Where the app is still making its own, the
 files wait for it, and the view says so; where it could not make one (with no connection,
-say), the project is still made, with the files in it, and says why: ask Claude to set it
+say), the project is still made, with the files in it, and says why: ask the agent to set it
 up and it makes a virtual environment in the folder.
 
-### Claude looks the model over
+### The agent looks the model over
 
 While the files are read and the model is made, the middle of the view says how far
-along it is, under the mark, with a bar that fills as it goes. Then Claude looks the model over, while a
+along it is, under the mark, with a bar that fills as it goes. Then the agent looks the model over, while a
 light goes across all of its parts and the camera goes slowly round it, from a little
-further back than a model opens at; when Claude is through, the view comes in to the
+further back than a model opens at; when the agent is through, the view comes in to the
 model again.
 
 The app draws it pictures of the model (put together, from the other side, pulled apart,
 and each part by itself) and it says what it takes the thing to be, and names and groups
 the parts, keeping the names the files gave where they are good ones. That is a
-conversation of the project's, begun by the app, and it ends with what Claude made of
+conversation of the project's, begun by the app, and it ends with what the agent made of
 the model and what it was unsure of.
 
 It names the project as well, which until then goes by what the file was called, or the
@@ -174,7 +174,7 @@ nothing of the thing, it is named for what it is. That is the model's title too.
 folder keeps the name it was made under, and a name you gave the project yourself
 [meanwhile](#renaming-a-project) stands.
 
-For this one turn Claude has none of Claude Code's own tools: it can look at the view,
+For this one turn the agent has none of its own tools: it can look at the view,
 and name the project and name and group the parts, which the app writes into `model.py`
 and builds. It can change nothing else. It can be stopped, and the settings can turn it
 off (General, Opened files); with no agent on the machine it waits until there is one.
@@ -185,9 +185,9 @@ The app looks in the folder for a model manifest: a JSON file listing the parts,
 mesh file of each, and the groups they are listed under. A part is any separate
 component: a thing made, bought or fitted on its own. The manifest and its files are
 build output; the project's own script writes them. When the manifest is rewritten, the
-view reloads and keeps your camera where it was. While Claude is at work the view can
-show a draft of it as well, which the app builds by itself as Claude writes the script
-(see [Working with Claude](working-with-claude.md#what-claude-has-just-made)). `enclose.py`
+view reloads and keeps your camera where it was. While the agent is at work the view can
+show a draft of it as well, which the app builds by itself as the agent writes the script
+(see [Working with the agent](working-with-the-agent.md#what-the-agent-has-just-made)). `enclose.py`
 writes that to the folder the app names in `ENCLOSE_DRAFT`, in place of `build/`.
 
 The manifest format is in

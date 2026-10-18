@@ -12,8 +12,8 @@
 - [Section, explode and grid](section-explode-grid.md)
 - [Reference scenes](reference-scenes.md): the model beside things of a known size
 - [Blueprints](blueprints.md): the model drawn flat, saved as SVG
-- [Tools of a project's own](project-tools.md): controls Claude builds for your model
-- [Working with Claude](working-with-claude.md): conversations, replies, access,
+- [Tools of a project's own](project-tools.md): controls the agent builds for your model
+- [Working with the agent](working-with-the-agent.md): the agents, conversations, replies, access,
   assembly guides, circuit boards, and taking a change back
 - [Writing a message](messages.md): parts by name, skills, commands and pictures
 - [Screws](screws.md)

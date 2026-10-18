@@ -53,12 +53,12 @@ one. Or pick parts out in the view.
 
 | | |
 |---|---|
-| Cmd+G | Makes a group of what is picked, which goes to the top of the list. Claude is asked what to call it: the card glimmers while the name is on its way |
+| Cmd+G | Makes a group of what is picked, which goes to the top of the list. Claude Code's quickest model is asked what to call it, where Claude is switched on: the card glimmers while the name is on its way |
 | Shift+Cmd+G | Takes them out of their groups, to be listed last as in none. With a whole group picked, by a click on its card, that is the end of the group |
 | Click a group's name | Write another over it. Enter keeps it, Esc does not, and nothing written gives back the name it had before it was written over by hand |
 | Cmd+Z | Takes any of this back |
 
-It is kept by the app, not in the project's files: Claude is told how you have the parts
+It is kept by the app, not in the project's files: the agent is told how you have the parts
 when it asks what they are, and is to write the same groups into the model the next time
 it changes it. Should a build put a part in some other group, or call a group something
 else, the build is what is shown.
@@ -66,7 +66,7 @@ else, the build is what is shown.
 ## Where the groups come from
 
 Nobody has to arrange the groups by hand. They come from the manifest, which the
-project's build writes, and Claude is told that grouping is its job: when it adds or
+project's build writes, and the agent is told that grouping is its job: when it adds or
 removes parts it puts each where a person would look for it, and makes a group when none
 fits.
 

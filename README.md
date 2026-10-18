@@ -2,7 +2,8 @@
 
 A desktop workbench for CAD projects that are built from code
 ([enclose.dev](https://enclose.dev)). You look at the model in 3D, click the part you
-mean, say what should change, and Claude edits the project and rebuilds it.
+mean, say what should change, and the coding agent on your machine (Claude Code, Codex,
+Grok or opencode) edits the project and rebuilds it.
 
 The circuit boards that go in a model are designed with
 [tscircuit](https://tscircuit.com), and drawn in the app with its libraries.
@@ -14,9 +15,11 @@ Early days: for macOS and Linux, and of CAD files it opens STEP, STL and OBJ.
 Download the latest version from
 [GitHub Releases](https://github.com/enclosedev/enclose/releases/latest): the disk image
 that ends in `arm64` for Apple silicon, `x64` for Intel, or on Linux the AppImage, deb,
-pacman package or rpm. It needs macOS 13 or newer, or Linux on x86_64 or aarch64, and
-[Claude Code](https://code.claude.com/docs/en/overview) installed and signed in; and
-for circuit boards, [Node.js](https://nodejs.org).
+pacman package or rpm. It needs macOS 13 or newer, or Linux on x86_64 or aarch64; one of
+[Claude Code](https://code.claude.com/docs/en/overview),
+[Codex](https://learn.chatgpt.com/docs/codex/cli), [Grok](https://x.ai/cli) or
+[opencode](https://opencode.ai/docs), installed and signed in; and for circuit boards,
+[Node.js](https://nodejs.org).
 
 ## Documentation
 

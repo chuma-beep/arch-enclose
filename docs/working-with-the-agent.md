@@ -1,43 +1,74 @@
-# Working with Claude
+# Working with the agent
 
-Claude is the Claude Code already on your machine, run through the
-[Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview) in the project's folder.
-The app has no login of its own, and keeps no credentials but a key you give it yourself
-as a variable in the settings (Providers); if you need to sign in again, do it in Claude
-Code. Cmd+B shows the conversation, and puts it away again.
+The agent is a command-line agent already on your machine, signed in there and run in
+the project's folder: Claude Code (through its
+[Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)), Codex, Grok or
+opencode, whichever you [pick](#the-agents). The app has no login of its own, and keeps
+no credentials but a key you give it yourself as a variable in the settings (Providers);
+if you need to sign in again, do it in the agent. Cmd+B shows the conversation, and puts
+it away again.
 
-## What Claude works on
+## The agents
 
-Claude works on the project, and not on the app. What it makes for you is made in the
-project's folder: the model, a reference scene, tools. It is told that Enclose itself is
-not its to change, whoever asks: not its code or the files it keeps for projects to
+Each is its maker's command-line agent, and answers once it is switched on: only Claude
+is on to begin with. The [settings](settings.md) show which of them the app found
+(Providers), switch each on or off, and hold what each is started with. opencode answers
+with an account signed in or without one, on its free models; looking at it leaves one
+empty session behind in its list, which is where its models come from.
+
+The marks of all of them are in a row over the [choices](#model-effort-and-access)
+under the message. Click one and the next conversation is had with that agent, with its
+models to choose from. A conversation under way is carried on by the agent it began
+with, so there another's mark begins a new one, [from the model as it is](#versions),
+and keeps what you were writing. A mark drawn grey cannot be picked, and says why with
+the pointer on it: the agent is switched off, or was not found on the machine.
+
+What this page says is so whichever of them answers, but for a few things:
+
+- Only Claude asks its [questions](#questions) as a form to click through: the others
+  ask them in what they say.
+- The skills and commands that $ and / [bring up](messages.md#parts-skills-and-commands-by-name)
+  are Claude Code's.
+- Only Claude passes on what you say of a board while it is
+  [made in the background](#circuit-boards).
+- Grok and opencode cannot see [pictures](messages.md#pictures).
+- A few short things are written by the quickest of Claude Code's models, whichever agent
+  answers, where Claude is switched on: what a [card](#conversations) says of a long
+  message, the name of a [group you make](parts.md#changing-the-groups-by-hand), and what
+  a [commit](projects.md#history-and-backup) says of a turn.
+
+## What the agent works on
+
+The agent works on the project, and not on the app. What it makes for you is made in
+the project's folder: the model, a reference scene, tools. It is told that Enclose itself
+is not its to change, whoever asks: not its code or the files it keeps for projects to
 copy, and not how its view, its panels or a tool's controls look and work. Asked for
 that, it says so and offers what can be done in the project. The app is open source:
 fork it to make it otherwise.
 
-## What Claude is given
+## What the agent is given
 
-On top of what Claude Code can already do, the app gives Claude three tools: a
-screenshot of the view as you see it, the list of parts with their groups and sizes, and
-your current selection. It has two more for a project's own tools, the ones it makes for
-you to work the model with: how they stand, with the error of one that did not load, and
-a hand on one of their controls, so that it can try what it made and look at the model
-before it says it is done. It has one that an [assembly guide](#assembly-guides) is
-written with: Claude gives the guide, and the app checks it against the model and files
-it. And it has one that begins [a new version](#asking-for-a-new-version) of the
-project, when you ask for one.
+On top of what the agent can already do, the app gives it three tools: a screenshot of
+the view as you see it, the list of parts with their groups and sizes, and your current
+selection. It has two more for a project's own tools, the ones it makes for you to work
+the model with: how they stand, with the error of one that did not load, and a hand on
+one of their controls, so that it can try what it made and look at the model before it
+says it is done. It has one that an [assembly guide](#assembly-guides) is written with:
+the agent gives the guide, and the app checks it against the model and files it. And it
+has one that begins [a new version](#asking-for-a-new-version) of the project, when you
+ask for one.
 
-## What Claude has just made
+## What the agent has just made
 
-The model changes on screen as Claude writes it, and not only when it builds it. While
-Claude is at work, each time it saves the model's script the app builds the model again
-by itself, into a folder of its own and without the STEP downloads, and shows that until
-Claude's own build is newer. What it builds is no part of the project: when the turn is
-over the view shows the project's own build again. A project whose `enclose.py` is an
-older copy has Claude copy in the app's before it changes the model; until then the
-model shows only when it is built.
+The model changes on screen as the agent writes it, and not only when it builds it.
+While the agent is at work, each time it saves the model's script the app builds the
+model again by itself, into a folder of its own and without the STEP downloads, and
+shows that until the agent's own build is newer. What it builds is no part of the
+project: when the turn is over the view shows the project's own build again. A project
+whose `enclose.py` is an older copy has the agent copy in the app's before it changes
+the model; until then the model shows only when it is built.
 
-Parts that Claude adds to a model are shown coming. When the model it built is on
+Parts that the agent adds to a model are shown coming. When the model it built is on
 screen they are all light for a moment, where they stand; a light goes across them,
 once, and leaves them as they are; and then the camera goes to them, as
 [Space](selecting.md#on-its-own-close-to-out-of-sight) takes it to what is picked out.
@@ -56,15 +87,15 @@ set for less motion, the camera goes and nothing else.
 [Blueprint](blueprints.md) puts its sheets there: A again, the button or Esc brings the
 view back. The cards of the other projects close up meanwhile, as they do for the
 sheets. A guide says how the thing is put together, a step at a time, for whoever has
-its parts on the table. Claude writes it, and the app makes it a page.
+its parts on the table. The agent writes it, and the app makes it a page.
 
 ### Asking for one
 
 At the foot of the guides is **New assembly guide**, and where a model has no guide yet
-the empty sheet in the middle of the view asks for one too. Claude looks at the parts, their
-sizes and places, and at how the model is built, works out an order they can go on in,
-and writes the steps: what is done in each, which parts it puts on and where they come
-from, and what is needed to hand. With something picked out of the model before the
+the empty sheet in the middle of the view asks for one too. The agent looks at the parts,
+their sizes and places, and at how the model is built, works out an order they can go
+on in, and writes the steps: what is done in each, which parts it puts on and where they
+come from, and what is needed to hand. With something picked out of the model before the
 guides are turned to, the button offers a guide to that alone, how it is put together
 and fitted, with **Whole model** beside it.
 
@@ -75,8 +106,8 @@ steps of its own, and then one that fits it. Only a thing that comes in one piec
 a bought movement, goes on as one, however many parts the model has it as.
 
 It is asked in the conversation, as a message would be. It can be asked for there in
-words too, and changed the same way ("split step 3 in two"). While Claude is at it, the
-foot of the view says how long it has been and what it is doing, with a button that
+words too, and changed the same way ("split step 3 in two"). While the agent is at it,
+the foot of the view says how long it has been and what it is doing, with a button that
 stops it. Writing a guide changes nothing in the model.
 
 ### The covers
@@ -84,7 +115,7 @@ stops it. Writing a guide changes nothing in the model.
 Each guide has a cover, the one written last first. At its top left, small, is what it
 is a guide to, the day it was written and how many steps and parts it has, and at its
 top right which version it is. All of the sheet is a line drawing of the thing, which
-Claude composes as an advertisement would show it: from the angle it looks its best,
+the agent composes as an advertisement would show it: from the angle it looks its best,
 and as big as fills the sheet with the parts that make it what it is, the rest running
 off the sheet's edge. A guide written again is the next version, and the ones before
 are kept.
@@ -125,14 +156,14 @@ them. So a guide follows the model: a part that has been changed is shown as it 
 and one the model no longer has is left out, which the cover says. The files are the
 project's own, so [each conversation has its own](#versions), and a turn that wrote one
 can be [taken back](#taking-a-change-back). [`kit/assembly.md`](../kit/assembly.md)
-says how a guide is written, and is what Claude reads before it writes one.
+says how a guide is written, and is what the agent reads before it writes one.
 
 ## Circuit boards
 
 The boards that go in the thing are designed with [tscircuit](https://tscircuit.com),
-and Claude makes them when a board comes up in what you ask: a PCB, the electronics,
+and the agent makes them when a board comes up in what you ask: a PCB, the electronics,
 how it is wired. A board in detail, every part chosen and wired and routed, takes a
-while, so Claude first asks whether you want that now. If not, it makes a rough one,
+while, so the agent first asks whether you want that now. If not, it makes a rough one,
 the outline the thing has room for, its mounting holes and the parts that decide its
 shape, so that the design goes on round it. A rough board is marked **Unfinished**, to be
 made in detail when you are ready. Either way the board is put into the model, where it
@@ -154,7 +185,7 @@ one lights those parts on the board in 3D, with the rest of the board darkened r
 and a click on one brings the camera to them. A click on a part of the board in 3D picks
 it out, with its name and what it is beside it and a button to say something of it, as
 a part of the model has: what is said goes with the next message, as a chip on the
-message box, and Claude is told which part of which board it is about. A message written in PCB mode is about the board on screen. The red **Exit PCB mode**,
+message box, and the agent is told which part of which board it is about. A message written in PCB mode is about the board on screen. The red **Exit PCB mode**,
 last of the buttons down the right, or Esc, brings the model back.
 
 A detailed board is made in the background, by another agent, while the conversation
@@ -162,15 +193,16 @@ goes on: it has a card of its own in the conversation, which says what it is at 
 goes, with **Show**, which opens the board in PCB mode, and **Stop**. The card shows
 only the last thing the agent said and the step it is on, and once it is done, what came
 of it; **See all**, at its foot, opens everything it did and said on the way. Meanwhile the model
-is locked. Claude still answers what you ask, and passes on to the board's agent what you
-say of the board; asked to change the model, it offers to stop the board or to make the
+is locked. The conversation's agent still answers what you ask; Claude passes on to the
+board's agent what you say of the board, where the others ask you to say it again once
+the board is done. Asked to change the model, it offers to stop the board or to make the
 change when it is done. Cmd+Z waits for the board too, and so does what is said in
 another conversation, which goes on once the board is done or stopped. What was made
 of a stopped board stays in its files.
 
-When Claude builds a board, PCB mode opens on it, and a detailed board is built in steps:
+When the agent builds a board, PCB mode opens on it, and a detailed board is built in steps:
 its parts placed, then connected, then routed. Each build shows as it comes
-in, and as Claude writes the board the app makes a quick look at it by itself, unrouted,
+in, and as the agent writes the board the app makes a quick look at it by itself, unrouted,
 so that its parts appear as they are put on it: even while what is written breaks
 tscircuit's rules, as a board half written does. While it is routed, the line under the
 board's name says how far that has got. A board made in detail in the background has
@@ -194,26 +226,26 @@ The download button in PCB mode saves the board's **Gerbers**, the zip a board h
 it from, with its drill files, what goes on it and where each part goes; or the board in
 3D, as **STEP**. An unfinished board's Gerbers are for looking at, not for ordering.
 Where the board was changed after it was last built, its Gerbers are outdated, and
-**Refresh Gerbers** there asks Claude to build it again.
+**Refresh Gerbers** there asks the agent to build it again.
 
 The BOM and the placement file in the zip are written as JLCPCB reads them: each part
 named by its maker's number and its package, and turned the way JLCPCB's own footprint of
 it needs. A finished board is checked as it would be ordered each time it is built, and
-Claude says how the checks came out: every part has a JLCPCB number of a part in stock,
+the agent says how the checks came out: every part has a JLCPCB number of a part in stock,
 sits on its pads as JLCPCB turns it, and has a 3D model; the zip is of the board as it is
 now; tscircuit finds no shorts and no parts in each other's way; and which parts cost
-more to assemble, through the board or on its underside. Before you order, ask Claude
+more to assemble, through the board or on its underside. Before you order, ask the agent
 whether the board is ready: it checks it again, with
 [`kit/board-check.mjs`](../kit/board-check.mjs), and says what to look at yourself on
 JLCPCB's site.
 
 A board is kept in `pcb/` at the top of the project: its tscircuit file
 (`pcb/main.circuit.tsx`), a small file with its name and whether it is finished, and in
-`pcb/build/` what is built of it, which Claude builds with the app's
+`pcb/build/` what is built of it, which the agent builds with the app's
 [`kit/board.mjs`](../kit/board.mjs). That needs [Node.js](https://nodejs.org), and
 fetches tscircuit the first time. The parts on it come with their makers' own 3D models,
 which the build fetches, so that the board in the model is the board as it will be made. [`kit/pcb.md`](../kit/pcb.md) says how a board is
-written and fitted into the model, and is what Claude reads before it makes one.
+written and fitted into the model, and is what the agent reads before it makes one.
 
 The [Table clock](projects.md#starting-from-an-example) example has a board to try all
 this on: the one that keeps its time and steps its motor, built and fitted into the case
@@ -232,16 +264,17 @@ once.
 A conversation goes by the first thing said in it, until it is given a name: click the
 name at the top of the conversation and write another.
 
-A card says the last of its conversation in two lines: what was asked, while Claude is
-at work on it, and otherwise what was last said, which of a reply of Claude's is the
-short part. A message too long for that is summed up in a few words by the quickest of
-your Claude Code's models, which is given the message and nothing else. If Claude is at
-work in a conversation under the card, the edge of the card says so.
+A card says the last of its conversation in two lines: what was asked, while the agent
+is at work on it, and otherwise what was last said, which of a reply is the short part.
+A message too long for that is summed up in a few words by the quickest of Claude Code's
+models, which is given the message and nothing else; with Claude switched off, the card
+shows as much of the message as fits. If the agent is at work in a conversation under
+the card, the edge of the card says so.
 
 ## Versions
 
 Each conversation has the project its own way. A new one begins from the model as it is
-on screen, and what is done from there, by Claude or by you, is done to its version
+on screen, and what is done from there, by the agent or by you, is done to its version
 alone: the conversation it began from keeps the model as it was left. Turn to a
 conversation, on a project's card or under it, and the view shows the model as that
 conversation left it, with the colours and groups you gave its parts there.
@@ -255,7 +288,7 @@ conversation's. What is not the project's own is the same for all of them, and l
 alone: `.git`, `node_modules`, a Python environment. Two versions are not brought
 together: to have in one what another has, ask for it there.
 
-The folder is not put another way while Claude is at work in it: turn to another
+The folder is not put another way while the agent is at work in it: turn to another
 conversation meanwhile, and its model is shown when the turn is over. A folder with more
 than 20,000 files in it, or 4 GB, is not copied aside, and has the one version.
 
@@ -266,11 +299,11 @@ stay as they were, for when it is switched on again.
 ### Asking for a new version
 
 A new version can be asked for in words, in the conversation you are in: "try this as a
-new version, with the seat 15 mm thicker". Claude changes nothing there. It sums up what
-you asked for, and the foot of the conversation says **Creating a new version** while
-its turn comes to an end, with a faint light going across the conversation behind what
-is said in it. Then the app begins a new conversation, says in it what Claude
-summed up as your own message, marked **New version**, and turns to it, with Claude
+new version, with the seat 15 mm thicker". The agent changes nothing there. It sums up
+what you asked for, and the foot of the conversation says **Creating a new version**
+while its turn comes to an end, with a faint light going across the conversation behind
+what is said in it. Then the app begins a new conversation, says in it what the agent
+summed up as your own message, marked **New version**, and turns to it, with the agent
 already at work. The pictures that came with your message go with it. Nothing else of
 the conversation you asked in is known in the new one, which is answered as that one
 was: by the same agent, with the same model, effort and access.
@@ -278,55 +311,56 @@ was: by the same agent, with the same model, effort and access.
 The conversation you asked in keeps the model as it was, and says that a new version
 was created from there. What was waiting to be said in it waits to be sent by hand.
 
-Stop Claude while the new version is being created, and none is. Claude begins one only
-when asked. With versions switched off, or in a folder too big to have them, there is
-none to begin: Claude says so, and changes nothing.
+Stop the agent while the new version is being created, and none is. The agent begins one
+only when asked. With versions switched off, or in a folder too big to have them, there
+is none to begin: the agent says so, and changes nothing.
 
 ## Replies
 
-What Claude says at the end of a turn is short: a sentence or two, since what it did is
-already there in the view. It says what you could not tell by looking (something it
+What the agent says at the end of a turn is short: a sentence or two, since what it did
+is already there in the view. It says what you could not tell by looking (something it
 could not do, a guess that decided what you got, a question for you) and keeps the rest,
 how it went about it and the sizes and clearances, under a Details line beneath the
 reply, which opens as the steps above it do. A question is answered outright, at the
 length it needs.
 
-What Claude says on the way, between one step and the next, is not its answer: it shows
-while Claude is at work and is then kept with the steps, under the line that says how
-long it worked.
+What the agent says on the way, between one step and the next, is not its answer: it
+shows while the agent is at work and is then kept with the steps, under the line that
+says how long it worked.
 
-Claude is told to answer so, and sets the rest off in a `<details>` block for the app to
-fold away; a reply with nothing set off is shown whole, as every earlier one is.
+The agent is told to answer so, and sets the rest off in a `<details>` block for the app
+to fold away; a reply with nothing set off is shown whole, as every earlier one is.
 
 ## Sizes
 
-What Claude makes is drawn at the size it is to be made, so it is told where sizes come
-from: what you said, what is already in the model, the standard for a thing that has one
-(looked up, not made up), and only then what such a thing commonly measures. It says
-which sizes decided the shape, and leads with any that were its own guess.
+What the agent makes is drawn at the size it is to be made, so it is told where sizes
+come from: what you said, what is already in the model, the standard for a thing that
+has one (looked up, not made up), and only then what such a thing commonly measures. It
+says which sizes decided the shape, and leads with any that were its own guess.
 
 ## Questions
 
-Mostly Claude shows its guess and lets you correct it. Where a wrong guess would waste
-the build (the thing has to fit something of yours whose size it cannot know, or what
-you asked for could be quite different things) it asks first, in the conversation, one
-question at a time: a few likely answers to click, and a line to write your own. A click
-goes on to the next question, and the last one sends them all (a question that takes
-several answers waits for Next); **Skip** leaves a
-question to Claude, which goes by its best guess and says what it was. Whatever access
-Claude has, what it asks is put to you: a question is no leave to do something.
+Mostly the agent shows its guess and lets you correct it. Where a wrong guess would
+waste the build (the thing has to fit something of yours whose size it cannot know, or
+what you asked for could be quite different things) it asks first.
+
+Claude asks in the conversation, one question at a time: a few likely answers to click,
+and a line to write your own. A click goes on to the next question, and the last one
+sends them all (a question that takes several answers waits for Next); **Skip** leaves a
+question to Claude, which goes by its best guess and says what it was. The other agents
+ask in what they say, and are answered in a message. Whatever access the agent has, what
+it asks is put to you: a question is no leave to do something.
 
 ## Model, effort and access
 
 Under the message, one line says how it will be answered: "Using Opus 5.5, High, Full
-access". Click it for the three choices behind it: which of Claude Code's models
-answers, how hard it thinks, and what it may do without asking. The models are the ones
-your Claude Code offers; "Default" leaves the model, and how hard it thinks, as Claude
-Code is set.
+access". Click it for the three choices behind it: which of the agent's models answers,
+how hard it thinks, and what it may do without asking. The models are the ones the agent
+offers; "Default" leaves the model, and how hard it thinks, as the agent is set.
 
-Claude starts out with full access and never asks leave.
+The agent starts out with full access and never asks leave.
 
-| Access            | What Claude does                                 |
+| Access            | What the agent does                              |
 | ----------------- | ------------------------------------------------ |
 | Full access       | Never asks                                       |
 | Auto              | Does what is routine and asks about the rest     |
@@ -337,47 +371,29 @@ Claude starts out with full access and never asks leave.
 
 Cmd+Z takes back the last thing done to the model, and Cmd+Shift+Z puts it back. That is
 a colour you gave a part, a group you made, broke up or renamed, parts you
-[hid or brought back](selecting.md#on-its-own-close-to-out-of-sight), or what Claude did
-in a turn, whichever was done later; press it again for the one before.
+[hid or brought back](selecting.md#on-its-own-close-to-out-of-sight), or what the agent
+did in a turn, whichever was done later; press it again for the one before.
 
-What Claude did takes a second press. The first leaves everything as it is and says, at
-the foot of the view, how long that turn was at work and what it was asked: Cmd+Z again
-within a few seconds takes it back. Anything else done in between, a key or a click,
-and the next Cmd+Z asks again. What you did yourself goes at the first press.
+What the agent did takes a second press. The first leaves everything as it is and says,
+at the foot of the view, how long that turn was at work and what it was asked: Cmd+Z
+again within a few seconds takes it back. Anything else done in between, a key or a
+click, and the next Cmd+Z asks again. What you did yourself goes at the first press.
 
-What Claude did is taken back whole and at once, without asking it for anything and
+What the agent did is taken back whole and at once, without asking it for anything and
 without building anything: before each turn the app puts the project's files aside, and
 keeps of them whatever the turn then wrote to, made or took away, the built model with
 the rest. A turn you stopped part of the way is taken back like any other. The
-conversation says that it was done, and how to put it back, and Claude is told with
+conversation says that it was done, and how to put it back, and the agent is told with
 your next message, so that it does not go on as though its change were still there.
 
-Nothing of Claude's is taken back while Claude is at work, or over a file that has been
+Nothing the agent did is taken back while it is at work, or over a file that has been
 changed since the turn, by you in an editor say: the app names the file that is in the way and
 leaves all of it as it is. The last twelve turns that changed anything are kept for each
 conversation, which are the ones Cmd+Z takes back in [its version](#versions) of the
 project; with versions switched off, for each project. What is not the project's own is
 left out, and left alone: `.git`,
 `node_modules`, a Python environment. A folder with more than 20,000 files in it, or
-4 GB, is not put aside at all, and nothing Claude does in it can be taken back.
+4 GB, is not put aside at all, and nothing the agent does in it can be taken back.
 
 In a box you are writing in, Cmd+Z is the writing's for as long as there is any; in an
 empty one, as the message box is after a message is sent, it is the model's.
-
-## Other agents
-
-Claude is the one the app is made round, but not the only one it can put a message to.
-Codex, Grok and opencode answer as well, each its maker's command-line agent, installed
-on your machine and signed in there, once it is switched on: only Claude is on to begin
-with. The [settings](settings.md) show which of them the app found (Providers), switch
-each on or off, and hold what each is started with. Grok and
-opencode cannot see [pictures](messages.md#pictures). opencode answers with an account
-signed in or without one, on its free models; looking at it leaves one empty session
-behind in its list, which is where its models come from.
-
-The marks of all of them are in a row over the [choices](#model-effort-and-access)
-under the message. Click one and the next conversation is had with that agent, with its
-models to choose from. A conversation under way is carried on by the agent it began
-with, so there another's mark begins a new one, [from the model as it is](#versions),
-and keeps what you were writing. A mark drawn grey cannot be picked, and says why with
-the pointer on it: the agent is switched off, or was not found on the machine.

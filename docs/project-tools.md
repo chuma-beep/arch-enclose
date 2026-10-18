@@ -1,12 +1,12 @@
 # Tools of a project's own
 
 **Tools** (T) is the one blue button, and is there only in a project that has tools of
-its own. They are not the app's: each was made for that project's model, by Claude,
+its own. They are not the app's: each was made for that project's model, by the agent,
 because someone asked to see the model do something. The hands of a clock set to a time
 and run, a lid opened by a slider, an arm steered joint by joint.
 
 The app has no animation of its own to learn, and nobody has to wait for one to be
-added: say what you want to try, and Claude builds the tool for it. What is the
+added: say what you want to try, and the agent builds the tool for it. What is the
 project's own is blue, the button and the panel it brings up, so that it is never taken
 for something the app came with.
 
@@ -40,7 +40,7 @@ what its controls are and, each time the view is drawn, where the parts are from
 controls stand: turned about a line, carried somewhere, put out of sight, drawn in
 another colour. It changes nothing in the project's files; the parts are only drawn
 where it has them. [`kit/tools.md`](../kit/tools.md) says how one is written, and is
-what Claude reads before it writes one.
+what the agent reads before it writes one.
 
 What a tool moves, it moves as a well-made machine would: off from rest gently, up to
 its pace, and gently to rest where it was going, never at a jump and never at one pace
@@ -48,7 +48,7 @@ from start to stop. The app works that out for the tool (`tool.glide`), the way 
 machine's own controller does, so a lid sent open takes its second to get there, a part
 under a slider follows the hand with some weight to it, and the joints of an arm sent
 to a pose all arrive together. A tool written before the app could do this moves as it
-did: ask Claude to have it glide.
+did: ask the agent to have it glide.
 
 A tool is run shut away from the rest of the app, in a worker of its own: it is told the
 parts' names and sizes, and has no way to the window, to files or to the network. It
@@ -59,7 +59,7 @@ imports a module from somewhere else: with that version, read a stranger's tools
 Versions up to 0.0.5 kept a tool from the network, but left it the means to show a
 system notice in the app's name and to reach the app's own storage.) One that goes
 wrong, or never comes back from a frame, is stopped and says why in its tab, with a
-button that takes that to Claude.
+button that takes that to the agent.
 
 ## Examples
 
@@ -69,7 +69,7 @@ the back, the movement and the stand are each screwed on, with screws from the a
 library in holes cut to fit them, and there is glass over the dial. A stepper motor on
 the back of the movement turns the centre wheel once an hour, and the wheels from it to
 the hands are cut to the numbers of teeth a real movement has. Behind the motor is its
-[circuit board](working-with-claude.md#circuit-boards), screwed to the inside of the
+[circuit board](working-with-the-agent.md#circuit-boards), screwed to the inside of the
 back cover: it keeps the time and steps the motor, from a USB-C socket in the drum's
 wall, and its button comes out through the back. PCB lists it, to open in PCB mode.
 

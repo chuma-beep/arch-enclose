@@ -22,7 +22,7 @@ A message that begins with / is a command: any that you, the project or a plugin
 given Claude Code, and three of its own that mean something here (compact, context and
 usage). Esc puts the list away.
 
-$ and / are Claude's: with Codex or Grok answering, they are only what was typed.
+$ and / are Claude's: with another agent answering, no list comes up, and they go as they were typed.
 
 ## What was said of parts
 
@@ -30,9 +30,9 @@ What you say of a part in the view, and the parts you add to chat from it, show 
 on the message box and go with the next message. [Picking parts out](selecting.md) says
 how.
 
-## What was said of Claude's words
+## What was said of the agent's words
 
-Select words in one of Claude's answers and **Quote** comes up by them. Press it, and a
+Select words in one of the agent's answers and **Quote** comes up by them. Press it, and a
 box opens beside the words, the one a part has: write what you say to them (your answer,
 where something was asked there, or what you want made clear) and Enter keeps it for the
 next message, as a chip on the message box. Nothing is sent by that. More can be quoted
@@ -43,7 +43,7 @@ Cancel, leaves things as they were.
 Words can be quoted with nothing said of them: the message then says the rest. Click a
 chip to change what was said, and its cross takes the quote back off the message. A
 message that was sent shows how each quote begins, in one line, over what was said to
-it. Claude gets all of the words you picked out, with what you said to each.
+it. The agent gets all of the words you picked out, with what you said to each.
 
 ## Pictures
 
@@ -57,19 +57,18 @@ the words can say which picture they mean ("the body of [Image 1] with the knob 
 [Image 2]"), and Backspace at the mark takes the picture with it. One message takes
 eight, and one too big for an agent is made smaller first.
 
-Claude gets each picture under its name, ahead of the words. It is told to make what a
+The agent gets each picture under its name, ahead of the words. It is told to make what a
 picture shows, part by part and in its proportions, to take sizes from what is written
 on it or said with it and not from how it looks, and to set a screenshot of what it
 built beside the picture before it reports.
 
 A message that was sent shows its pictures over what it said. They are kept with the
 app's own state, not in the project's folder, for as long as the project is on the list.
-Codex takes pictures the same way. Grok and opencode cannot see them: they get your
-words, and the conversation says so.
+Grok and opencode cannot see them: they get your words, and the conversation says so.
 
-## While Claude is at work
+## While the agent is at work
 
-More can be said in a conversation Claude is at work in. It waits its turn, marked
+More can be said in a conversation the agent is at work in. It waits its turn, marked
 Queued, and is sent when the turn is over. A message that waits can be sent at once
 (Send now), which stops the turn for it, or taken back. After a turn that was stopped or
 that failed, what waits is not sent by itself: it is left for you to send, or goes after

@@ -19,7 +19,7 @@ three buttons appear where you clicked, with the part's name beside them, and st
 that spot of the part as it is turned.
 
 - One gives it another of the app's colours, which is how the app draws it from then on
-  (Claude is told, when it asks what the parts are). While you choose a colour for it,
+  (the agent is told, when it asks what the parts are). While you choose a colour for it,
   and for a moment after, the part is seen in its own colour instead. The colours you
   give are kept in the project's folder, in `enclose.colors.json`, so they go wherever
   the project goes: into its [history and backup](projects.md#history-and-backup), and
@@ -33,7 +33,7 @@ Where the part is one of several that make one object (the parts of a group that
 one another, as they go when the model is pulled apart), the click picks out the whole
 object, and so does the pointer light it up: a circuit board with all that is on it,
 under the group's name, or under that of its widest part where it is only some of the
-group. The colour is then given to all of it, what you say is said of all of it (Claude
+group. The colour is then given to all of it, what you say is said of all of it (the agent
 is told which parts those are, and where on them you clicked), and there is no file of
 it to download.
 
@@ -48,7 +48,7 @@ belongs to.
 Enter keeps what you wrote for the next message: it shows as a chip on the message box
 and as a mark on the part, and you can go on to say things of other parts, which gather
 there. Click a chip or a mark to change what you said. Cmd+Enter sends at once, with
-everything gathered and whatever is in the message box. Each thing said goes to Claude
+everything gathered and whatever is in the message box. Each thing said goes to the agent
 with its part and the point clicked, in the model's coordinates.
 
 ## On its own, close to, out of sight
@@ -66,7 +66,7 @@ and changes nothing else: the rest stays on show, and Cmd+1 is all of the model 
 out of sight and leaves the rest. Pick out more and H hides those too; H with nothing
 picked out, or Esc, brings back all that was hidden, and the list of parts brings them
 back one at a time. Cmd+Z takes back any of these, as it does
-[a change to the model](working-with-claude.md#taking-a-change-back).
+[a change to the model](working-with-the-agent.md#taking-a-change-back).
 
 ## A box
 
@@ -94,10 +94,10 @@ With parts picked out together, by a box or with Shift, a button at the foot of 
 view, Add to chat, puts them on the message box, in a row of chips that scrolls
 sideways, the last added first, and opens the conversation to go on from there. It goes by the object, as picking does. A whole object among what is picked out
 is one chip, however many parts it is made of, and the button counts those as groups:
-Add 2 groups to chat. It goes to Claude as one thing, with what it is called and which
+Add 2 groups to chat. It goes to the agent as one thing, with what it is called and which
 parts it is, and what you write is taken as said of it; where you mean only some part of
-it (the cap of a button), say so in your own words and Claude finds the part.
+it (the cap of a button), say so in your own words and the agent finds the part.
 
-The parts picked out for themselves are a chip each, and go to Claude by name, ahead of
+The parts picked out for themselves are a chip each, and go to the agent by name, ahead of
 what you write, as if you had written them with @. A message that was sent shows the
 objects it was about over what it said.
