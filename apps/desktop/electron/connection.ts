@@ -109,7 +109,7 @@ export class Connection {
       }
       // kept only now, with Enclose installed: an app quit before that is not connected
       if (!this.deps.save({ account, tokens: client.current }))
-        throw new Error("This Mac would not keep the account safely.")
+        throw new Error("This machine would not keep the account safely.")
       this.github = { client, account }
       this.set({ state: "on", login: account.login, name: account.name })
       this.deps.onConnected()
