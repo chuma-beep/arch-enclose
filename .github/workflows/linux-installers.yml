@@ -23,6 +23,8 @@ concurrency:
 
 jobs:
   attach:
+    # only the app's own releases (v0.1.0): the examples' (examples-v3) have no app in them
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'v')
     strategy:
       fail-fast: false
       matrix:
