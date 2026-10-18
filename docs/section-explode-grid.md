@@ -7,7 +7,10 @@ Three of the buttons down the right-hand edge of the view.
 **Section** (S) cuts the model open. Three squares appear by the axes, one per direction
 to cut across, which the X, Y and Z keys choose too; in the view, drag the arrow to push
 the cut through the model and the arcs to tilt it. While the pointer is on either, or
-has hold of it, a faint square shows where the cut lies and how it is tilted.
+has hold of it, a faint square shows where the cut lies and how it is tilted. Once it
+has been dragged and let go of, or a click lands on nothing, the arrow and arcs go, so
+as not to stand in the middle of what was cut open; a cut chosen afresh brings them back
+(S off and on again, Esc and S, an axis, or Reset cut).
 
 Two more buttons appear to the left of this one: one shows the other half, the other
 starts the cut again. A cut is kept as it is left: cut open again, the model is cut the

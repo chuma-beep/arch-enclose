@@ -51,6 +51,8 @@ const TILTS = [
 
 type Moved = { position: Vec3; turn: Turn }
 type Press = ThreeEvent<PointerEvent>
+/** What the scene can do with the handle from outside it. */
+export type HandleControls = { putAway: () => void }
 
 /** The shade the handle is edged in: dark round a light handle, light round a dark one. */
 const edgeOf = (colors: ThemeColors) => (colors.dark ? EDGE : "#ffffff")
@@ -189,13 +191,14 @@ const onward = (tilt: (typeof TILTS)[number], degrees: number) => {
 /**
  * Taking hold of a piece of the handle and dragging it. `begin` is told where it was
  * taken hold of, and gives back what to do as the pointer moves: it is told how far the
- * pointer has gone since, in pixels.
+ * pointer has gone since, in pixels. `end` is told when it is let go of.
  */
 function useGrip(
   begin: (
     press: Press,
     size: { width: number; height: number }
-  ) => (dx: number, dy: number, press: Press) => void
+  ) => (dx: number, dy: number, press: Press) => void,
+  end: () => void
 ) {
   const get = useThree((state) => state.get)
   // lit while the pointer is on it, and for as long as it is held, wherever that takes it
@@ -260,6 +263,7 @@ function useGrip(
           bridge.handling = false
         }, 0)
         ;(press.target as Element).releasePointerCapture(press.pointerId)
+        end()
       },
     },
   }
@@ -273,6 +277,8 @@ type Piece = {
   onChange: (moved: Moved) => void
   /** the pointer has come onto this piece (1), or has gone from it and let go of it (-1) */
   onLit: (by: 1 | -1) => void
+  /** this piece has been let go of */
+  onLetGo: () => void
 }
 
 /** Tells the handle while one of its pieces is under the pointer, or held. */
@@ -285,7 +291,7 @@ function useLit(over: boolean, onLit: Piece["onLit"]) {
 }
 
 /** The arrow: drag it to push the cut through the model, along the way it faces. */
-function Push({ section, frame, colors, onChange, onLit }: Piece) {
+function Push({ section, frame, colors, onChange, onLit, onLetGo }: Piece) {
   const { over, grip } = useGrip((press, size) => {
     const standing = frame.current!.matrixWorld
     const along = dragAlong(
@@ -301,7 +307,7 @@ function Push({ section, frame, colors, onChange, onLit }: Piece) {
         position: from.clone().addScaledVector(way, along(dx, dy)).toArray(),
         turn: section.turn,
       })
-  })
+  }, onLetGo)
   useLit(over, onLit)
   const shaft = 1 - HEAD.length * 1.2
   const edge = edgeOf(colors)
@@ -348,6 +354,7 @@ function Tilt({
   colors,
   onChange,
   onLit,
+  onLetGo,
 }: Piece & {
   tilt: (typeof TILTS)[number]
   /** the part of the handle that is kept the same size on the screen */
@@ -394,7 +401,7 @@ function Tilt({
         turn: [next.x, next.y, next.z, next.w],
       })
     }
-  })
+  }, onLetGo)
 
   const drawn = React.useMemo(() => {
     const between = (from: number, to: number, steps: number) =>
@@ -450,23 +457,35 @@ function Tilt({
   )
 }
 
+/** The same cut: through the same point, and turned the same way. */
+const sameCut = (a: Moved, b: Moved) =>
+  a.position.every((v, i) => v === b.position[i]) &&
+  a.turn.every((v, i) => v === b.turn[i])
+
 /**
  * The section's handle: an arrow to push the cut through the model, and two rings to
  * tilt it about the two directions that lie in it. With it, a faint square where the cut
  * is, so that its tilt can be read at a glance: for as long as the pointer is on the
  * handle, or has hold of it, and not otherwise, when it would only be in the way of the
  * model.
+ *
+ * Once it has been dragged and let go of, the cut is where it was wanted, and the handle
+ * goes, for as long as the cut stays there: it stands in the middle of what was cut open
+ * to be looked at. A click on nothing puts it away as well. A cut chosen afresh brings
+ * it back (S again, an axis, Reset cut).
  */
 export function SectionHandle({
   section,
   reach,
   colors,
   onChange,
+  ref,
 }: {
   section: Section
   reach: number
   colors: ThemeColors
   onChange: (moved: Moved) => void
+  ref?: React.Ref<HandleControls>
 }) {
   const frame = React.useRef<THREE.Group>(null)
   const sized = React.useRef<THREE.Group>(null)
@@ -499,7 +518,33 @@ export function SectionHandle({
     (by: 1 | -1) => setLit((pieces) => pieces + by),
     []
   )
-  const piece = { section, frame, colors, onChange, onLit }
+
+  // where the cut was last dragged to, until it is let go of; and where it was let go
+  const dragged = React.useRef<Moved | null>(null)
+  const [left, setLeft] = React.useState<Moved | null>(null)
+  const moved = React.useCallback(
+    (to: Moved) => {
+      dragged.current = to
+      onChange(to)
+    },
+    [onChange]
+  )
+  const onLetGo = React.useCallback(() => {
+    // taken hold of and let go without moving it, it stays
+    if (dragged.current) setLeft(dragged.current)
+    dragged.current = null
+  }, [])
+  React.useImperativeHandle(
+    ref,
+    () => ({
+      putAway: () =>
+        setLeft({ position: section.position, turn: section.turn }),
+    }),
+    [section.position, section.turn]
+  )
+  if (left && sameCut(left, section)) return null
+
+  const piece = { section, frame, colors, onChange: moved, onLit, onLetGo }
   return (
     <group ref={frame} matrix={matrix} matrixAutoUpdate={false}>
       <mesh visible={lit > 0} renderOrder={4} raycast={NOT_PICKED}>

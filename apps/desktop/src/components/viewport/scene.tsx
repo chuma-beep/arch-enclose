@@ -28,7 +28,7 @@ import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
 import { groundOf, Reference, setIn, type LoadedReference } from "./reference"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
-import { SectionHandle } from "./section-handle"
+import { SectionHandle, type HandleControls } from "./section-handle"
 
 // surfaces sit a hair back in the depth buffer so their own edges win cleanly
 const BEHIND_EDGES = {
@@ -2114,6 +2114,15 @@ export function Scene({
   )
   const place = (index: number) =>
     cuts[index] ? cuts.slice(0, index).filter(Boolean).length : null
+  // a click on nothing puts the section's handle away, as well as what was picked out
+  const handle = React.useRef<HandleControls>(null)
+  const pick = React.useCallback(
+    (selection: Selection | null, add: boolean, alone: boolean) => {
+      if (!selection) handle.current?.putAway()
+      onPick(selection, add, alone)
+    },
+    [onPick]
+  )
 
   return (
     <Canvas
@@ -2191,7 +2200,7 @@ export function Scene({
         loaded={loaded}
         plane={plane}
         onHover={onHover}
-        onPick={onPick}
+        onPick={pick}
       />
       <Marquee
         root={root}
@@ -2328,6 +2337,7 @@ export function Scene({
         )}
         {view.section && (
           <SectionHandle
+            ref={handle}
             section={view.section}
             reach={radius}
             colors={colors}
