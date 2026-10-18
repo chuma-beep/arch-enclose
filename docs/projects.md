@@ -93,7 +93,7 @@ change.
 
 | Example | What it is |
 |---|---|
-| [Table clock](../examples/clock) | A mechanical movement in a drum case on a stand, with [a tool that sets it and runs it](project-tools.md#examples) |
+| [Table clock](../examples/clock) | An electric clock in a drum case on a stand, its hands turned by a stepper motor and [its circuit board](working-with-claude.md#circuit-boards) behind it, with [a tool that sets it and runs it](project-tools.md#examples) |
 | [Robot arm](../examples/arm) | The SO-101, an open-source arm, read from its makers' own CAD file, with [a tool that steers it](project-tools.md#examples) |
 | [Clip lamp](../examples/lamp) | A clip lamp on a wall shelf, with its wire |
 | [Counter stool](../examples/stool) | A counter stool, drawn to the sizes it is sold by, [to see beside a person](reference-scenes.md#an-example) |

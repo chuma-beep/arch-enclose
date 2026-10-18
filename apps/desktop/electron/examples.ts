@@ -7,6 +7,7 @@ import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
+import { BOARD_FOLDER } from "../shared/board-format"
 import type { Example } from "../shared/examples"
 import { LEFT_BEHIND, type Filed } from "./archive"
 import { SCRIPT } from "./imports"
@@ -73,6 +74,23 @@ export function ownExporter(script: string): string {
   return script.replace(/^sys\.path\.insert\(.*"kit"\)\)\r?\n/m, "")
 }
 
+/**
+ * Everything in a project's pcb/ stamped as written at the one moment. A board is out of
+ * date where its file is newer than what was built of it, and a project made of an
+ * example has had each of its files written a moment ago, in no order that says which
+ * was made first: the example's boards come built as they are.
+ */
+function boardsTogether(dir: string, at = new Date()) {
+  const folder = path.join(dir, BOARD_FOLDER)
+  if (!fs.existsSync(folder)) return
+  for (const entry of fs.readdirSync(folder, {
+    recursive: true,
+    withFileTypes: true,
+  }))
+    if (entry.isFile())
+      fs.utimesSync(path.join(entry.parentPath, entry.name), at, at)
+}
+
 /** The app's library of screws, beside its exporter: what a model that has screws reads. */
 const SCREWS = "screws.py"
 const USES_SCREWS = /^(?:from screws import|import screws)\b/m
@@ -118,6 +136,7 @@ export function startFrom(
           path.join(dir, SCREWS)
         )
     }
+    boardsTogether(dir)
   } catch (error) {
     // half a project is no project: the folder was made a moment ago, and is all copies
     fs.rmSync(dir, { recursive: true, force: true })

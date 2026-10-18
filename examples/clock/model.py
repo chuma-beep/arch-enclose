@@ -1,33 +1,50 @@
 """A table clock, to show what Enclose is for: a thing made of parts, drawn in code.
 
-It is a mechanical clock in a drum case, on a stand. Everything that holds it together
+It is an electric clock in a drum case, on a stand. Everything that holds it together
 is in the model: the bezel, the dial, the back and the stand are screwed on, with
 screws out of the app's own library (kit/screws.py), in holes cut to fit them.
 
-The movement is a whole one. A barrel, which holds the mainspring, drives the centre
-wheel, which goes round once an hour and carries the minute hand. That drives the
-fourth wheel sixty times as fast, through the third, and the fourth carries the seconds
-hand. The fourth drives the escape wheel, which the pallet fork lets go one tooth at a
-time as the balance swings: four beats a second. In front of the plates the motion
-work takes the hour hand round once in twelve: cannon pinion, minute wheel, hour wheel.
-The wheels are cut to the numbers a real movement has, so that turning them by those
-numbers keeps their teeth in mesh, which is what tools/clock.js does.
+The hands are turned by a small stepper motor, a 28BYJ-48, screwed to the back of the
+back plate. Its shaft comes through the plate into the hub of the centre wheel, and
+turns it once an hour; the centre wheel carries the minute hand. It drives the fourth
+wheel sixty times as fast, through the third, and the fourth carries the seconds hand.
+In front of the plates the motion work takes the hour hand round once in twelve: cannon
+pinion, minute wheel, hour wheel. The wheels are cut to the numbers a real movement
+has, so that turning them by those numbers keeps their teeth in mesh, which is what
+tools/clock.js does.
 
-The teeth are plain wedges, not the curves a made wheel has, and the escapement is
-drawn to be watched, not to keep time: this is a model to look at and move, not to cut.
+Behind the motor is the clock's circuit board (pcb/main.circuit.tsx), screwed to posts
+on the inside of the back cover. It keeps the time and steps the motor, from 5 V on a
+USB-C socket that sits in a notch in the drum's wall, and its button comes out through
+the back cover: holding it runs the hands forward, to set them.
+
+The teeth are plain wedges, not the curves a made wheel has: this is a model to look
+at and move, not to cut.
 """
 
 import math
 import os
 import sys
 
-from build123d import Axis, Box, Circle, Cylinder, Polygon, Pos, Rot, chamfer, extrude, fillet
+from build123d import (
+    Axis,
+    Box,
+    Circle,
+    Cylinder,
+    Polygon,
+    Pos,
+    Rot,
+    SlotOverall,
+    chamfer,
+    extrude,
+    fillet,
+)
 
 # the app's exporter and its screws, which a project of your own keeps copies of beside
 # its model.py
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "kit"))
-from enclose import Model  # noqa: E402
+from enclose import Model, read_board  # noqa: E402
 from screws import Screw  # noqa: E402
 
 # Everything is drawn lying flat, the dial facing up, and stood on its stand at the end:
@@ -35,19 +52,17 @@ from screws import Screw  # noqa: E402
 
 # --- the wheels: how many teeth, and how big a tooth (its module, mm) -------------------
 GOING = 0.75  # the train between the plates
-FINE = 0.5  # the fourth wheel and the escape pinion
+FINE = 0.5  # the fourth wheel
 CANNON = 1.0  # cannon pinion and minute wheel
 HOUR = 0.96  # minute pinion and hour wheel: so that it comes back to the centre
 
-BARREL_WHEEL, BARREL_PINION = 66, 8
 CENTRE_WHEEL, THIRD_PINION, THIRD_WHEEL, FOURTH_PINION = 64, 8, 60, 8
-FOURTH_WHEEL, ESCAPE_PINION, ESCAPE_TEETH = 56, 7, 15
+FOURTH_WHEEL = 56
 CANNON_PINION, MINUTE_WHEEL, MINUTE_PINION, HOUR_WHEEL = 12, 36, 10, 40
 
 # --- where the arbors are, on the plates (mm) -------------------------------------------
 CENTRE = (0.0, 0.0)
 FOURTH = (0.0, -30.0)  # under the centre: the seconds hand is at six o'clock
-BARREL = (0.0, GOING * (BARREL_WHEEL + BARREL_PINION) / 2)  # over it
 
 
 def beside(a, b, from_a: float, from_b: float, right: bool):
@@ -82,17 +97,6 @@ THIRD = beside(
 reach = CANNON * (CANNON_PINION + MINUTE_WHEEL) / 2
 STUD = (-reach * math.sqrt(0.5), reach * math.sqrt(0.5))  # the minute wheel, up and to the left
 
-# The escapement, down and to the left. The balance is half way between seven and eight
-# o'clock, where the dial has a window cut for it, and the rest is laid out to reach it.
-ESCAPE_TIP = 9.0  # how far out the escape wheel's teeth go
-BALANCE_RIM = 8.0
-ESCAPE = out(200, FINE * (FOURTH_WHEEL + ESCAPE_PINION) / 2, FOURTH)
-BALANCE = out(225, 41.0)
-PALLET = beside(ESCAPE, BALANCE, 11.5, 10.0, right=False)
-if PALLET[1] < beside(ESCAPE, BALANCE, 11.5, 10.0, right=True)[1]:
-    # (of the two places it could be, the one nearer the centre, where it shows)
-    PALLET = beside(ESCAPE, BALANCE, 11.5, 10.0, right=True)
-
 PLATE = 56.0  # how far out the plates go
 PILLAR = 51.0  # how far out the pillars are: three of them, where no wheel is
 HEIGHT = 82.0  # how high the centre is, stood up
@@ -103,10 +107,33 @@ HOURS, MINUTES, SECONDS = 10, 10, 0
 DRUM = 65.0  # how far out the drum goes
 BORE = PLATE + 1.0  # the room the plates slide into
 SEAT = 45.0  # the ring inside it that the movement is screwed up against, and the dial down on
-BACK, FRONT = -12.0, 33.0  # where the drum ends, behind and in front
+BACK, FRONT = -24.5, 33.0  # where the drum ends, behind and in front
 DIAL = 54.0  # how far out the dial goes
 SCREWS = 61.0  # how far out the screws of the bezel and of the back are
 FOOT = 3.0  # how high its feet lift it
+
+# --- the motor: a 28BYJ-48 (5 V), to its maker's drawing (mm) ------------------------------
+# It is screwed to the back of the back plate, its face on the plate's back face (z = 0)
+# and its shaft on the centre arbor's axis; the can is off to one side of the shaft.
+MOTOR_CAN = 14.0  # the can's radius
+MOTOR_DEEP = 19.0  # how far back the can goes from its face
+MOTOR_OFF = 8.0  # how far the can's middle is from the shaft: above it
+MOTOR_EARS = 35.0  # between the holes in its two ears, which are 4.2 across
+MOTOR_BOSS = 4.5  # the boss round the shaft, 1.5 proud of the face
+MOTOR_SHAFT = 10.0  # how far the shaft stands out from the face: 5 across, 3 across its flats
+
+# --- the board: these are the numbers pcb/main.circuit.tsx has at its top -----------------
+# It lies across the back of the drum, its parts facing forward at the motor, and is
+# held to three posts on the back cover. Its 3D comes from the build of the board.
+BOARD_RADIUS = 55.0  # inside the bore (57)
+BOARD_THICK = 1.6
+BOARD_FRONT = -20.5  # its front face, where its parts are: 1.5 behind the motor's can
+USB_ANGLE = -30.0  # where the USB-C socket comes out of the drum, degrees from +x
+TAB_REACH, TAB_HALF = 64.4, 5.5  # the tab the socket is on: how far out, half as wide
+SOCKET_FRONT = 4.9  # how far the socket's mouth is from its own origin (6 pin, C456012)
+SOCKET_HIGH = 3.16  # how high the socket stands on the board
+BOARD_HOLES = [out(angle, 47.0) for angle in (30, 150, 270)]
+BUTTON = (0.0, 46.0)  # the button, through the back cover
 
 
 def rod(radius: float, low: float, high: float, at=(0.0, 0.0)):
@@ -134,19 +161,6 @@ def wheel(teeth: int, module: float, low: float, high: float, at, phase=0.0, hol
             points.append((radius * math.cos(angle), radius * math.sin(angle)))
     shape = Pos(at[0], at[1], low) * extrude(Polygon(*points, align=None), high - low)
     return lightened(shape, at, holes, root * 0.56, root * 0.27, phase) if holes else shape
-
-
-def saw(teeth: int, tip: float, root: float, low: float, high: float, at, phase=0.0):
-    """A wheel whose teeth lean one way: a ratchet's, or an escape wheel's."""
-    step = 2 * math.pi / teeth
-    points = []
-    for tooth in range(teeth):
-        angle = phase + tooth * step
-        for radius, part in ((tip, 0.0), (tip, 0.08), (root, 0.42), (root, 0.86)):
-            points.append(
-                (radius * math.cos(angle + part * step), radius * math.sin(angle + part * step))
-            )
-    return Pos(at[0], at[1], low) * extrude(Polygon(*points, align=None), high - low)
 
 
 def meshing(driver_phase: float, driver: int, driver_at, driven: int, driven_at) -> float:
@@ -208,31 +222,20 @@ def rounded(shape, radius: float, top: bool):
 centre_phase = 0.0
 third_phase = meshing(centre_phase, CENTRE_WHEEL, CENTRE, THIRD_PINION, THIRD)
 fourth_phase = meshing(0.0, THIRD_WHEEL, THIRD, FOURTH_PINION, FOURTH)
-barrel_phase = meshing(0.0, BARREL_PINION, CENTRE, BARREL_WHEEL, BARREL)
-escape_phase = meshing(0.0, FOURTH_WHEEL, FOURTH, ESCAPE_PINION, ESCAPE)
 minute_phase = meshing(0.0, CANNON_PINION, CENTRE, MINUTE_WHEEL, STUD)
 hour_phase = meshing(0.0, MINUTE_PINION, STUD, HOUR_WHEEL, CENTRE)
 
-# the barrel: a drum with the spring in it, and teeth round its edge. It turns on its
-# arbor, which stays still but for being wound, by the square on its end.
-barrel = (
-    wheel(BARREL_WHEEL, GOING, 7, 8.8, BARREL, barrel_phase)
-    + rod(22, 7, 13, BARREL)
-    - rod(20, 12.4, 14, BARREL)
-    + rod(4.5, 12, 13, BARREL)
-    - rod(2.05, 0, 20, BARREL)
-)
-barrel_arbor = (
-    rod(1.9, -9, 15.5, BARREL)
-    + Pos(BARREL[0], BARREL[1], -11.75) * Box(2.7, 2.7, 5.5)
-    + saw(20, 7.5, 6.2, -4.5, -3, BARREL)  # the ratchet that keeps it wound
-)
-# the centre arbor goes right through to the back, for the knob the hands are set by
+# The centre wheel is driven straight off the motor's shaft: its hub slides on over it,
+# with a bore that fits the shaft's two flats, and its arbor goes on forward from there
+# through the front plate, for the motion work and the minute hand.
+# (the shaft is round for its first 4 mm, and flatted beyond)
+shaft_fit = rod(2.55, 2.0, 4.0) + (rod(2.55, 4.0, MOTOR_SHAFT + 0.3) & Pos(0, 0, 7) * Box(3.1, 6, 7))
 centre_wheel = (
-    rod(1.5, -17, 31, CENTRE)
+    rod(1.5, 10.5, 31, CENTRE)
+    + rod(3.8, 2.4, 11, CENTRE)  # the hub
     + wheel(CENTRE_WHEEL, GOING, 4, 6, CENTRE, centre_phase, holes=5)
-    + wheel(BARREL_PINION, GOING, 6.8, 9, CENTRE)
     + wheel(CANNON_PINION, CANNON, 17, 20, CENTRE)
+    - shaft_fit
 )
 third_wheel = (
     rod(1.2, -1.5, 15.5, THIRD)
@@ -243,74 +246,6 @@ fourth_wheel = (
     rod(1.0, -1.5, 24.4, FOURTH)
     + wheel(FOURTH_PINION, GOING, 8.5, 11.5, FOURTH, fourth_phase)
     + wheel(FOURTH_WHEEL, FINE, 12.2, 13.4, FOURTH, holes=4)
-)
-
-# --- the escapement -------------------------------------------------------------------------
-# The pallets reach in at the escape wheel from the pallet fork's side, this far either
-# side of the line between the two: four teeth apart. The wheel is drawn with the gap
-# between two teeth at each of them.
-REACH = 2 * 360 / ESCAPE_TEETH
-to_fork = math.atan2(PALLET[1] - ESCAPE[1], PALLET[0] - ESCAPE[0])
-escape_teeth = saw(
-    ESCAPE_TEETH,
-    ESCAPE_TIP,
-    6.6,
-    7,
-    8,
-    ESCAPE,
-    to_fork + math.radians(REACH) - 0.66 * 2 * math.pi / ESCAPE_TEETH,
-)
-escape_wheel = (
-    rod(0.8, -1.5, 15.5, ESCAPE)
-    + wheel(ESCAPE_PINION, FINE, 11.8, 13.8, ESCAPE, escape_phase)
-    + lightened(escape_teeth, ESCAPE, 5, 3.9, 1.5)
-    + rod(1.6, 7, 11.8, ESCAPE)
-)
-
-
-def pallet_fork():
-    """Two arms that reach in among the escape wheel's teeth, and a lever with a fork on
-    its end that the pin under the balance swings in."""
-    outline = spot(PALLET, 1.7)
-    back = math.degrees(to_fork)
-    for side in (REACH, -REACH):
-        # each arm ends in a pallet, pointing in at the wheel's middle
-        outside = out(back + side, ESCAPE_TIP + 1.7, ESCAPE)
-        inside = out(back + side, ESCAPE_TIP - 1.1, ESCAPE)
-        outline += (
-            strip(PALLET, outside, 1.8, 1.3)
-            + spot(outside, 0.65)
-            + strip(outside, inside, 1.3, 0.5)
-        )
-    toward = math.degrees(math.atan2(BALANCE[1] - PALLET[1], BALANCE[0] - PALLET[0]))
-    far = math.hypot(BALANCE[0] - PALLET[0], BALANCE[1] - PALLET[1])
-    neck = out(toward, far - 3.4, PALLET)
-    outline += strip(PALLET, neck, 1.8, 1.4)
-    across = (-math.sin(math.radians(toward)), math.cos(math.radians(toward)))
-    for side in (1, -1):
-        # the two horns of the fork, one either side of the pin
-        root = (neck[0] + across[0] * side * 1.2, neck[1] + across[1] * side * 1.2)
-        tip = out(toward, 2.6, root)
-        outline += strip(neck, root, 1.2) + strip(root, tip, 1.2, 0.7) + spot(root, 0.6)
-    return raised(outline, 7, 8) + rod(0.6, -1.5, 15.5, PALLET)
-
-
-pallet = pallet_fork()
-
-toward_pallet = math.degrees(math.atan2(PALLET[1] - BALANCE[1], PALLET[0] - BALANCE[0]))
-rim = spot(BALANCE, BALANCE_RIM) - spot(BALANCE, BALANCE_RIM - 1.5) + spot(BALANCE, 1.6)
-for spoke in (0, 60, 120):
-    rim += strip(
-        out(toward_pallet + spoke, BALANCE_RIM - 0.5, BALANCE),
-        out(toward_pallet + spoke + 180, BALANCE_RIM - 0.5, BALANCE),
-        1.2,
-    )
-balance = (
-    rod(0.7, -1.5, 15.5, BALANCE)
-    + raised(rim, 10, 11.5)
-    # under it, the roller with the pin that the fork pushes, and is pushed by
-    + rod(2.3, 8.4, 9.3, BALANCE)
-    + rod(0.45, 7, 8.4, out(toward_pallet, 1.75, BALANCE))
 )
 
 # --- in front of the plates: the motion work ---------------------------------------------
@@ -324,10 +259,6 @@ hour_wheel = (
     + rod(3.0, 20.5, 27.5, CENTRE)
     - rod(1.9, 10, 40, CENTRE)
 )
-# behind the back, the knob that sets the hands: fluted, for a finger and thumb
-knob = rounded(rod(7, -22, -16.5), 1.0, top=False) - rod(1.5, -21, -10)
-for flute in range(14):
-    knob -= rod(1.1, -30, -10, out(flute * 360 / 14, 7.5))
 
 # --- the hands, at the time it is built showing -------------------------------------------
 minutes = MINUTES + SECONDS / 60
@@ -341,29 +272,18 @@ seconds_hand = clockwise(
 
 # --- the plates, and the pillars between them ----------------------------------------------
 PILLARS = [out(angle, PILLAR) for angle in (30, 150, 270)]
-arbors = [
-    (CENTRE, 1.7),
-    (THIRD, 1.4),
-    (FOURTH, 1.2),
-    (BARREL, 2.1),
-    (ESCAPE, 1.0),
-    (PALLET, 0.8),
-    (BALANCE, 0.9),
-]
+arbors = [(CENTRE, 1.7), (THIRD, 1.4), (FOURTH, 1.2)]
 
-back_plate = rod(PLATE, 0, 2)
+# (the back plate has the motor's boss through it, where the centre arbor ran)
+back_plate = rod(PLATE, 0, 2) - rod(MOTOR_BOSS + 0.25, -5, 5)
 
 # The front plate is a rim and bars, so that the wheels show behind it: a bar out to
-# each arbor, and a bridge over the escapement.
-bars = spot(CENTRE, 7) + spot(BARREL, 5.5)
+# each arbor.
+bars = spot(CENTRE, 7)
 for angle in (90, 270):
     bars += strip(CENTRE, out(angle, PLATE - 3), 8)
 for to in (THIRD, STUD):
     bars += strip(CENTRE, out(math.degrees(math.atan2(to[1], to[0])), PLATE - 3), 8)
-# (it is narrow where it crosses the balance, which is what there is to see there)
-bridge = [(out(225, PLATE - 5), 3.2), (BALANCE, 3.0), (PALLET, 3.6), (ESCAPE, 4.4), ((0.0, -42.0), 4.4)]
-for (a, wide_a), (b, wide_b) in zip(bridge, bridge[1:]):
-    bars += strip(a, b, wide_a, wide_b) + spot(a, wide_a / 2 + 0.4) + spot(b, wide_b / 2 + 0.4)
 front_plate = (
     rod(PLATE, 14, 16)
     - rod(PLATE - 10, 10, 20)
@@ -378,8 +298,8 @@ pillars = rod(3.0, 2, 14, PILLARS[0])
 for at in PILLARS[1:]:
     pillars += rod(3.0, 2, 14, at)
 
-# --- the dial: a ring, with a window on the balance, and a mark let into it for each hour --
-dial = rod(DIAL, 24, 26) - rod(39, 20, 30) - rod(BALANCE_RIM + 0.7, 20, 30, BALANCE)
+# --- the dial: a ring, with a mark let into it for each hour -------------------------------
+dial = rod(DIAL, 24, 26) - rod(39, 20, 30)
 marks = None
 for hour in range(12):
     quarter = hour % 3 == 0
@@ -398,16 +318,36 @@ case = (
     - rod(BORE, BACK - 5, 16)
     - rod(SEAT, 10, 30)
     - rod(DIAL + 0.5, 24, FRONT + 5)
-    - rod(BALANCE_RIM + 1.6, 15, 25, BALANCE)  # so that the balance shows through the dial
 )
-# the back: a lid with a lip that goes into the drum, and a hole for the knob and the key
+
+
+def toward_usb(far: float, wide: float, low: float, high: float):
+    """A block reaching out through the drum's wall where the USB socket is: its middle
+    this far out, this wide across, from this high to this."""
+    x, y = out(USB_ANGLE, far)
+    return Pos(x, y, (low + high) / 2) * Rot(0, 0, USB_ANGLE) * Box(10, wide, high - low)
+
+
+# The USB socket stands on a tab of the board that reaches into a notch in the wall, open
+# to the back, so that its mouth comes to the drum's outside: a cable plugs straight in.
+BOARD_BACK = BOARD_FRONT - BOARD_THICK
+case -= toward_usb(61, 2 * TAB_HALF + 0.6, BACK - 1, BOARD_FRONT + SOCKET_HIGH + 0.6)
+
+# the back: a lid with a lip that goes into the drum, a tongue that fills the notch under
+# the board's tab, a hole for the button, with a low ring round it so that it is not
+# pressed by chance, and three posts the board is screwed to
 back_cover = (
     rounded(rod(DRUM, BACK - 3, BACK), 1.2, top=False)
     + rod(BORE - 0.2, BACK, BACK + 2)
     - rod(BORE - 3.5, BACK - 0.01, BACK + 5)
-    - rod(2.3, -30, 0, CENTRE)
-    - rod(3.4, -30, 0, BARREL)
+    + (toward_usb(61, 2 * TAB_HALF + 0.2, BACK - 0.5, BOARD_BACK - 0.2) & rod(DRUM, -50, 0))
+    + rod(5.5, BACK - 4.5, BACK - 2, BUTTON)
+    - rod(2.1, BACK - 10, BACK + 5, BUTTON)
+    # (and a pocket inside for the button's body, which stands 3.5 off the board)
+    - Pos(*BUTTON, BOARD_BACK - 3.5 - 0.3 + 2.5) * Box(6.8, 6.8, 5)
 )
+for at in BOARD_HOLES:
+    back_cover += rod(3.5, BACK - 1, BOARD_BACK, at)
 # the glass, and the bezel that holds it down on the front of the drum
 crystal = rod(56.5, FRONT, FRONT + 2.5)
 bezel = (
@@ -456,9 +396,42 @@ for at in plate_spots:
     back_plate -= at * plate_screw.hole()
     pillars -= at * plate_screw.thread_hole()
 
+# --- the motor, on the back of the back plate -------------------------------------------
+EAR = 0.8  # how thick its ears are
+ears = [(x, MOTOR_OFF) for x in (-MOTOR_EARS / 2, MOTOR_EARS / 2)]
+# (its shaft is flatted both sides for its last 6 mm, 3 across the flats)
+flats = Pos(0, 0, MOTOR_SHAFT - 3) * (Pos(-2.75, 0, 0) * Box(2.5, 6, 6) + Pos(2.75, 0, 0) * Box(2.5, 6, 6))
+motor = (
+    rod(MOTOR_CAN, -MOTOR_DEEP, 0, (0, MOTOR_OFF))
+    + Pos(0, MOTOR_OFF, -EAR) * extrude(SlotOverall(MOTOR_EARS + 7, 7), EAR)
+    # the box its leads come out of, on the far side of the can from the shaft
+    + Pos(0, MOTOR_OFF + 10 + 3.6, -9) * Box(14.6, 7.2, 16)
+    + rod(MOTOR_BOSS, 0, 1.5)
+    + (rod(2.5, 1.5, MOTOR_SHAFT) - flats)
+)
+for at in ears:
+    motor -= rod(2.1, -5, 5, at)
+
+# it is held by a screw through each ear into the back plate, which is tapped for them
+motor_screw = Screw("M3", 4, "button")
+motor_spots = [Pos(*at, -EAR) * BEHIND for at in ears]
+for at in motor_spots:
+    back_plate -= at * motor_screw.thread_hole()
+
+# --- the board, and the screws that hold it to the back cover ----------------------------
+board_screw = Screw("M2.5", 6, "pan")
+board_spots = [Pos(*at, BOARD_FRONT) for at in BOARD_HOLES]
+for at in board_spots:
+    back_cover -= at * board_screw.thread_hole()
+
+# The board as its build makes it, with its parts' own 3D models on it: lying flat, its
+# parts facing forward, and its middle halfway through its thickness.
+board = [Pos(0, 0, BOARD_FRONT - BOARD_THICK / 2) * found.shape for found in read_board("main")]
+
 # --- the stand, as it stands: z is up from here on ----------------------------------------
 MIDDLE = -(BACK + 4 + FRONT - 5) / 2  # the middle of the cradle, front to back
-slab = fillet((Pos(0, MIDDLE, FOOT + 4) * Box(112, 66, 8)).edges().filter_by(Axis.Z), 9)
+SLAB = FRONT - BACK + 21  # how deep the stand is, front to back: a little more than the drum
+slab = fillet((Pos(0, MIDDLE, FOOT + 4) * Box(112, SLAB, 8)).edges().filter_by(Axis.Z), 9)
 slab = chamfer(slab.edges().group_by(Axis.Z)[-1], 1.0)
 cradle_top = HEIGHT - 54
 stand = slab + Pos(0, MIDDLE, (FOOT + 8 + cradle_top) / 2) * Box(
@@ -468,7 +441,7 @@ stand -= stood(rod(DRUM + 0.15, BACK - 10, FRONT + 10))  # the cradle the drum l
 
 feet = None
 for x in (-42, 42):
-    for y in (MIDDLE - 20, MIDDLE + 20):
+    for y in (MIDDLE - SLAB / 2 + 13, MIDDLE + SLAB / 2 - 13):
         foot = Pos(x, y, FOOT / 2) * Cylinder(7, FOOT)
         feet = foot if feet is None else feet + foot
 
@@ -490,8 +463,8 @@ outside = model.group("Case", shell=True)
 face = model.group("Dial and hands")
 plates = model.group("Plates")
 train = model.group("Going train")
-escapement = model.group("Escapement")
 motion = model.group("Motion work")
+electronics = model.group("Electronics")
 fixings = model.group("Screws")
 
 
@@ -507,46 +480,43 @@ def screws(id: str, what: str, screw: Screw, spots, lying: bool, explode):
     )
 
 
-DARK = "#26282b"  # the hands, the marks and the feet: a grey is drawn as it is
-
 # each goes its own way when the model is pulled apart: the front comes off forwards,
 # the movement comes out of the back, and the stand comes away underneath
 model.part("stand", stand, label="Stand", group=outside, color="grey", explode=(0, 0, -40))
-model.part("feet", feet, label="Feet", group=outside, color=DARK, explode=(0, 0, -54))
+model.part("feet", feet, label="Feet", group=outside, color="lightgrey", explode=(0, 0, -54))
 model.part("case", case, label="Case", group=outside)
-model.part("back-cover", stood(back_cover), label="Back cover", group=outside, explode=(0, 104, 0))
+model.part("back-cover", stood(back_cover), label="Back cover", group=outside, explode=(0, 116, 0))
 model.part("bezel", stood(bezel), label="Bezel", group=outside, explode=(0, -88, 0))
 model.part("crystal", stood(crystal), label="Crystal", group=outside, finish="glass", explode=(0, -74, 0))
 
 model.part("dial", stood(dial), label="Dial", group=face, color="white", explode=(0, -38, 0))
-model.part("hour-marks", stood(marks), label="Hour marks", group=face, color=DARK, explode=(0, -44, 0))
+model.part("hour-marks", stood(marks), label="Hour marks", group=face, color="grey", explode=(0, -44, 0))
 model.part("seconds-hand", stood(seconds_hand), label="Seconds hand", group=face, color="red", explode=(0, -30, 0))
-model.part("hour-hand", stood(hour_hand), label="Hour hand", group=face, color=DARK, explode=(0, -50, 0))
-model.part("minute-hand", stood(minute_hand), label="Minute hand", group=face, color=DARK, explode=(0, -56, 0))
+model.part("hour-hand", stood(hour_hand), label="Hour hand", group=face, color="grey", explode=(0, -50, 0))
+model.part("minute-hand", stood(minute_hand), label="Minute hand", group=face, color="grey", explode=(0, -56, 0))
 
-model.part("front-plate", stood(front_plate), label="Front plate", group=plates, color="lightgrey", finish="metal", explode=(0, 14, 0))
-model.part("pillars", stood(pillars), label="Pillars", group=plates, color="lightgrey", finish="metal", explode=(0, 56, 0))
-model.part("back-plate", stood(back_plate), label="Back plate", group=plates, color="lightgrey", finish="metal", explode=(0, 68, 0))
+model.part("front-plate", stood(front_plate), label="Front plate", group=plates, finish="metal", explode=(0, 14, 0))
+model.part("pillars", stood(pillars), label="Pillars", group=plates, finish="metal", explode=(0, 56, 0))
+model.part("back-plate", stood(back_plate), label="Back plate", group=plates, finish="metal", explode=(0, 68, 0))
 
-model.part("barrel", stood(barrel), label="Barrel", group=train, explode=(0, 44, 0))
-model.part("barrel-arbor", stood(barrel_arbor), label="Barrel arbor", group=train, explode=(0, 86, 0))
 model.part("centre-wheel", stood(centre_wheel), label="Centre wheel", group=train, explode=(0, 26, 0))
 model.part("third-wheel", stood(third_wheel), label="Third wheel", group=train, explode=(0, 34, 0))
 model.part("fourth-wheel", stood(fourth_wheel), label="Fourth wheel", group=train, explode=(0, 40, 0))
 
-model.part("escape-wheel", stood(escape_wheel), label="Escape wheel", group=escapement, explode=(0, 24, 0))
-model.part("pallet-fork", stood(pallet), label="Pallet fork", group=escapement, explode=(0, 30, 0))
-model.part("balance", stood(balance), label="Balance", group=escapement, explode=(0, 36, 0))
 
 model.part("minute-wheel", stood(minute_wheel), label="Minute wheel", group=motion, explode=(0, -16, 0))
 model.part("hour-wheel", stood(hour_wheel), label="Hour wheel", group=motion, explode=(0, -24, 0))
-model.part("setting-knob", stood(knob), label="Setting knob", group=motion, explode=(0, 124, 0))
+
+model.part("motor", stood(motor), label="Stepper motor, 28BYJ-48", group=electronics, finish="metal", explode=(0, 84, 0))
+model.part("board", [stood(shape) for shape in board], label="Clock board", group=electronics, explode=(0, 104, 0))
 
 screws("bezel-screws", "Bezel screws", bezel_screw, bezel_spots, True, (0, -104, 0))
 screws("dial-screws", "Dial screws", dial_screw, dial_spots, True, (0, -64, 0))
 screws("movement-screws", "Movement screws", movement_screw, movement_spots, True, (0, -8, 0))
 screws("plate-screws", "Plate screws", plate_screw, plate_spots, True, (0, 78, 0))
-screws("cover-screws", "Back cover screws", cover_screw, cover_spots, True, (0, 116, 0))
+screws("cover-screws", "Back cover screws", cover_screw, cover_spots, True, (0, 128, 0))
+screws("motor-screws", "Motor screws", motor_screw, motor_spots, True, (0, 90, 0))
+screws("board-screws", "Board screws", board_screw, board_spots, True, (0, 96, 0))
 screws("stand-screws", "Stand screws", stand_screw, stand_spots, False, (0, 0, -64))
 model.write()
 
@@ -555,10 +525,6 @@ for name, (x, y) in (
     ("centre", CENTRE),
     ("third", THIRD),
     ("fourth", FOURTH),
-    ("barrel", BARREL),
-    ("escape", ESCAPE),
-    ("pallet", PALLET),
-    ("balance", BALANCE),
     ("stud", STUD),
 ):
     print(f"{name}: [{x:.3f}, 0, {y + HEIGHT:.3f}]")

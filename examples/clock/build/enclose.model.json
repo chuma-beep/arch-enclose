@@ -20,12 +20,12 @@
    "label": "Going train"
   },
   {
-   "id": "escapement",
-   "label": "Escapement"
-  },
-  {
    "id": "motion_work",
    "label": "Motion work"
+  },
+  {
+   "id": "electronics",
+   "label": "Electronics"
   },
   {
    "id": "screws",
@@ -50,7 +50,7 @@
    "id": "feet",
    "label": "Feet",
    "group": "case",
-   "color": "#26282b",
+   "color": "lightgrey",
    "explode": [
     0.0,
     0.0,
@@ -72,7 +72,7 @@
    "group": "case",
    "explode": [
     0.0,
-    104.0,
+    116.0,
     0.0
    ],
    "file": "back-cover.glb",
@@ -120,7 +120,7 @@
    "id": "hour-marks",
    "label": "Hour marks",
    "group": "dial_and_hands",
-   "color": "#26282b",
+   "color": "grey",
    "explode": [
     0.0,
     -44.0,
@@ -146,7 +146,7 @@
    "id": "hour-hand",
    "label": "Hour hand",
    "group": "dial_and_hands",
-   "color": "#26282b",
+   "color": "grey",
    "explode": [
     0.0,
     -50.0,
@@ -159,7 +159,7 @@
    "id": "minute-hand",
    "label": "Minute hand",
    "group": "dial_and_hands",
-   "color": "#26282b",
+   "color": "grey",
    "explode": [
     0.0,
     -56.0,
@@ -172,7 +172,6 @@
    "id": "front-plate",
    "label": "Front plate",
    "group": "plates",
-   "color": "lightgrey",
    "finish": "metal",
    "explode": [
     0.0,
@@ -186,7 +185,6 @@
    "id": "pillars",
    "label": "Pillars",
    "group": "plates",
-   "color": "lightgrey",
    "finish": "metal",
    "explode": [
     0.0,
@@ -200,7 +198,6 @@
    "id": "back-plate",
    "label": "Back plate",
    "group": "plates",
-   "color": "lightgrey",
    "finish": "metal",
    "explode": [
     0.0,
@@ -209,30 +206,6 @@
    ],
    "file": "back-plate.glb",
    "edges": "back-plate.edges.bin"
-  },
-  {
-   "id": "barrel",
-   "label": "Barrel",
-   "group": "going_train",
-   "explode": [
-    0.0,
-    44.0,
-    0.0
-   ],
-   "file": "barrel.glb",
-   "edges": "barrel.edges.bin"
-  },
-  {
-   "id": "barrel-arbor",
-   "label": "Barrel arbor",
-   "group": "going_train",
-   "explode": [
-    0.0,
-    86.0,
-    0.0
-   ],
-   "file": "barrel-arbor.glb",
-   "edges": "barrel-arbor.edges.bin"
   },
   {
    "id": "centre-wheel",
@@ -271,42 +244,6 @@
    "edges": "fourth-wheel.edges.bin"
   },
   {
-   "id": "escape-wheel",
-   "label": "Escape wheel",
-   "group": "escapement",
-   "explode": [
-    0.0,
-    24.0,
-    0.0
-   ],
-   "file": "escape-wheel.glb",
-   "edges": "escape-wheel.edges.bin"
-  },
-  {
-   "id": "pallet-fork",
-   "label": "Pallet fork",
-   "group": "escapement",
-   "explode": [
-    0.0,
-    30.0,
-    0.0
-   ],
-   "file": "pallet-fork.glb",
-   "edges": "pallet-fork.edges.bin"
-  },
-  {
-   "id": "balance",
-   "label": "Balance",
-   "group": "escapement",
-   "explode": [
-    0.0,
-    36.0,
-    0.0
-   ],
-   "file": "balance.glb",
-   "edges": "balance.edges.bin"
-  },
-  {
    "id": "minute-wheel",
    "label": "Minute wheel",
    "group": "motion_work",
@@ -331,16 +268,30 @@
    "edges": "hour-wheel.edges.bin"
   },
   {
-   "id": "setting-knob",
-   "label": "Setting knob",
-   "group": "motion_work",
+   "id": "motor",
+   "label": "Stepper motor, 28BYJ-48",
+   "group": "electronics",
+   "finish": "metal",
    "explode": [
     0.0,
-    124.0,
+    84.0,
     0.0
    ],
-   "file": "setting-knob.glb",
-   "edges": "setting-knob.edges.bin"
+   "file": "motor.glb",
+   "edges": "motor.edges.bin"
+  },
+  {
+   "id": "board",
+   "label": "Clock board",
+   "group": "electronics",
+   "explode": [
+    0.0,
+    104.0,
+    0.0
+   ],
+   "board": "main",
+   "file": "board.glb",
+   "edges": "board.edges.bin"
   },
   {
    "id": "bezel-screws",
@@ -401,11 +352,37 @@
    "finish": "metal",
    "explode": [
     0.0,
-    116.0,
+    128.0,
     0.0
    ],
    "file": "cover-screws.glb",
    "edges": "cover-screws.edges.bin"
+  },
+  {
+   "id": "motor-screws",
+   "label": "Motor screws, M3 \u00d7 4",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    90.0,
+    0.0
+   ],
+   "file": "motor-screws.glb",
+   "edges": "motor-screws.edges.bin"
+  },
+  {
+   "id": "board-screws",
+   "label": "Board screws, M2.5 \u00d7 6",
+   "group": "screws",
+   "finish": "metal",
+   "explode": [
+    0.0,
+    96.0,
+    0.0
+   ],
+   "file": "board-screws.glb",
+   "edges": "board-screws.edges.bin"
   },
   {
    "id": "stand-screws",
@@ -429,7 +406,7 @@
    "label": "Table clock",
    "detail": "every part, in place",
    "kind": "full",
-   "bytes": 14006698
+   "bytes": 30632006
   },
   {
    "file": "step/stand.step",
@@ -438,7 +415,7 @@
    "detail": "",
    "kind": "part",
    "part": "stand",
-   "bytes": 109877
+   "bytes": 109915
   },
   {
    "file": "step/feet.step",
@@ -447,7 +424,7 @@
    "detail": "",
    "kind": "part",
    "part": "feet",
-   "bytes": 17912
+   "bytes": 17928
   },
   {
    "file": "step/case.step",
@@ -456,7 +433,7 @@
    "detail": "",
    "kind": "part",
    "part": "case",
-   "bytes": 148078
+   "bytes": 168163
   },
   {
    "file": "step/back-cover.step",
@@ -465,7 +442,7 @@
    "detail": "",
    "kind": "part",
    "part": "back-cover",
-   "bytes": 105335
+   "bytes": 168070
   },
   {
    "file": "step/bezel.step",
@@ -492,7 +469,7 @@
    "detail": "",
    "kind": "part",
    "part": "dial",
-   "bytes": 231263
+   "bytes": 226224
   },
   {
    "file": "step/hour-marks.step",
@@ -537,7 +514,7 @@
    "detail": "",
    "kind": "part",
    "part": "front-plate",
-   "bytes": 188454
+   "bytes": 93978
   },
   {
    "file": "step/pillars.step",
@@ -555,25 +532,7 @@
    "detail": "",
    "kind": "part",
    "part": "back-plate",
-   "bytes": 44684
-  },
-  {
-   "file": "step/barrel.step",
-   "name": "barrel.step",
-   "label": "Barrel",
-   "detail": "",
-   "kind": "part",
-   "part": "barrel",
-   "bytes": 1056174
-  },
-  {
-   "file": "step/barrel-arbor.step",
-   "name": "barrel-arbor.step",
-   "label": "Barrel arbor",
-   "detail": "",
-   "kind": "part",
-   "part": "barrel-arbor",
-   "bytes": 352072
+   "bytes": 37085
   },
   {
    "file": "step/centre-wheel.step",
@@ -582,7 +541,7 @@
    "detail": "",
    "kind": "part",
    "part": "centre-wheel",
-   "bytes": 1366301
+   "bytes": 1259289
   },
   {
    "file": "step/third-wheel.step",
@@ -603,33 +562,6 @@
    "bytes": 1040941
   },
   {
-   "file": "step/escape-wheel.step",
-   "name": "escape-wheel.step",
-   "label": "Escape wheel",
-   "detail": "",
-   "kind": "part",
-   "part": "escape-wheel",
-   "bytes": 410594
-  },
-  {
-   "file": "step/pallet-fork.step",
-   "name": "pallet-fork.step",
-   "label": "Pallet fork",
-   "detail": "",
-   "kind": "part",
-   "part": "pallet-fork",
-   "bytes": 119210
-  },
-  {
-   "file": "step/balance.step",
-   "name": "balance.step",
-   "label": "Balance",
-   "detail": "",
-   "kind": "part",
-   "part": "balance",
-   "bytes": 129313
-  },
-  {
    "file": "step/minute-wheel.step",
    "name": "minute-wheel.step",
    "label": "Minute wheel",
@@ -648,13 +580,22 @@
    "bytes": 653428
   },
   {
-   "file": "step/setting-knob.step",
-   "name": "setting-knob.step",
-   "label": "Setting knob",
+   "file": "step/motor.step",
+   "name": "motor.step",
+   "label": "Stepper motor, 28BYJ-48",
    "detail": "",
    "kind": "part",
-   "part": "setting-knob",
-   "bytes": 366645
+   "part": "motor",
+   "bytes": 83253
+  },
+  {
+   "file": "step/board.step",
+   "name": "board.step",
+   "label": "Clock board",
+   "detail": "",
+   "kind": "part",
+   "part": "board",
+   "bytes": 17937635
   },
   {
    "file": "step/bezel-screws.step",
@@ -690,7 +631,7 @@
    "detail": "",
    "kind": "part",
    "part": "plate-screws",
-   "bytes": 193334
+   "bytes": 193337
   },
   {
    "file": "step/cover-screws.step",
@@ -699,7 +640,25 @@
    "detail": "",
    "kind": "part",
    "part": "cover-screws",
-   "bytes": 194179
+   "bytes": 194187
+  },
+  {
+   "file": "step/motor-screws.step",
+   "name": "motor-screws.step",
+   "label": "Motor screws, M3 \u00d7 4",
+   "detail": "",
+   "kind": "part",
+   "part": "motor-screws",
+   "bytes": 155405
+  },
+  {
+   "file": "step/board-screws.step",
+   "name": "board-screws.step",
+   "label": "Board screws, M2.5 \u00d7 6",
+   "detail": "",
+   "kind": "part",
+   "part": "board-screws",
+   "bytes": 245623
   },
   {
    "file": "step/stand-screws.step",
@@ -708,7 +667,7 @@
    "detail": "",
    "kind": "part",
    "part": "stand-screws",
-   "bytes": 241459
+   "bytes": 241461
   }
  ]
 }

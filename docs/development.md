@@ -59,10 +59,10 @@ apps/
     installer/ the picture behind the window the installer opens
   marketing/   the website, a Modulato site with its own README
 docs/          how the app works, a page to a subject
-examples/      projects to open and try things on: a table clock, with a tool, a
-               counter stool, to see beside a person, a clip lamp on a wall shelf,
-               with its wire, and an open-source robot arm, read from its CAD file
-               and steered by a tool
+examples/      projects to open and try things on: a table clock, with a tool and
+               a circuit board, a counter stool, to see beside a person, a clip lamp
+               on a wall shelf, with its wire, and an open-source robot arm, read
+               from its CAD file and steered by a tool
 kit/           the exporter a project copies in to write its model (Python), the
                screws it can put in one, the app's own reference scenes, each drawn
                in code and kept as built, the figure of a person that stands in some
@@ -124,7 +124,7 @@ again after a change, with a Python that has build123d.
 
 The examples are not in the app, to keep it small. Each is one
 archive (`clock.tar.br`: its folder as a tar archive, squeezed with Brotli, which makes
-20 MB of the four where the folders are 137), kept with a release of the app's
+26 MB of the four where the folders are 194), kept with a release of the app's
 repository. It is fetched when it is asked for, taken for the example only if it has the
 size and the SHA-256 the app was made to expect, and unpacked. Run from a checkout, the
 app has the examples in [`examples/`](../examples), at the top of the repository, and

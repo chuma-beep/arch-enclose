@@ -64,18 +64,22 @@ button that takes that to Claude.
 ## Examples
 
 [`examples/clock`](../examples/clock) is a project to try it on, and the rest of the app
-with it: a table clock, a mechanical movement in a drum case on a stand. The bezel, the
-dial, the back, the movement and the stand are each screwed on, with screws from the
-app's library in holes cut to fit them, and there is glass over the dial. The movement
-is a whole one, from the barrel to the balance, its wheels cut to the numbers of teeth a
-real one has.
+with it: a table clock, an electric one in a drum case on a stand. The bezel, the dial,
+the back, the movement and the stand are each screwed on, with screws from the app's
+library in holes cut to fit them, and there is glass over the dial. A stepper motor on
+the back of the movement turns the centre wheel once an hour, and the wheels from it to
+the hands are cut to the numbers of teeth a real movement has. Behind the motor is its
+[circuit board](working-with-claude.md#circuit-boards), screwed to the inside of the
+back cover: it keeps the time and steps the motor, from a USB-C socket in the drum's
+wall, and its button comes out through the back. PCB lists it, to open in PCB mode.
 
 Its tool sets the time the hands show, runs it forwards or back at three speeds, or
-keeps it to the computer's clock; at the clock's own speed the balance swings and the
-train goes on in beats, four to the second. Glass shows the movement in its case,
-Explode takes it apart in the order it is put together, and the dial has a window on the
-balance. Open the folder as a project, or, with no projects yet, click it among the
-examples the window shows: that makes a project of a copy of it, where new projects go.
+keeps it to the computer's clock; at the clock's own speed the hands go on in the
+motor's small steps, one every 0.88 s or so. **Set button** holds down the button on the
+back, which runs the hands forward fast. Glass shows the movement in its case, and
+Explode takes it apart in the order it is put together. Open the folder as a project,
+or, with no projects yet, click it among the examples the window shows: that makes a
+project of a copy of it, where new projects go.
 
 [`examples/arm`](../examples/arm) is another: a robot arm that was not drawn here. It is
 the SO-101, an open-source arm, read from its makers' own CAD file

@@ -215,6 +215,10 @@ fetches tscircuit the first time. The parts on it come with their makers' own 3D
 which the build fetches, so that the board in the model is the board as it will be made. [`kit/pcb.md`](../kit/pcb.md) says how a board is
 written and fitted into the model, and is what Claude reads before it makes one.
 
+The [Table clock](projects.md#starting-from-an-example) example has a board to try all
+this on: the one that keeps its time and steps its motor, built and fitted into the case
+behind the motor.
+
 ## Conversations
 
 A project can have any number of conversations, and none of them is deleted while the

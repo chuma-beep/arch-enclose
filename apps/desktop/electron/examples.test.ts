@@ -6,6 +6,7 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import type { Example } from "../shared/examples"
+import { boardsIn } from "./boards"
 import { fetched, ownExporter, startFrom } from "./examples"
 
 let root: string
@@ -133,6 +134,19 @@ describe("startFrom", () => {
       expect(read(`${at}/build/step/base.step`)).toBe("step")
       expect(read(`${at}/enclose.py`)).toBe("# exporter\n")
       expect(read(`${at}/model.py`)).not.toContain("sys.path")
+    })
+
+    it("has its boards come built, though each was written after its build", () => {
+      const dir = unpacked({
+        "model.py": SCRIPT,
+        "pcb/build/main.circuit.json": "[]",
+        "pcb/build/main.preview.json": "[]",
+        "pcb/main.board.json": '{ "name": "Clock board", "finished": true }',
+        "pcb/main.circuit.tsx": "// the board\n",
+      })
+      const [board] = boardsIn(dir)
+      expect(board.outdated).toBe(false)
+      expect(board.preview).toBeNull()
     })
 
     it("leaves no folder behind when a file would land outside it", () => {
