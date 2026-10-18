@@ -43,6 +43,10 @@ day: `2026_10_11_table-clock.step`. So do the folder a group's files go in, the 
 archive, and a [blueprint](blueprints.md#saving)'s sheets; the files inside a folder or
 an archive keep their own names. The settings turn this off (General, Downloads).
 
+Where to save opens in the folder you last saved into, whatever it was (a part, a
+board, an assembly guide, a blueprint), and in Downloads until you have saved anything
+or if that folder has gone. The app remembers it after it is closed, too.
+
 ## Changing the groups by hand
 
 Several parts are picked in the list as in any list, and shown together: hold Cmd and

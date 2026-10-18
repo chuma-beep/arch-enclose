@@ -100,6 +100,7 @@ import { archived, archiveName, GuideServer } from "./guide-page"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
 import { Pictures } from "./pictures"
+import { SaveFolder } from "./saving"
 import {
   folderName,
   folderSize,
@@ -220,6 +221,8 @@ let versions: Versions
 /** the conversation the window shows of each project, by project */
 const showing = new Map<string, string>()
 let settings: SettingsStore
+/** where a dialog to save with opens: where the last thing was saved (see saving.ts) */
+let saving: SaveFolder
 /** the agents on this machine: Claude Code, Codex, Grok, opencode */
 let providers: Providers
 let python: Python
@@ -1214,12 +1217,10 @@ function wire() {
         manifest && resolveInside(path.dirname(manifest), String(file))
       if (!win || !source || !fs.existsSync(source)) return false
       const picked = await dialog.showSaveDialog(win, {
-        defaultPath: path.join(
-          app.getPath("downloads"),
-          path.basename(String(name))
-        ),
+        defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
+      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.copyFile(source, picked.filePath)
       analytics?.record("model saved", { as: "files", files: 1 })
       return true
@@ -1284,12 +1285,10 @@ function wire() {
       )
       if (!fs.existsSync(source)) return false
       const picked = await dialog.showSaveDialog(win, {
-        defaultPath: path.join(
-          app.getPath("downloads"),
-          path.basename(String(name))
-        ),
+        defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
+      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.copyFile(source, picked.filePath)
       analytics?.record("board saved", { as: what })
       return true
@@ -1352,13 +1351,11 @@ function wire() {
       if (!win || !found) return false
       const { guide, manifest } = found
       const picked = await dialog.showSaveDialog(win, {
-        defaultPath: path.join(
-          app.getPath("downloads"),
-          `${archiveName(guide)}.zip`
-        ),
+        defaultPath: saving.offer(`${archiveName(guide)}.zip`),
         filters: [{ name: "Zip archive", extensions: ["zip"] }],
       })
       if (picked.canceled || !picked.filePath) return false
+      saving.savedIn(path.dirname(picked.filePath))
       // The parts are read from where the model's build left them, and go nowhere but
       // into the archive: nothing of a guide is copied until it is taken away.
       const files = await archived(
@@ -1416,10 +1413,11 @@ function wire() {
       const picked = await dialog.showOpenDialog(win, {
         message: `Choose where the folder "${called}" goes, with its ${wanted.length} STEP files`,
         buttonLabel: "Save here",
-        defaultPath: app.getPath("downloads"),
+        defaultPath: saving.folder(),
         properties: ["openDirectory", "createDirectory"],
       })
       if (picked.canceled || !picked.filePaths[0]) return false
+      saving.savedIn(picked.filePaths[0])
       // a folder of its own, numbered where the name is taken: nothing is written over
       const into = makeFolder(picked.filePaths[0], called)
       for (const { source, name } of wanted)
@@ -1444,12 +1442,10 @@ function wire() {
       )
       if (wanted.length === 0) return false
       const picked = await dialog.showSaveDialog(win, {
-        defaultPath: path.join(
-          app.getPath("downloads"),
-          path.basename(String(name))
-        ),
+        defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
+      saving.savedIn(path.dirname(picked.filePath))
       const archive = zipOf(
         await Promise.all(
           wanted.map(async ({ source, name }) => ({
@@ -1503,16 +1499,18 @@ function wire() {
         const picked = await dialog.showOpenDialog(win, {
           message: `Choose where the folder "${name}" goes, with its ${wanted.length} ${String(format).toUpperCase()} files`,
           buttonLabel: "Save here",
-          defaultPath: app.getPath("downloads"),
+          defaultPath: saving.folder(),
           properties: ["openDirectory", "createDirectory"],
         })
         if (picked.canceled || !picked.filePaths[0]) return false
+        saving.savedIn(picked.filePaths[0])
         into = picked.filePaths[0]
       } else {
         const picked = await dialog.showSaveDialog(win, {
-          defaultPath: path.join(app.getPath("downloads"), name),
+          defaultPath: saving.offer(name),
         })
         if (picked.canceled || !picked.filePath) return false
+        saving.savedIn(path.dirname(picked.filePath))
         into = picked.filePath
       }
       // each part read once, however many of the files have it
@@ -1566,13 +1564,11 @@ function wire() {
     async (_, name: unknown, svg: unknown) => {
       if (!win || typeof svg !== "string") return false
       const picked = await dialog.showSaveDialog(win, {
-        defaultPath: path.join(
-          app.getPath("downloads"),
-          path.basename(String(name))
-        ),
+        defaultPath: saving.offer(path.basename(String(name))),
         filters: [{ name: "SVG", extensions: ["svg"] }],
       })
       if (picked.canceled || !picked.filePath) return false
+      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.writeFile(picked.filePath, svg, "utf8")
       analytics?.record("model saved", { as: "drawings", files: 1 })
       return true
@@ -1598,10 +1594,11 @@ function wire() {
       const picked = await dialog.showOpenDialog(win, {
         message: `Choose where the folder "${called}" goes, with its ${wanted.length} SVG files`,
         buttonLabel: "Save here",
-        defaultPath: app.getPath("downloads"),
+        defaultPath: saving.folder(),
         properties: ["openDirectory", "createDirectory"],
       })
       if (picked.canceled || !picked.filePaths[0]) return false
+      saving.savedIn(picked.filePaths[0])
       // a folder of its own, numbered where the name is taken: nothing is written over
       const into = makeFolder(picked.filePaths[0], called)
       for (const { name, svg } of wanted)
@@ -2010,6 +2007,9 @@ if (!app.requestSingleInstanceLock()) {
       (id, root, board) => previews.written(id, root, board)
     )
     changes = new Changes(path.join(data, "changes"))
+    saving = new SaveFolder(path.join(data, "save-folder"), () =>
+      app.getPath("downloads")
+    )
     versions = new Versions(path.join(data, "versions"))
     pictures = new Pictures(path.join(data, "pictures"))
     connection = new Connection({
