@@ -14,6 +14,8 @@ const left = (
 ): ConversationSummary => ({
   id,
   title: `About ${id}`,
+  name: null,
+  version: 1,
   provider: "claude",
   status,
   since: null,

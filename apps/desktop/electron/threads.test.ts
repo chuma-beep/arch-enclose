@@ -1022,6 +1022,63 @@ describe("what is said while a conversation is being answered", () => {
   })
 })
 
+describe("which version of the project a conversation is", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("goes by when each began, and stays so when an earlier one is carried on", async () => {
+    const { threads, say, go, idle } = talking(dir)
+    const answered = async (conversation: string, times: number) => {
+      await until(
+        () =>
+          threads
+            .items(ID, conversation)
+            .filter((item) => item.kind === "assistant").length >= times
+      )
+      await idle()
+    }
+    const versions = () =>
+      threads.summaries(ID).map(({ id, version }) => ({ id, version }))
+    go()
+    const first = say("Make a box", null) as string
+    await answered(first, 1)
+    const second = say("Make a tray", null) as string
+    await answered(second, 1)
+    expect(versions()).toEqual([
+      { id: second, version: 2 },
+      { id: first, version: 1 },
+    ])
+    // the earlier one, carried on, is the latest, and still the first version
+    say("And a lid", first)
+    await answered(first, 2)
+    expect(versions()).toEqual([
+      { id: first, version: 1 },
+      { id: second, version: 2 },
+    ])
+  })
+
+  it("has the name it was given, and none again once that is taken away", () => {
+    const { threads, say } = talking(dir)
+    const into = say("Make a box", null) as string
+    threads.rename(ID, into, "  The box ")
+    expect(threads.summaries(ID)[0]).toMatchObject({
+      name: "The box",
+      title: "The box",
+    })
+    threads.rename(ID, into, "")
+    expect(threads.summaries(ID)[0]).toMatchObject({
+      name: null,
+      title: "Make a box",
+    })
+    threads.stop(ID)
+  })
+})
+
 describe("versioning", () => {
   const lines = versioning((set, name) => `${set}__${name}`).join("\n")
 

@@ -1370,6 +1370,15 @@ export class Threads {
   /** A project's conversations as the sidebar shows them, the latest first. */
   summaries(projectId: string): ConversationSummary[] {
     const { conversations, run, waiting, job } = this.book(projectId)
+    // which version of the project each is, by when it began: one with nothing said in
+    // it yet is the latest, and of two begun at once the order is by id, to stay put
+    const begun = (conversation: Conversation) =>
+      conversation.items[0]?.at ?? Infinity
+    const versions = new Map(
+      [...conversations.values()]
+        .sort((a, b) => begun(a) - begun(b) || a.id.localeCompare(b.id))
+        .map((conversation, index) => [conversation, index + 1])
+    )
     return [...conversations.values()]
       .sort(
         (a, b) =>
@@ -1387,6 +1396,8 @@ export class Threads {
         return {
           id: conversation.id,
           title: conversation.name ?? (first ? firstLine(wordsOf(first)) : ""),
+          name: conversation.name,
+          version: versions.get(conversation)!,
           provider: conversation.provider,
           status: !running
             ? "idle"

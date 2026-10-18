@@ -760,9 +760,10 @@ function RebuildOffer({ project }: { project: Project }) {
 }
 
 /**
- * What the conversation goes by, at the top of it. Clicked, it is written over: Enter,
- * or clicking away, keeps what is written, and Esc leaves it as it was. Left empty, the
- * conversation goes back to going by the first thing said in it.
+ * What the conversation goes by, at the top of it: the name it was given, or else which
+ * version of the project it is. Clicked, it is written over: Enter, or clicking away,
+ * keeps what is written, and Esc leaves it as it was. Left empty, the conversation goes
+ * back to going by its version.
  */
 function Name({
   projectId,
@@ -776,6 +777,7 @@ function Name({
   const left = React.useRef(false)
   const NAME = "truncate text-sm font-medium"
   if (!conversation) return <h2 className={NAME}>New conversation</h2>
+  const shown = conversation.name ?? `Version ${conversation.version}`
   if (written === null)
     return (
       <h2 className="no-drag -ml-1.5 flex min-w-0">
@@ -784,14 +786,14 @@ function Name({
           title="Rename"
           onClick={() => {
             left.current = false
-            setWritten(conversation.title)
+            setWritten(shown)
           }}
           className={cn(
             NAME,
             "h-7 cursor-text rounded-md px-1.5 text-left outline-none hover:bg-muted focus-visible:bg-muted"
           )}
         >
-          {conversation.title}
+          {shown}
         </button>
       </h2>
     )
@@ -801,7 +803,7 @@ function Name({
     if (left.current) return
     left.current = true
     setWritten(null)
-    if (keep && written.trim() !== conversation.title)
+    if (keep && written.trim() !== shown)
       void window.cad.thread.rename(projectId, conversation.id, written)
   }
   return (

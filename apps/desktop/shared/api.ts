@@ -28,6 +28,13 @@ export type ConversationSummary = {
   id: string
   /** what it goes by: the name it was given, or else the first thing said in it */
   title: string
+  /** the name it was given, if it has been given one */
+  name: string | null
+  /**
+   * Which version of the project it is: the how-manyth of the project's conversations
+   * to have begun, from 1. Carrying on an earlier one leaves it as it was.
+   */
+  version: number
   /** whose agent it is had with: the one it began with, and is carried on with */
   provider: ProviderId
   status: ThreadStatus

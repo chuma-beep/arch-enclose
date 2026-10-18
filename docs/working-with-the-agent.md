@@ -262,8 +262,10 @@ is what spreads them out, and any of them can be opened and carried on where it 
 off. One thing at a time is done in a project's folder, so only one of them runs at
 once.
 
-A conversation goes by the first thing said in it, until it is given a name: click the
-name at the top of the conversation and write another.
+At the top of a conversation is which version of the project it is: **Version 1** for the
+first conversation had about it, **Version 2** for the next, and so on, by when each
+began. Click it to give the conversation a name instead; left empty, it goes back to its
+version. Under a project's card, one with no name goes by the first thing said in it.
 
 A card says the last of its conversation in two lines: what was asked, while the agent
 is at work on it, and otherwise what was last said, which of a reply is the short part.
