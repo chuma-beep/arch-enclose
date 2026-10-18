@@ -408,7 +408,8 @@
 
 /* A circuit board that is being made, and has nothing of it yet to show: a square of a
    board turns round, slowly, seen from above at a slant (components/pcb/turning-board.tsx).
-   Its edge is the same square again, darker, a little under it. */
+   It is in the theme's colour for a board's mask, and its edge is the same square again,
+   darker, a little under it. */
 @keyframes turning-board {
   from {
     transform: rotateX(56deg) rotateZ(0deg);
@@ -425,7 +426,7 @@
   position: relative;
   height: 100%;
   border-radius: 6%;
-  background: #24573a;
+  background: var(--board-mask);
   transform-style: preserve-3d;
   transform: rotateX(56deg) rotateZ(30deg);
   animation: turning-board 9s linear infinite;
@@ -435,7 +436,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: #163a25;
+  background: color-mix(in oklab, var(--board-mask), black 35%);
   transform: translateZ(-4px);
 }
 @media (prefers-reduced-motion: reduce) {

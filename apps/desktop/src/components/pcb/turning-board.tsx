@@ -16,25 +16,25 @@ const HOLES = [
 /**
  * A board turning round, slowly, seen from above at a slant: where one is being made and
  * there is nothing of it yet to show. Only a square of a board, with a chip, a row of
- * pads each side of it, and a hole in each corner; in the colours of a board in 3D. Its
- * size is what it is given.
+ * pads each side of it, and a hole in each corner; in the theme's colours for a board in
+ * 3D, the chip in its shade for chips' packages. Its size is what it is given.
  */
 export function TurningBoard({ className }: { className?: string }) {
   return (
     <div aria-hidden className={cn("turning-board", className)}>
       <div className="turning-board-face">
-        <span className="absolute top-[34%] left-[26%] h-[32%] w-[48%] rounded-[3%] bg-[#55585e]" />
+        <span className="absolute top-[34%] left-[26%] h-[32%] w-[48%] rounded-[3%] bg-[var(--components-mid)]" />
         {PADS.map(([x, y]) => (
           <span
             key={`${x}:${y}`}
-            className="absolute h-[9%] w-[5%] -translate-1/2 rounded-[1px] bg-[#d8c17b]"
+            className="absolute h-[9%] w-[5%] -translate-1/2 rounded-[1px] bg-[var(--board-pads)]"
             style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
           />
         ))}
         {HOLES.map(([x, y]) => (
           <span
             key={`${x}:${y}`}
-            className="absolute size-[9%] -translate-1/2 rounded-full border-[1.5px] border-[#b07a52] bg-[#0f2a18]"
+            className="absolute size-[9%] -translate-1/2 rounded-full border-[1.5px] border-[var(--board-pads)] bg-[color-mix(in_oklab,var(--board-mask),black_60%)]"
             style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
           />
         ))}

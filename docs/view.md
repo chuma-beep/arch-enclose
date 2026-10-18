@@ -121,9 +121,9 @@ colour (red, orange, yellow, lime, green, cyan, blue, indigo, violet, pink), and
 a light grey and a grey. A model can name one for a part; any other colour it gives, or
 its files carry, is drawn as the nearest of them, except greys, white and black, which
 are drawn as they are, and bare metal. A part given no colour takes the one that falls
-to its group. Circuit boards are drawn in green, as the list of them pictures them, and in
-a model with one in it green is theirs alone: any other part that would be green is drawn
-in indigo, unless you give it green yourself. Nothing in the project's files is changed
+to its group. Circuit boards are drawn in green, and in a model with one in it green is
+theirs alone: any other part that would be green is drawn in indigo, unless you give it
+green yourself. Nothing in the project's files is changed
 by this: it is only how the app draws them.
 
 ### Glass

@@ -1,16 +1,17 @@
 // A picture of each of a project's circuit boards, for the list of them: the board in 3D,
-// as tscircuit built it, from its front right corner and from above, in the app's own
-// colours (see `inOurGreen`). They are drawn off screen, by a renderer of their own that
-// is thrown away when it is done.
+// as tscircuit built it, from its front right corner and from above, in the theme's
+// colours for a board, as PCB mode draws it (see `inBoardColours`). They are drawn off
+// screen, by a renderer of their own that is thrown away when it is done.
 import * as React from "react"
 import * as THREE from "three"
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
 
 import type { BoardSummary } from "@shared/api"
+import type { PcbColours } from "@shared/theme-format"
 import { frame, stage } from "@/components/viewport/thumbnails"
 import { useThemeColors } from "@/lib/css-color"
 import { boardUrl } from "./boards"
-import { BOARD_ITSELF } from "./colours"
+import { boardPaint, inOurColours, inShade, shadedOf } from "./colours"
 
 /** Pixels a side: twice the size they are shown at, for sharp screens. */
 const PICTURE = 400
@@ -47,95 +48,44 @@ export async function loadBoard(url: string): Promise<THREE.Group> {
 }
 
 /**
- * The colour of what is on a board, in its picture: near black, short of it so that the
- * light still shows each part's shape, and dark against the board's light green.
+ * A board as its pictures have it, as PCB mode draws it (see colours.ts): the board
+ * itself in the theme's colours for a board, and what is on it that is a grey in the
+ * theme's shade for greys as light. What else is on it (an LED, gold) is as it was.
  */
-const ON_BOARD = "#262626"
-/**
- * How light tscircuit's own green is, which most of a board is (its mask): of white, as
- * light is counted before it is shown. Each of the board's colours is drawn as much
- * lighter or darker than the app's green as it is than that.
- */
-const THEIR_GREEN = 0.059
-/**
- * How many times lighter than tscircuit's green a colour is when it is drawn as dark as
- * what is on the board: its pads and its lettering, which are drawn as part of it.
- */
-const MARKED_AT = 4
-
-/**
- * A board as the list of them pictures it, as the app draws a part: the board itself in
- * the app's green, and what is on it near black, its parts and the pads and lettering
- * drawn on it alike. The mask is that green, and the rest of the board darker as it was
- * darker than tscircuit's own green, or the lighter it was the nearer what is on it:
- * copper a little darker green, pads and lettering near black.
- */
-function inOurGreen(
-  board: THREE.Object3D,
-  /** the green the app draws a part in, as the theme the window is in has it */
-  boardGreen: string
-) {
-  const glsl = (colour: THREE.Color) =>
-    `vec3(${colour
-      .toArray()
-      .map((value) => value.toFixed(4))
-      .join(", ")})`
-  const greenColour = new THREE.Color(boardGreen)
-  const green = glsl(greenColour)
-  const marked = glsl(new THREE.Color(ON_BOARD))
+export function inBoardColours(board: THREE.Object3D, colours: PcbColours) {
+  const paint = boardPaint(colours)
+  // (parts of one kind share their materials: each is done the once)
+  const done = new Set<THREE.Material>()
   board.traverse((thing) => {
     if (!(thing instanceof THREE.Mesh)) return
-    const materials: THREE.Material[] = Array.isArray(thing.material)
-      ? thing.material
-      : [thing.material]
-    const painted = materials.map((material) => {
+    for (const material of [thing.material as THREE.Material].flat()) {
+      if (done.has(material)) continue
+      done.add(material)
       if (
-        !BOARD_ITSELF.test(material.name) ||
+        inOurColours(material, paint) !== null ||
         !(material instanceof THREE.MeshStandardMaterial)
-      ) {
-        material.dispose()
-        return new THREE.MeshStandardMaterial({
-          color: ON_BOARD,
-          roughness: 0.7,
-          metalness: 0,
-        })
-      }
-      // its edge has no picture on it, only a colour: the app's green, a little darker
-      if (!material.map) {
-        material.color.copy(greenColour).multiplyScalar(0.8)
-        return material
-      }
-      material.onBeforeCompile = (shader) => {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <map_fragment>",
-          `#include <map_fragment>
-          float lighter = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / ${THEIR_GREEN.toFixed(3)};
-          diffuseColor.rgb = lighter <= 1.0
-            ? ${green} * lighter
-            : mix(${green}, ${marked}, min(1.0, (lighter - 1.0) / ${(MARKED_AT - 1).toFixed(1)}));`
-        )
-      }
-      material.customProgramCacheKey = () =>
-        `board in the app's green ${boardGreen}`
-      return material
-    })
-    thing.material = Array.isArray(thing.material) ? painted : painted[0]
+      )
+        continue
+      const shaded = shadedOf(material.color)
+      if (shaded) inShade(shaded, colours, material.color)
+    }
   })
 }
 
 /**
- * The pictures drawn, by board, by when it was built and by the green it was drawn in:
- * drawn again only when it is built again, or the window is put in a theme of another.
+ * The pictures drawn, by board, by when it was built and by the colours it was drawn in
+ * (as JSON): drawn again only when it is built again, or the window is put in a theme
+ * that colours a board otherwise.
  */
 const pictured = new Map<string, string>()
-const pictureOf = (projectId: string, board: BoardSummary, green: string) =>
-  `${projectId}:${board.id}:${board.built}:${green}`
+const pictureOf = (projectId: string, board: BoardSummary, colours: string) =>
+  `${projectId}:${board.id}:${board.built}:${colours}`
 
 /** A picture of each of some boards, handed over as a data URL as each is drawn. */
 async function draw(
   projectId: string,
   boards: BoardSummary[],
-  green: string,
+  colours: PcbColours,
   each: (board: BoardSummary, url: string) => void,
   stopped: () => boolean
 ) {
@@ -144,6 +94,8 @@ async function draw(
   renderer.setSize(PICTURE / 2, PICTURE / 2, false)
   renderer.setClearColor(0x000000, 0)
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  // as PCB mode has them drawn (react-three-fiber's way)
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
   const { scene } = stage()
   const camera = new THREE.OrthographicCamera()
   try {
@@ -156,7 +108,7 @@ async function draw(
         break
       }
       if (!loaded) continue
-      inOurGreen(loaded, green)
+      inBoardColours(loaded, colours)
       scene.add(loaded)
       loaded.updateMatrixWorld(true)
       frame(camera, new THREE.Box3().setFromObject(loaded), BOARD_FROM, FILL)
@@ -182,22 +134,23 @@ export function useBoardPictures(
 ): Record<string, string> {
   // (counts the pictures drawn since this was up, to show each as it is drawn)
   const [, setDrawn] = React.useState(0)
-  const { green } = useThemeColors().palette
+  // (by what they are, and not by which object has them)
+  const colours = JSON.stringify(useThemeColors().pcb)
   React.useEffect(() => {
     const wanted = boards.filter(
       (board) =>
         board.model &&
         board.built !== null &&
-        !pictured.has(pictureOf(projectId, board, green))
+        !pictured.has(pictureOf(projectId, board, colours))
     )
     if (wanted.length === 0) return
     let stopped = false
     void draw(
       projectId,
       wanted,
-      green,
+      JSON.parse(colours) as PcbColours,
       (board, url) => {
-        pictured.set(pictureOf(projectId, board, green), url)
+        pictured.set(pictureOf(projectId, board, colours), url)
         if (!stopped) setDrawn((count) => count + 1)
       },
       () => stopped
@@ -205,10 +158,10 @@ export function useBoardPictures(
     return () => {
       stopped = true
     }
-  }, [projectId, boards, green])
+  }, [projectId, boards, colours])
   return Object.fromEntries(
     boards.flatMap((board) => {
-      const url = pictured.get(pictureOf(projectId, board, green))
+      const url = pictured.get(pictureOf(projectId, board, colours))
       return url ? [[board.id, url]] : []
     })
   )
