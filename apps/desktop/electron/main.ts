@@ -534,6 +534,8 @@ const unturned = new Map<string, string>()
  * says why.
  */
 function follow() {
+  // (turns stopped for the app to be quit end with nothing to be turned to)
+  if (leaving !== null) return
   for (const [id, conversationId] of showing) {
     if (versions.on(id) === conversationId) continue
     if (unturned.get(id) === conversationId) continue
@@ -2447,13 +2449,14 @@ async function mayLeave(as: "Quit" | "Restart"): Promise<boolean> {
 
 /**
  * Stop what is under way, for the app to be quit: models being made, and turns and
- * boards, each seen to its end and its commit, for QUIT_WAIT_MS at most.
+ * boards, each seen to its end and its commit, for QUIT_WAIT_MS at most. (What is being
+ * pushed is not waited for: it goes with the next push.)
  */
 async function settle() {
   for (const stop of builds.values()) stop()
   if (!threads) return
   await Promise.race([
-    threads.stopAll().then(() => backups?.settled()),
+    threads.stopAll().then(() => backups?.committed()),
     new Promise((resolve) => setTimeout(resolve, QUIT_WAIT_MS)),
   ])
 }

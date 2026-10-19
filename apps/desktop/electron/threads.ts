@@ -2515,6 +2515,13 @@ export class Threads {
       this.safely("projects", () => this.deps.projects.refresh(projectId))
       this.write(projectId, conversation)
       if (this.books.get(projectId) === book) {
+        // with nothing at work in the folder any more, a project that was given its
+        // shape as the board was asked for can take its name (before its commit, as
+        // after a turn)
+        if (!book.run)
+          this.safely("projects", () =>
+            this.deps.projects.christen(projectId, this.deps.onRenamed)
+          )
         const said = job.item.items.findLast((one) => one.kind === "assistant")
         this.deps.onTurned(
           projectId,
@@ -2523,12 +2530,6 @@ export class Threads {
           conversation.name ?? null,
           said?.kind === "assistant" ? said.text : ""
         )
-        // with nothing at work in the folder any more, a project that was given its
-        // shape as the board was asked for can take its name
-        if (!book.run)
-          this.safely("projects", () =>
-            this.deps.projects.christen(projectId, this.deps.onRenamed)
-          )
         // what was said in another conversation meanwhile goes on now
         const waited = book.waiting[0]
         if (!book.run && waited) this.next(projectId, book, waited.conversation)

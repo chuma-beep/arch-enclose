@@ -153,18 +153,16 @@ export class Backups {
       .sort((a, b) => b.at - a.at)
   }
 
-  /** Resolves once all that was asked of every project until now is done, or has failed. */
-  async settled(): Promise<void> {
-    await Promise.all([...this.queues.values()])
-  }
-
   /**
    * Resolves once what was asked until now to be committed in a project has been, or
    * could not be: what it was asked of is the folder as it is now. (It does not wait
-   * for what is pushed.)
+   * for what is pushed after it.)
    */
-  async committed(id: string): Promise<void> {
-    await this.committing.get(id)
+  async committed(id?: string): Promise<void> {
+    // (of every project, where none is named)
+    await (id === undefined
+      ? Promise.all([...this.committing.values()])
+      : this.committing.get(id))
   }
 
   /** Something is to be committed in a project: call what this returns once it has been. */
