@@ -465,7 +465,9 @@ function keepColours(id: string) {
 /**
  * Have a project's folder be one of its conversations': put as that one left it, where
  * each has the project its own way, and the view told to show the model as it then is.
- * Resolves to whether the folder is that conversation's alone.
+ * Resolves to whether the folder is that conversation's alone. Rejects, in words to
+ * show, where the folder could not be copied aside or put as that one left it: the
+ * window is not told it was.
  */
 async function turnTo(id: string, conversationId: string): Promise<boolean> {
   const project = projects.get(id)
@@ -489,19 +491,41 @@ async function turnTo(id: string, conversationId: string): Promise<boolean> {
 }
 
 /**
+ * The conversation each project's folder could not be made, the last time the window
+ * showed it: it is not tried again by itself, to be said again at every turn of
+ * anything, but once another is shown, or a message is sent in it.
+ */
+const unturned = new Map<string, string>()
+
+/**
  * Have each project's folder be the conversation's that the window shows of it, where
  * it is not already: but not while Claude is at work there, or files are being made a
- * model of. It is seen to when that is over.
+ * model of. It is seen to when that is over. Where it cannot be done, the conversation
+ * says why.
  */
 function follow() {
   for (const [id, conversationId] of showing) {
     if (versions.on(id) === conversationId) continue
+    if (unturned.get(id) === conversationId) continue
     if (threads.working(id) || builds.has(id)) continue
     if (!threads.summaries(id).some((one) => one.id === conversationId)) {
       showing.delete(id)
       continue
     }
-    void turnTo(id, conversationId).catch(() => {})
+    void turnTo(id, conversationId).then(
+      () => {
+        if (unturned.get(id) === conversationId) unturned.delete(id)
+      },
+      (error: unknown) => {
+        unturned.set(id, conversationId)
+        threads.noted(
+          id,
+          conversationId,
+          error instanceof Error ? error.message : String(error),
+          "error"
+        )
+      }
+    )
   }
 }
 
@@ -1193,6 +1217,7 @@ function wire() {
     threads.forget(project.id)
     changes.forget(project.id)
     showing.delete(project.id)
+    unturned.delete(project.id)
     versions.forget(project.id)
     pictures.forget(project.id)
     // a model still being made of its files is given up on
@@ -1660,6 +1685,8 @@ function wire() {
       if (typeof id !== "string" || typeof conversationId !== "string") return
       if (!projects.get(id)) return
       showing.set(id, conversationId)
+      // shown again, it is tried again
+      unturned.delete(id)
       follow()
     }
   )

@@ -207,6 +207,87 @@ describe("Versions", () => {
     expect(read("build/half.glb")).toBeNull()
   })
 
+  it("does not take a folder it cannot read for an empty one, and stays the conversation's it was", async () => {
+    const versions = new Versions(kept)
+    await versions.turnTo("p1", "a", folder)
+    await versions.turnTo("p1", "b", folder)
+    write("model.py", "sphere(5)")
+    // the folder is not there for a while (a drive that is not plugged in, say)
+    const away = `${folder}-away`
+    fs.renameSync(folder, away)
+    await expect(versions.turnTo("p1", "a", folder)).rejects.toThrow(
+      /could not be copied aside/
+    )
+    expect(versions.on("p1")).toBe("b")
+    fs.renameSync(away, folder)
+    // nothing was lost of either: b's is in the folder still, and a's is put back
+    expect(read("model.py")).toBe("sphere(5)")
+    await versions.turnTo("p1", "a", folder)
+    expect(read("model.py")).toBe("box(10)")
+    await versions.turnTo("p1", "b", folder)
+    expect(read("model.py")).toBe("sphere(5)")
+  })
+
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "says when a folder could not be put as a conversation left it, and puts it so the next time",
+    async () => {
+      const versions = new Versions(kept)
+      await versions.turnTo("p1", "a", folder)
+      await versions.turnTo("p1", "b", folder)
+      write("build/lid.glb", "ROUND LID")
+      write("build/ball.glb", "BALL")
+      // nothing can be made or taken away in the folder's build folder for now
+      fs.chmodSync(path.join(folder, "build"), 0o555)
+      try {
+        await expect(versions.turnTo("p1", "a", folder)).rejects.toThrow(
+          /could not be put as this conversation left it/
+        )
+        expect(versions.on("p1")).toBe("b")
+      } finally {
+        fs.chmodSync(path.join(folder, "build"), 0o755)
+      }
+      expect(await versions.turnTo("p1", "a", folder)).toEqual({
+        from: "b",
+        to: "a",
+        restored: true,
+      })
+      expect(read("build/lid.glb")).toBe("LID")
+      expect(read("build/ball.glb")).toBeNull()
+      await versions.turnTo("p1", "b", folder)
+      expect(read("build/lid.glb")).toBe("ROUND LID")
+      expect(read("build/ball.glb")).toBe("BALL")
+    }
+  )
+
+  it("does not empty a folder for a copy with nothing in it that does not say it was made so", async () => {
+    const versions = new Versions(kept)
+    await versions.turnTo("p1", "a", folder)
+    await versions.turnTo("p1", "b", folder)
+    // a copy as an earlier version could make it, of a folder it could not read
+    const copied = path.join(kept, "p1", "a")
+    fs.rmSync(copied, { recursive: true })
+    fs.mkdirSync(path.join(copied, "files"), { recursive: true })
+    fs.writeFileSync(path.join(copied, "stood.json"), "{}")
+    expect(await versions.turnTo("p1", "a", folder)).toEqual({
+      from: "b",
+      to: "a",
+      restored: false,
+    })
+    expect(read("model.py")).toBe("box(10)")
+    expect(versions.on("p1")).toBe("a")
+  })
+
+  it("empties a folder for a conversation that left it with nothing in it", async () => {
+    fs.rmSync(folder, { recursive: true })
+    fs.mkdirSync(folder)
+    const versions = new Versions(kept)
+    await versions.turnTo("p1", "a", folder)
+    await versions.turnTo("p1", "b", folder)
+    write("model.py", "box(10)")
+    await versions.turnTo("p1", "a", folder)
+    expect(read("model.py")).toBeNull()
+  })
+
   it("is busy for as long as a folder is being put another way", async () => {
     const versions = new Versions(kept)
     const turning = versions.turnTo("p1", "a", folder)

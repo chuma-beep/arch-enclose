@@ -86,7 +86,11 @@ const LEFT_OUT = new Set([
 
 type Standing = { path: string; size: number; mtimeMs: number }
 
-/** Every file of a folder that is the project's own, as it stands. Null if there is too much. */
+/**
+ * Every file of a folder that is the project's own, as it stands. Null if there is too
+ * much. Rejects where the folder, or a folder in it, cannot be read: what it has then is
+ * not known, and is not to be taken for nothing.
+ */
 export async function filesOf(folder: string): Promise<Standing[] | null> {
   const found: Standing[] = []
   let bytes = 0
@@ -96,8 +100,10 @@ export async function filesOf(folder: string): Promise<Standing[] | null> {
       entries = await fs.promises.readdir(path.join(folder, within), {
         withFileTypes: true,
       })
-    } catch {
-      return true
+    } catch (error) {
+      // (one in it that has gone since it was seen has nothing in it)
+      if (within !== "" && missing(error)) return true
+      throw error
     }
     // a Python of the project's own, under whatever name
     if (entries.some((entry) => entry.name === "pyvenv.cfg")) return true

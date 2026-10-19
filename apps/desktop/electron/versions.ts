@@ -44,6 +44,15 @@ type Stood = Record<string, { size: number; mtimeMs: number }>
 /** Where the files of a copy are in it, and where it says how each stood when it was made. */
 const FILES = "files"
 const STOOD = "stood.json"
+/**
+ * What a copy has in it, where it was made of a folder with nothing of the project's in
+ * it: only such a copy is put as a folder that has anything in it, which it empties.
+ */
+const EMPTY = "empty"
+
+/** Why a folder could not be copied aside, or put as it was copied, in words to show. */
+const reason = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
 
 /** What a conversation goes by, where it is to name a folder: nothing that leads out of one. */
 const named = (id: unknown): id is string =>
@@ -131,7 +140,7 @@ export class Versions {
    * there is not too much in it (see changes.ts).
    */
   async fits(folder: string): Promise<boolean> {
-    return (await filesOf(folder)) !== null
+    return (await filesOf(folder).catch(() => null)) !== null
   }
 
   /** Whether a conversation has a copy of the folder: it was left, with versions kept. */
@@ -141,19 +150,21 @@ export class Versions {
 
   /**
    * Copy a folder aside as a conversation has it, in place of the copy it had. False if
-   * there is too much in it to copy, or it could not be: the copy it had stands.
+   * there is too much in it to copy. Rejects, in words to show, where it could not be
+   * read or copied: the copy it had stands.
    */
   private async keep(
     projectId: string,
     conversationId: string,
     folder: string
   ): Promise<boolean> {
-    const standing = await filesOf(folder)
-    if (!standing) return false
     const kept = this.root(projectId, conversationId)
     // made beside the one it is to take the place of, which is there until it is whole
     const fresh = `${kept}.new`
     try {
+      // (a folder that cannot be read is not taken for one with nothing in it)
+      const standing = await filesOf(folder)
+      if (!standing) return false
       await fs.promises.rm(fresh, { recursive: true, force: true })
       await fs.promises.mkdir(path.join(fresh, FILES), { recursive: true })
       const stood: Stood = {}
@@ -168,14 +179,19 @@ export class Versions {
         path.join(fresh, STOOD),
         JSON.stringify(stood)
       )
+      if (standing.length === 0)
+        await fs.promises.writeFile(path.join(fresh, EMPTY), "")
       await fs.promises.rm(kept, { recursive: true, force: true })
       await fs.promises.rename(fresh, kept)
       return true
-    } catch {
+    } catch (error) {
       await fs.promises
         .rm(fresh, { recursive: true, force: true })
         .catch(() => {})
-      return false
+      throw new Error(
+        `The project's folder could not be copied aside for the conversation it was, so it was left as it is (${reason(error)}).`,
+        { cause: error }
+      )
     }
   }
 
@@ -183,18 +199,44 @@ export class Versions {
    * Put a folder as it was copied for a conversation: what it has that the copy has not
    * goes, and each file of the copy that is not in it as it was copied is written.
    * `last` is a file to see to after all the others: the one whose being written is
-   * taken for the rest being so.
+   * taken for the rest being so. False where nothing was done: there is too much in one
+   * or the other, or the copy has nothing in it and does not say it was made so (an
+   * earlier version could make such a copy of a folder it could not read), which is
+   * not put as a folder with anything in it. Rejects, in words to show, where it could
+   * not be done, part of the way through it may be.
    */
   private async put(
     projectId: string,
     conversationId: string,
     folder: string,
     last: string | null
-  ) {
+  ): Promise<boolean> {
+    try {
+      return await this.putting(projectId, conversationId, folder, last)
+    } catch (error) {
+      throw new Error(
+        `The project's folder could not be put as this conversation left it (${reason(error)}). It is tried again the next time a conversation is opened.`,
+        { cause: error }
+      )
+    }
+  }
+
+  private async putting(
+    projectId: string,
+    conversationId: string,
+    folder: string,
+    last: string | null
+  ): Promise<boolean> {
     const kept = path.join(this.root(projectId, conversationId), FILES)
     const copied = await filesOf(kept)
     const standing = await filesOf(folder)
-    if (!copied || !standing) return
+    if (!copied || !standing) return false
+    if (
+      copied.length === 0 &&
+      standing.length > 0 &&
+      !fs.existsSync(path.join(this.root(projectId, conversationId), EMPTY))
+    )
+      return false
     let stood: Stood = {}
     try {
       stood = JSON.parse(
@@ -245,13 +287,17 @@ export class Versions {
         continue
       await copy(from, at)
     }
+    return true
   }
 
   /**
    * Have a project's folder be a conversation's. With versions `kept`, it is copied
    * aside for the conversation it was, and put as it was copied for this one, if it
    * ever was. Without, it only becomes this one's, as it stands. Resolves to what came
-   * of it, or to null if the folder was this conversation's already.
+   * of it, or to null if the folder was this conversation's already. Rejects, in words
+   * to show, where the folder could not be copied aside or put as it was copied: it is
+   * then still the conversation's it was, or, where it was left part of the way to this
+   * one, it is put the rest of the way the next time any conversation is turned to.
    */
   turnTo(
     projectId: string,
@@ -270,7 +316,7 @@ export class Versions {
       if (index.turning !== null) {
         const half = index.turning
         if (this.has(projectId, half))
-          await this.put(projectId, half, folder, last).catch(() => {})
+          await this.put(projectId, half, folder, last)
         index.on = half
         index.turning = null
         this.save(projectId)
@@ -278,6 +324,8 @@ export class Versions {
       }
       if (index.on !== to) {
         // only a folder that was copied aside is put another way: nothing is lost by it
+        // (one with too much in it to copy is this one's as it stands, as it would be
+        // without versions)
         const copied =
           how.kept &&
           index.on !== null &&
@@ -285,11 +333,10 @@ export class Versions {
         if (copied && this.has(projectId, to)) {
           index.turning = to
           this.save(projectId)
-          // (what could not be put is in the copy still, and the folder is this one's
-          // from here on either way)
-          await this.put(projectId, to, folder, last).catch(() => {})
+          // (what could not be put is in the copy still, and it is seen through the
+          // next time: until then the folder is still the one's it was)
+          restored = (await this.put(projectId, to, folder, last)) || restored
           index.turning = null
-          restored = true
         }
         index.on = to
         this.save(projectId)

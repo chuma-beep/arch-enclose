@@ -1760,10 +1760,18 @@ export class Threads {
     return said
   }
 
-  /** Say something in a conversation that neither the user nor Claude said: the app did. */
-  noted(projectId: string, conversationId: string, text: string) {
+  /**
+   * Say something in a conversation that neither the user nor Claude said: the app did.
+   * An error, where something the app was to do there could not be done.
+   */
+  noted(
+    projectId: string,
+    conversationId: string,
+    text: string,
+    tone: "info" | "error" = "info"
+  ) {
     const conversation = this.book(projectId).conversations.get(conversationId)
-    if (conversation) this.notice(projectId, conversation, "info", text)
+    if (conversation) this.notice(projectId, conversation, tone, text)
   }
 
   /**
@@ -1933,9 +1941,15 @@ export class Threads {
     // The turn is had in the folder as this conversation has it: where it was left for
     // another, it is put as this one left it first. (Its model may be somewhere else
     // then, which the agent is to be told.)
+    // Where it could not be, nothing is done in it: what this conversation asks is not
+    // to be done to another's files. Why is said in the conversation.
+    let unturned: string | null = null
     const own = await this.deps
       .turnTo(projectId, conversation.id)
-      .catch(() => false)
+      .catch((error: unknown) => {
+        unturned = error instanceof Error ? error.message : String(error)
+        return false
+      })
     // a circuit board being made in the background has the project's files to itself
     const busy = book.job?.item.name ?? null
     project = this.deps.projects.get(projectId) ?? project
@@ -2103,12 +2117,16 @@ export class Threads {
 
     // The folder as it is now is put aside, so that what this turn does to it can be
     // taken back. (Stopped before that was done, the turn is over before it began.)
-    const pending = await this.deps.changes
-      .before(projectId, project.path)
-      .catch(() => null)
+    const pending =
+      unturned === null
+        ? await this.deps.changes
+            .before(projectId, project.path)
+            .catch(() => null)
+        : null
     let serving: Serving | null = null
     try {
       if (abort.signal.aborted) throw new Error("Stopped.")
+      if (unturned !== null) throw new Error(unturned)
       if (!this.deps.launch(provider))
         throw new Error(
           `${AGENTS[provider]} was not found on this machine, or is switched off in the settings.`

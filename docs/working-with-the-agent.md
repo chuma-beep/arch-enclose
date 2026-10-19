@@ -300,6 +300,14 @@ The folder is not put another way while the agent is at work in it: turn to anot
 conversation meanwhile, and its model is shown when the turn is over. A folder with more
 than 20,000 files in it, or 4 GB, is not copied aside, and has the one version.
 
+A folder that cannot be read just then (on a drive that is not plugged in, say) is not
+taken for an empty one: it stays the version it was, and the conversation you turned to
+says why. So does one that could be copied aside but not put as the other conversation
+left it, part of the way through it may be: nothing is lost, as both versions are kept,
+and it is put the rest of the way the next time a conversation is turned to. A message
+sent in that conversation meanwhile is not answered in the other's version: it says why
+instead.
+
 The [settings](settings.md) switch this off (Versions). The conversations then all
 change the one model, and turning to one changes nothing. The versions kept until then
 stay as they were, for when it is switched on again.

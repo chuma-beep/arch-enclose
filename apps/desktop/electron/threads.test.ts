@@ -699,7 +699,11 @@ const ID = "project"
  */
 function talking(
   dir: string,
-  { each = false, versioned = "yes" as "yes" | "off" | "big" } = {}
+  {
+    each = false,
+    versioned = "yes" as "yes" | "off" | "big",
+    deps = {} as Partial<ThreadsDeps>,
+  } = {}
 ) {
   const flag = path.join(dir, "go")
   const file = fakeAgent(
@@ -769,6 +773,7 @@ on("turn/interrupt", () => {
     onSignedOut: () => {},
     onTurned: () => {},
     history: () => "off" as const,
+    ...deps,
   })
   const now = () => threads.summaries(ID)[0]
   return {
@@ -928,6 +933,35 @@ describe("a board made in the background", () => {
     go()
     await until(() => said(other).length === 1)
     expect(said(other)).toEqual(["Make a lid"])
+  })
+})
+
+describe("a turn whose folder could not be made its conversation's", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("does nothing in it, and says why", async () => {
+    const { threads, now, say, served, idle } = talking(dir, {
+      deps: {
+        turnTo: async () => {
+          throw new Error("The folder could not be copied aside.")
+        },
+      },
+    })
+    const into = say("Make a box", null) as string
+    await idle()
+    expect(served()).toBe(0)
+    expect(threads.items(ID, into).at(-1)).toMatchObject({
+      kind: "notice",
+      tone: "error",
+      text: "The folder could not be copied aside.",
+    })
+    expect(now().status).toBe("idle")
   })
 })
 
