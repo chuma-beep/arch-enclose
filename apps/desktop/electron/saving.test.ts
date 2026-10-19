@@ -43,4 +43,31 @@ describe("SaveFolder", () => {
     fs.rmSync(parts, { recursive: true })
     expect(saving.folder()).toBe(downloads)
   })
+
+  it("still opens where the last thing was saved when that cannot be kept", () => {
+    const parts = path.join(dir, "Parts")
+    fs.mkdirSync(parts)
+    // where it would be kept is a file, which no folder can be made in
+    const blocked = path.join(dir, "blocked")
+    fs.writeFileSync(blocked, "")
+    const saving = new SaveFolder(
+      path.join(blocked, "save-folder"),
+      () => downloads
+    )
+    expect(() => saving.savedIn(parts)).not.toThrow()
+    expect(saving.folder()).toBe(parts)
+    // and the next time the app is opened, nothing was kept
+    expect(
+      new SaveFolder(
+        path.join(blocked, "save-folder"),
+        () => downloads
+      ).folder()
+    ).toBe(downloads)
+  })
+
+  it("opens in Downloads where what was kept says nothing", () => {
+    fs.mkdirSync(path.dirname(kept), { recursive: true })
+    fs.writeFileSync(kept, "\n")
+    expect(new SaveFolder(kept, () => downloads).folder()).toBe(downloads)
+  })
 })

@@ -67,7 +67,7 @@ const REDS = [
  * drawn round it, on the ground, it would not be seen at all. (A pad's hole has the
  * pad's copper round it.) The line is as thin at any zoom.
  */
-const holesEdged = (markup: string, colours: PcbColours) =>
+export const holesEdged = (markup: string, colours: PcbColours) =>
   markup.replaceAll(
     'data-type="pcb_hole"',
     `stroke="${colours["technical-edge"]}" stroke-width="1" vector-effect="non-scaling-stroke" data-type="pcb_hole"`
@@ -118,7 +118,7 @@ function pcbLook(
  * first: but with its two sides the other way round, its bottom over its top, for the
  * board seen from under it.
  */
-function fromUnder(layer: string | null): number {
+export function fromUnder(layer: string | null): number {
   if (layer === null) return 500
   if (layer === "global") return -100
   if (layer === "board") return 2
@@ -165,7 +165,7 @@ function bottomUp(markup: string): string {
  * A drawing of the bottom of a board turned over, as the board is when it is turned
  * over to be looked at from under: left is right, and its print reads as it should.
  */
-function turnedOver(markup: string): string {
+export function turnedOver(markup: string): string {
   const width =
     Number(/<svg[^>]*\swidth="([\d.]+)"/.exec(markup)?.[1]) || DRAWN.width
   return markup

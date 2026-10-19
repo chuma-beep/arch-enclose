@@ -1,6 +1,10 @@
+import fs from "node:fs"
+import os from "node:os"
+import path from "node:path"
+
 import { describe, expect, it } from "vitest"
 
-import { bare, guideAgain, piecesOf, Saying, stopped } from "./turn"
+import { bare, guideAgain, inside, piecesOf, Saying, stopped } from "./turn"
 
 describe("bare", () => {
   it("is a command without the shell it was wrapped in to be run", () => {
@@ -90,5 +94,45 @@ describe("Saying", () => {
     saying.end()
     expect(saying.say("Too late.")).toBe(false)
     expect(await all(saying)).toEqual([])
+  })
+})
+
+describe("inside", () => {
+  it("says where a file is from the folder, and leaves one outside it whole", () => {
+    const from = inside("/a/b")
+    expect(from("/a/b/model.py")).toBe("model.py")
+    expect(from("/a/b/build/enclose.model.json")).toBe(
+      path.join("build", "enclose.model.json")
+    )
+    // a folder whose name only begins as this one's is another folder
+    expect(from("/a/bc/model.py")).toBe("/a/bc/model.py")
+    expect(from("/a/b")).toBe("/a/b")
+  })
+
+  it("knows the folder by the other way to it, as an agent may give it", () => {
+    // as /tmp is to /private/tmp on a Mac
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-inside-"))
+    try {
+      const real = path.join(top, "private-tmp")
+      const link = path.join(top, "tmp")
+      fs.mkdirSync(real)
+      fs.symlinkSync(real, link)
+      const from = inside(link)
+      expect(from(path.join(link, "model.py"))).toBe("model.py")
+      expect(from(path.join(fs.realpathSync(real), "model.py"))).toBe(
+        "model.py"
+      )
+      expect(from(`${fs.realpathSync(real)}x/model.py`)).toBe(
+        `${fs.realpathSync(real)}x/model.py`
+      )
+    } finally {
+      fs.rmSync(top, { recursive: true, force: true })
+    }
+  })
+
+  it("has the one name for a folder that is not there", () => {
+    expect(inside("/nowhere/at/all")("/nowhere/at/all/model.py")).toBe(
+      "model.py"
+    )
   })
 })

@@ -2,9 +2,9 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { Python, type PythonStatus } from "./python"
+import { fetchUv, Python, type PythonStatus } from "./python"
 
 describe("Python", () => {
   let dir: string
@@ -111,5 +111,58 @@ describe("Python", () => {
     fakeUv()
     expect(await python.ready()).toBe(true)
     expect(python.get()).toEqual({ state: "ours" })
+  })
+})
+
+describe("fetchUv", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), "enclose-uv-")),
+      "python"
+    )
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    fs.rmSync(path.dirname(dir), { recursive: true, force: true })
+  })
+
+  /** A download that hands over these bytes, keeping where it was asked for. */
+  const download = (bytes: string) => {
+    const asked: string[] = []
+    vi.stubGlobal("fetch", async (url: string) => {
+      asked.push(url)
+      return new Response(bytes)
+    })
+    return asked
+  }
+
+  it("runs nothing it was not made knowing, and writes none of it", async () => {
+    const asked = download("not uv")
+    await expect(fetchUv(dir)).rejects.toThrow(
+      "The uv that was downloaded is not the one expected."
+    )
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toMatch(/^https:\/\/github\.com\/astral-sh\/uv\//)
+    expect(fs.existsSync(dir)).toBe(false)
+  })
+
+  it("says so where it cannot be downloaded", async () => {
+    vi.stubGlobal("fetch", async () => new Response("", { status: 503 }))
+    await expect(fetchUv(dir)).rejects.toThrow("Could not download uv (503).")
+    expect(fs.existsSync(dir)).toBe(false)
+  })
+
+  it("downloads none where it has it already", async () => {
+    // where it would be, by the name its download has
+    const first = download("not uv")
+    await fetchUv(dir).catch(() => {})
+    const name = path.basename(first[0], ".tar.gz")
+    const uv = path.join(dir, name, "uv")
+    fs.mkdirSync(path.dirname(uv), { recursive: true })
+    fs.writeFileSync(uv, "")
+    const asked = download("not uv")
+    expect(await fetchUv(dir)).toBe(uv)
+    expect(asked).toEqual([])
   })
 })
