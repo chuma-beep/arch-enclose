@@ -2526,6 +2526,12 @@ async function settle() {
     threads.stopAll().then(() => backups?.committed()),
     new Promise((resolve) => setTimeout(resolve, QUIT_WAIT_MS)),
   ])
+  // and the conversations written down, where they were being, or were to be soon (what
+  // is left after that is written as the app goes)
+  await Promise.race([
+    threads.saved(),
+    new Promise((resolve) => setTimeout(resolve, QUIT_WAIT_MS)),
+  ])
 }
 
 /** Let go of everything, as the app goes. */

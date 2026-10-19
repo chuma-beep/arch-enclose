@@ -10,6 +10,7 @@ import {
   newConversation,
   readConversations,
   writeConversation,
+  writeConversationSoon,
 } from "./conversations"
 
 let dir: string
@@ -50,6 +51,21 @@ describe("conversations on disk", () => {
     expect(read.find((c) => c.id === second.id)).toEqual(second)
     expect(readConversations(dir, "p2", none)).toHaveLength(1)
     expect(readConversations(dir, "p3", none)).toEqual([])
+  })
+
+  it("writes a conversation without holding the app up, as it would be written at once", async () => {
+    const one = {
+      ...newConversation(),
+      sessionId: "session-1",
+      items: [said("a", "A cube")],
+    }
+    const writing = writeConversationSoon(dir, "p1", one)
+    // what is written is the conversation as it was asked to be
+    one.items = [...one.items, said("b", "With a hole")]
+    await writing
+    expect(readConversations(dir, "p1", none)).toEqual([
+      { ...one, items: [said("a", "A cube")] },
+    ])
   })
 
   it("writes over a conversation that is carried on, rather than beside it", () => {

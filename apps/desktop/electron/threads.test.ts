@@ -1068,6 +1068,63 @@ describe("a conversation that cannot be written down", () => {
   })
 })
 
+describe("a conversation as it is written down", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  const kept = (conversation: string) =>
+    (
+      JSON.parse(
+        fs.readFileSync(
+          path.join(dir, "conversations", ID, `${conversation}.json`),
+          "utf8"
+        )
+      ) as { items: { kind: string }[] }
+    ).items.map((item) => item.kind)
+
+  it("is written soon, and at once when it is asked to be, and ends as it ends", async () => {
+    const { threads, say, go, idle } = talking(dir)
+    const into = say("Make a box", null) as string
+    // nothing is written at every word: but all of it is, before the app is quit
+    expect(
+      fs.existsSync(path.join(dir, "conversations", ID, `${into}.json`))
+    ).toBe(false)
+    await threads.saved()
+    expect(kept(into)).toEqual(["user"])
+    go()
+    await idle()
+    await threads.saved()
+    expect(kept(into)).toEqual(["user", "assistant"])
+  })
+
+  it("is written as it is last, of all said at once, however many times it was asked to be", async () => {
+    const { threads, say, go, idle } = talking(dir)
+    const into = say("Make a box", null) as string
+    go()
+    await idle()
+    // written again and again while it is being written: the last of it is what stays
+    for (let n = 0; n < 5; n++) {
+      threads.noted(ID, into, `Note ${n}`)
+      void threads.saved()
+      threads.rename(ID, into, `Box ${n}`)
+    }
+    await threads.saved()
+    const file = JSON.parse(
+      fs.readFileSync(
+        path.join(dir, "conversations", ID, `${into}.json`),
+        "utf8"
+      )
+    ) as { name: string; items: { text?: string }[] }
+    expect(file.name).toBe("Box 4")
+    expect(file.items.at(-1)?.text).toBe("Note 4")
+  })
+})
+
 describe("the app being quit in the middle of a turn", () => {
   let dir: string
   beforeEach(() => {

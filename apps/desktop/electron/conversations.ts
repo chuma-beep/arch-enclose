@@ -6,7 +6,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { PROVIDERS, type ProviderId, type ThreadItem } from "../shared/api"
-import { setAside, writeWhole } from "./atomic"
+import { setAside, writeWhole, writeWholeSoon } from "./atomic"
 
 export type Conversation = {
   id: string
@@ -61,16 +61,46 @@ const folder = (dir: string, projectId: string) => path.join(dir, projectId)
 const single = (dir: string, projectId: string) =>
   path.join(dir, `${projectId}.json`)
 
+/** A conversation as its file has it. */
+const fileOf = ({
+  provider,
+  sessionId,
+  guided,
+  name,
+  items,
+  gist,
+}: Conversation) =>
+  JSON.stringify({ provider, sessionId, guided, name, items, gist })
+
 export function writeConversation(
   dir: string,
   projectId: string,
-  { id, provider, sessionId, guided, name, items, gist }: Conversation
+  conversation: Conversation
 ) {
   fs.mkdirSync(folder(dir, projectId), { recursive: true })
   // (written whole or not at all: it is written again and again while a turn goes on)
   writeWhole(
-    path.join(folder(dir, projectId), `${id}.json`),
-    JSON.stringify({ provider, sessionId, guided, name, items, gist })
+    path.join(folder(dir, projectId), `${conversation.id}.json`),
+    fileOf(conversation)
+  )
+}
+
+/**
+ * The same, without holding the app up while the disk is written to. What is written is
+ * the conversation as it is when this is called. Two of these at once to the same
+ * conversation could each put theirs in place last: whoever calls it waits for one to
+ * be over before the next.
+ */
+export async function writeConversationSoon(
+  dir: string,
+  projectId: string,
+  conversation: Conversation
+) {
+  const data = fileOf(conversation)
+  await fs.promises.mkdir(folder(dir, projectId), { recursive: true })
+  await writeWholeSoon(
+    path.join(folder(dir, projectId), `${conversation.id}.json`),
+    data
   )
 }
 

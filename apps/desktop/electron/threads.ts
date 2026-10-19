@@ -64,6 +64,7 @@ import {
   newConversation,
   readConversations,
   writeConversation,
+  writeConversationSoon,
   type Conversation,
 } from "./conversations"
 import { findModel, type Projects } from "./projects"
@@ -1319,6 +1320,12 @@ export class Threads {
   private books = new Map<string, Book>()
   /** conversations with something not yet written down, by conversation id */
   private saving = new Map<string, NodeJS.Timeout>()
+  /**
+   * the conversations being written down meanwhile, each until it is (by id): and those
+   * to be written again as soon as that is over, having changed since it began
+   */
+  private writing = new Map<string, Promise<void>>()
+  private again = new Set<string>()
   private counter = 0
   /** the messages put to be summed up: one at a time, and none of them twice */
   private gists: Promise<void> = Promise.resolve()
@@ -1355,32 +1362,98 @@ export class Threads {
   }
 
   /**
-   * Write a conversation down. Where it cannot be (a disk that is full, say), it says
-   * so, once, and is tried again the next time anything is said or done in it: nothing
-   * that was to come after it is kept from happening.
+   * Write a conversation down, now. Where it cannot be (a disk that is full, say), it
+   * says so, once, and is tried again the next time anything is said or done in it:
+   * nothing that was to come after it is kept from happening. (Where it is being
+   * written down already, it is written again as soon as that is over: never two at
+   * once, the older put in place last.)
    */
   private write(projectId: string, conversation: Conversation) {
     clearTimeout(this.saving.get(conversation.id))
     this.saving.delete(conversation.id)
     // a project taken off the list in the middle of a turn has nothing left to keep
     if (!this.books.get(projectId)?.conversations.get(conversation.id)) return
+    if (this.writing.has(conversation.id)) {
+      this.again.add(conversation.id)
+      return
+    }
     try {
       writeConversation(this.deps.dir, projectId, conversation)
-      this.unwritten.delete(conversation.id)
+      this.written(conversation)
     } catch (error) {
-      console.error("[conversations]", error)
-      if (this.unwritten.has(conversation.id)) return
-      this.unwritten.add(conversation.id)
-      // (which has it written again soon, and tried again then)
-      this.notice(
-        projectId,
-        conversation,
-        "error",
-        `This conversation could not be saved (${
-          error instanceof Error ? error.message : String(error)
-        }). It is tried again as it goes on; until then, what is new in it is lost if Enclose is quit.`
-      )
+      this.unsaved(projectId, conversation, error)
     }
+  }
+
+  /**
+   * The same, without holding the app up while the disk is written to: for what is
+   * written again and again while a turn goes on.
+   */
+  private writeSoon(projectId: string, conversation: Conversation) {
+    const { id } = conversation
+    clearTimeout(this.saving.get(id))
+    this.saving.delete(id)
+    if (!this.books.get(projectId)?.conversations.get(id)) return
+    if (this.writing.has(id)) {
+      this.again.add(id)
+      return
+    }
+    const writing = writeConversationSoon(
+      this.deps.dir,
+      projectId,
+      conversation
+    )
+      .then(
+        () => this.written(conversation),
+        (error: unknown) => {
+          // (one taken off the list meanwhile has nothing left to say it in)
+          if (this.books.get(projectId)?.conversations.get(id))
+            this.unsaved(projectId, conversation, error)
+        }
+      )
+      .finally(() => {
+        this.writing.delete(id)
+        if (this.again.delete(id)) this.writeSoon(projectId, conversation)
+      })
+    this.writing.set(id, writing)
+  }
+
+  /** A conversation has been written down. */
+  private written(conversation: Conversation) {
+    this.unwritten.delete(conversation.id)
+  }
+
+  /** A conversation could not be written down: said in it, the first time. */
+  private unsaved(
+    projectId: string,
+    conversation: Conversation,
+    error: unknown
+  ) {
+    console.error("[conversations]", error)
+    if (this.unwritten.has(conversation.id)) return
+    this.unwritten.add(conversation.id)
+    // (which has it written again soon, and tried again then)
+    this.notice(
+      projectId,
+      conversation,
+      "error",
+      `This conversation could not be saved (${
+        error instanceof Error ? error.message : String(error)
+      }). It is tried again as it goes on; until then, what is new in it is lost if Enclose is quit.`
+    )
+  }
+
+  /**
+   * Have every conversation with anything not yet written down written, and resolve
+   * once none is being written any more: for the app to be quit.
+   */
+  async saved(): Promise<void> {
+    for (const [projectId, book] of this.books)
+      for (const conversation of book.conversations.values())
+        if (this.saving.has(conversation.id))
+          this.writeSoon(projectId, conversation)
+    while (this.writing.size > 0)
+      await Promise.allSettled([...this.writing.values()])
   }
 
   /**
@@ -1400,7 +1473,7 @@ export class Threads {
     if (this.saving.has(conversation.id)) return
     this.saving.set(
       conversation.id,
-      setTimeout(() => this.write(projectId, conversation), 800)
+      setTimeout(() => this.writeSoon(projectId, conversation), 800)
     )
   }
 
@@ -1677,12 +1750,21 @@ export class Threads {
     const book = this.book(projectId)
     book.run?.abort.abort()
     book.job?.abort.abort()
+    const writing: Promise<void>[] = []
     for (const { id } of book.conversations.values()) {
       clearTimeout(this.saving.get(id))
       this.saving.delete(id)
+      this.again.delete(id)
+      const one = this.writing.get(id)
+      if (one) writing.push(one)
     }
     this.books.delete(projectId)
     forgetConversations(this.deps.dir, projectId)
+    // and what was being written of it as it was taken off is forgotten once it is
+    if (writing.length > 0)
+      void Promise.allSettled(writing).then(() =>
+        forgetConversations(this.deps.dir, projectId)
+      )
   }
 
   /**
@@ -3023,9 +3105,14 @@ export class Threads {
     for (const [projectId, book] of this.books) {
       book.run?.abort.abort()
       book.job?.abort.abort()
-      for (const conversation of book.conversations.values())
-        if (this.saving.has(conversation.id))
-          this.write(projectId, conversation)
+      for (const conversation of book.conversations.values()) {
+        const { id } = conversation
+        if (!this.saving.has(id) && !this.again.has(id)) continue
+        // (nothing may be left for after: the app is going)
+        this.writing.delete(id)
+        this.again.delete(id)
+        this.write(projectId, conversation)
+      }
     }
   }
 }
