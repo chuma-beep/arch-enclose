@@ -9,6 +9,11 @@
 // Putting it back does the opposite. Neither asks anything of Claude, or builds anything:
 // what a build wrote is in the folder too, and goes back with the rest.
 //
+// The folder as the last turn left it is kept as well, beside the changes, with how each
+// of its files stood then. A file that stands the same at the next turn is not copied
+// aside again but linked to from there, which takes no time and no room on any disk:
+// only what was written to in between is copied.
+//
 // A change is taken back only from where its turn left things, and put back only from
 // where taking it back left them. A file that has been written to since, by hand or by
 // anything else, is not written over: nothing is done, and the files in the way are
@@ -87,6 +92,42 @@ const LEFT_OUT = new Set([
 
 type Standing = { path: string; size: number; mtimeMs: number }
 
+/** How many files are copied, or linked to, at once. */
+const AT_ONCE = 8
+/**
+ * A folder with more in it than this, in bytes, is not kept as the last turn left it:
+ * on a disk that cannot share what two copies have the same, that would be the room
+ * the whole of it takes again, for good. It is copied aside whole before each turn.
+ */
+const LATEST_MOST = 512e6
+
+/**
+ * Do something to each of these, AT_ONCE at a time. Rejects, once all that was begun is
+ * over, with what went wrong first, if anything did; nothing more is begun after that.
+ */
+export async function eachOf<T>(
+  items: T[],
+  work: (item: T) => Promise<void>,
+  most = AT_ONCE
+) {
+  let next = 0
+  let failed = null as { error: unknown } | null
+  const worker = async () => {
+    while (next < items.length && !failed) {
+      const item = items[next++]
+      try {
+        await work(item)
+      } catch (error) {
+        failed ??= { error }
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(most, items.length) }, worker)
+  )
+  if (failed) throw failed.error
+}
+
 /**
  * Every file of a folder that is the project's own, as it stands. Null if there is too
  * much. Rejects where the folder, or a folder in it, cannot be read: what it has then is
@@ -144,6 +185,26 @@ export async function copy(from: string, to: string) {
   await fs.promises.copyFile(from, to, fs.constants.COPYFILE_FICLONE)
 }
 
+/**
+ * A second name for a file, which is the same file: whether it could be had. (Only
+ * for what is kept here, which is never written to where it is, but put in place whole.)
+ */
+async function linked(from: string, to: string): Promise<boolean> {
+  try {
+    await fs.promises.mkdir(path.dirname(to), { recursive: true })
+    await fs.promises.link(from, to)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Whether a file stands as it did: not written to since, to the instant. */
+const same = (
+  was: { size: number; mtimeMs: number } | undefined,
+  is: { size: number; mtimeMs: number } | undefined
+) => !!was && !!is && was.size === is.size && was.mtimeMs === is.mtimeMs
+
 /** A path within a folder, as it was written down: not one that leads out of it. */
 const within = (file: unknown): file is string =>
   typeof file === "string" &&
@@ -178,6 +239,91 @@ export class Changes {
     return id
       ? path.join(this.dir, projectId, id)
       : path.join(this.dir, projectId)
+  }
+
+  /** Where a project's folder is kept as the last turn left it. */
+  private latest(projectId: string) {
+    return path.join(this.dir, `${projectId}.latest`)
+  }
+
+  /**
+   * How each file of the folder kept as the last turn left it stood then: null where
+   * there is none, or what says so cannot be read.
+   */
+  private async latestOf(
+    projectId: string
+  ): Promise<Map<string, { size: number; mtimeMs: number }> | null> {
+    try {
+      const read = JSON.parse(
+        await fs.promises.readFile(
+          path.join(this.latest(projectId), "standing.json"),
+          "utf8"
+        )
+      ) as unknown
+      if (!Array.isArray(read)) return null
+      return new Map(
+        (read as Partial<Standing>[]).flatMap((file) =>
+          within(file?.path) &&
+          typeof file.size === "number" &&
+          typeof file.mtimeMs === "number"
+            ? [[file.path, { size: file.size, mtimeMs: file.mtimeMs }]]
+            : []
+        )
+      )
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Keep the folder as a turn left it (`standing`), for the next turn's copy to be
+   * linked to: each file the turn left as it was (`left`) moved from where it was put
+   * aside before the turn, which is no part of the change; each it wrote to or made
+   * from what the change keeps of it as the turn left it; and anything else copied
+   * from the folder. What was kept before is let go. Where any of this cannot be done,
+   * nothing is kept, and the next turn's copy is made whole.
+   */
+  private async keepLatest(
+    projectId: string,
+    root: string,
+    folder: string,
+    standing: Standing[],
+    left: Set<string>
+  ) {
+    const latest = this.latest(projectId)
+    const next = `${latest}.next`
+    const rm = (at: string) =>
+      fs.promises.rm(at, { recursive: true, force: true })
+    try {
+      await rm(next)
+      if (standing.reduce((sum, file) => sum + file.size, 0) > LATEST_MOST)
+        return await rm(latest)
+      await eachOf(standing, async (file) => {
+        const to = path.join(next, "folder", file.path)
+        if (left.has(file.path)) {
+          try {
+            await fs.promises.mkdir(path.dirname(to), { recursive: true })
+            // (it would be let go of next anyway)
+            return await fs.promises.rename(
+              path.join(root, "before", file.path),
+              to
+            )
+          } catch {
+            // copied, then
+          }
+        } else if (await linked(path.join(root, "after", file.path), to)) return
+        await copy(path.join(folder, file.path), to)
+      })
+      await fs.promises.writeFile(
+        path.join(next, "standing.json"),
+        JSON.stringify(standing)
+      )
+      await rm(latest)
+      await fs.promises.rename(next, latest)
+    } catch (error) {
+      console.error("[changes]", error)
+      await rm(next).catch(() => {})
+    }
   }
 
   private index(projectId: string): Index {
@@ -290,12 +436,21 @@ export class Changes {
       const aside = path.join(this.root(projectId, id), "before")
       const files: Pending["files"] = new Map()
       this.pending.add(id)
+      // what stands as the last turn left it is linked to, and only the rest copied
+      const latest = await this.latestOf(projectId)
+      const kept = path.join(this.latest(projectId), "folder")
       try {
         await fs.promises.mkdir(aside, { recursive: true })
-        for (const file of standing) {
-          await copy(path.join(folder, file.path), path.join(aside, file.path))
+        await eachOf(standing, async (file) => {
+          const to = path.join(aside, file.path)
+          if (
+            !same(latest?.get(file.path), file) ||
+            !(await linked(path.join(kept, file.path), to))
+          )
+            await copy(path.join(folder, file.path), to)
+        })
+        for (const file of standing)
           files.set(file.path, { size: file.size, mtimeMs: file.mtimeMs })
-        }
       } catch {
         this.pending.delete(id)
         this.drop(projectId, id)
@@ -326,19 +481,21 @@ export class Changes {
       }
       const now = new Map(standing.map((file) => [file.path, file]))
       const files: Touched[] = []
+      /** the files the turn left as they were: what was put aside of them is no change */
+      const left = new Set<string>()
       for (const [file, was] of pending.files) {
         const is = now.get(file)
         const kept = path.join(root, "before", file)
         // as it stood, to the instant: not written to
-        if (is && is.size === was.size && is.mtimeMs === was.mtimeMs) {
-          await fs.promises.rm(kept, { force: true })
+        if (same(was, is)) {
+          left.add(file)
           continue
         }
         const before = await hashOf(kept)
         const after = is ? await hashOf(path.join(folder, file)) : null
         // written again, with what was in it already: a build does that to all it makes
         if (before === null || before === after) {
-          await fs.promises.rm(kept, { force: true })
+          left.add(file)
           continue
         }
         if (after !== null)
@@ -355,6 +512,12 @@ export class Changes {
         )
         files.push({ path: file.path, before: null, after })
       }
+      // the folder as the turn left it, for the next turn's copy to be linked to: taking
+      // what it can of that from what was put aside of it, which is let go of after
+      await this.keepLatest(projectId, root, folder, standing, left)
+      await eachOf([...left], (file) =>
+        fs.promises.rm(path.join(root, "before", file), { force: true })
+      )
       if (files.length === 0) {
         this.discard(pending)
         return null
@@ -534,5 +697,10 @@ export class Changes {
   forget(projectId: string) {
     this.indexes.delete(projectId)
     fs.rmSync(this.root(projectId), { recursive: true, force: true })
+    fs.rmSync(this.latest(projectId), { recursive: true, force: true })
+    fs.rmSync(`${this.latest(projectId)}.next`, {
+      recursive: true,
+      force: true,
+    })
   }
 }

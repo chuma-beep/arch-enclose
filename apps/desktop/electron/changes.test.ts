@@ -4,7 +4,7 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { Changes, tookOf } from "./changes"
+import { Changes, eachOf, tookOf } from "./changes"
 
 let dir: string
 let folder: string
@@ -402,5 +402,112 @@ describe("Changes", () => {
     changes.forget("p1")
     expect(changes.last("p1").undo).toBeNull()
     expect(fs.existsSync(path.join(kept, "p1"))).toBe(false)
+    expect(fs.existsSync(path.join(kept, "p1.latest"))).toBe(false)
+  })
+
+  it("copies aside before a turn only what was written to since the last, and links to the rest", async () => {
+    const changes = new Changes(kept)
+    await turn(changes, "Taller", () => write("model.py", "box(20)"))
+    // written to by hand in between
+    write("notes.txt", "and me")
+    const pending = await changes.before("p1", folder)
+    const inode = (at: string) => fs.statSync(at).ino
+    const aside = (file: string) =>
+      path.join(kept, "p1", pending!.id, "before", file)
+    const latest = (file: string) =>
+      path.join(kept, "p1.latest", "folder", file)
+    // the same file as the one kept as the last turn left it, where it stands the same
+    expect(inode(aside("build/lid.glb"))).toBe(inode(latest("build/lid.glb")))
+    expect(inode(aside("model.py"))).toBe(inode(latest("model.py")))
+    // and a copy of its own where it was written to since
+    expect(inode(aside("notes.txt"))).not.toBe(inode(latest("notes.txt")))
+    expect(fs.readFileSync(aside("notes.txt"), "utf8")).toBe("and me")
+    expect(fs.readFileSync(aside("model.py"), "utf8")).toBe("box(20)")
+    write("model.py", "box(30)")
+    write("notes.txt", "and you")
+    await changes.after(pending!, folder, about("Wider"))
+    // taken back, it is as it was before that turn, hand and all
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect(read("model.py")).toBe("box(20)")
+    expect(read("notes.txt")).toBe("and me")
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect(read("model.py")).toBe("box(10)")
+  })
+
+  it("takes back turn after turn as each left it, with what each linked to kept apart", async () => {
+    const changes = new Changes(kept)
+    await turn(changes, "One", () => write("model.py", "box(20)"))
+    await turn(changes, "Two", () => {
+      write("build/lid.glb", "LID 2")
+      fs.rmSync(path.join(folder, "notes.txt"))
+    })
+    await turn(changes, "Three", () => {
+      write("model.py", "box(30)")
+      write("build/base.glb", "BASE")
+    })
+    // nothing put aside but what the changes keep, and the folder as it was left
+    expect(
+      fs.readdirSync(path.join(kept, "p1", changes.last("p1").undo!.id)).sort()
+    ).toEqual(["after", "before"])
+    expect(read("model.py")).toBe("box(30)")
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect([read("model.py"), read("build/base.glb")]).toEqual([
+      "box(20)",
+      null,
+    ])
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect([read("build/lid.glb"), read("notes.txt")]).toEqual([
+      "LID",
+      "keep me",
+    ])
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect(read("model.py")).toBe("box(10)")
+    // and put back again in turn
+    for (let n = 0; n < 3; n++)
+      expect((await changes.redo("p1", folder)).ok).toBe(true)
+    expect([
+      read("model.py"),
+      read("build/lid.glb"),
+      read("build/base.glb"),
+      read("notes.txt"),
+    ]).toEqual(["box(30)", "LID 2", "BASE", null])
+  })
+})
+
+describe("eachOf", () => {
+  it("does each, no more than so many at once", async () => {
+    let now = 0
+    let most = 0
+    const done: number[] = []
+    await eachOf(
+      [1, 2, 3, 4, 5, 6, 7],
+      async (n) => {
+        most = Math.max(most, ++now)
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        done.push(n)
+        now--
+      },
+      3
+    )
+    expect(most).toBe(3)
+    expect(done.sort()).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it("begins nothing more once something went wrong, and says what, once the rest is over", async () => {
+    const begun: number[] = []
+    let over = 0
+    const going = eachOf(
+      [1, 2, 3, 4, 5],
+      async (n) => {
+        begun.push(n)
+        await new Promise((resolve) => setTimeout(resolve, n === 1 ? 1 : 5))
+        over++
+        if (n === 1) throw new Error("no room")
+      },
+      2
+    )
+    await expect(going).rejects.toThrow("no room")
+    expect(begun).toEqual([1, 2])
+    expect(over).toBe(2)
   })
 })
