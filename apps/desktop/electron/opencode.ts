@@ -13,7 +13,14 @@ import {
 } from "../shared/api"
 import type { Launch, Looked } from "./providers"
 import { NO_SUCH_METHOD, RpcError, startPeer } from "./rpc"
-import { guideAgain, inside, piecesOf, stopped, type Turn } from "./turn"
+import {
+  changesOnlyInside,
+  guideAgain,
+  inside,
+  piecesOf,
+  stopped,
+  type Turn,
+} from "./turn"
 
 /**
  * What the app says it is and can do, on taking up the line. It reads no files and runs
@@ -261,27 +268,19 @@ export async function runOpencode(turn: Turn): Promise<void> {
    * Whether a tool call is to one of the app's own tools, and if so which. opencode
    * calls a tool it was brought over MCP by the server's name and the tool's, joined
    * with one line: viewport_screenshot. It says which tool that is under `name`, the
-   * tool's own name, and that is what is gone by here. Never the title: that is often
-   * words the model wrote (a bash call's description for one), and a call it titled
-   * "viewport screenshot" would otherwise be taken for the app's own tool and let go
-   * without a question.
+   * tool's own name, and that alone is gone by here, exactly. Never the title, nor
+   * anything in what the tool was given: those are often words the model wrote (a bash
+   * call's description for one), and a call it titled "viewport screenshot" would
+   * otherwise be taken for the app's own tool and let go without a question. Nor is a
+   * call opencode says runs a command or changes a file, whatever it is called.
    */
   const ours = (call: ToolCall) => {
-    // what opencode makes of the names on the way is its normalization, which is
-    // met halfway: the names the app serves need none of it
-    const plain = (name: string) => name.replaceAll(/[^a-zA-Z0-9_-]/g, "_")
-    const named = [call.name, field(call.rawInput, "tool_name")].flatMap(
-      (one) => (one ? [one] : [])
-    )
+    if (call.kind && call.kind !== "other") return null
     for (const [set, tools_] of Object.entries(turn.tools))
       for (const tool of tools_)
         if (
-          named.some(
-            (one) =>
-              one === `${set}_${tool.name}` ||
-              one === `${set}__${tool.name}` ||
-              plain(one) === plain(`${set}_${tool.name}`)
-          )
+          call.name === `${set}_${tool.name}` ||
+          call.name === `${set}__${tool.name}`
         )
           return `mcp__${set}__${tool.name}`
     return null
@@ -413,11 +412,14 @@ export async function runOpencode(turn: Turn): Promise<void> {
       // The app's own tools are the point of it: they are never asked about. Where
       // everything is let, nothing is either, for the whole session; and where
       // the project's files are the agent's to change, changing them is not
-      // asked about.
+      // asked about: only them, and not a file anywhere else, nor one a link in the
+      // project leads out to.
       if (
         ours(call) ||
         access === "full" ||
-        (access === "edits" && call.kind === "edit")
+        (access === "edits" &&
+          call.kind === "edit" &&
+          changesOnlyInside(turn.cwd, call))
       )
         return access === "full" && !ours(call)
           ? choose("allow_always", "allow_once")

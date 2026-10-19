@@ -14,7 +14,14 @@ import {
 } from "../shared/api"
 import type { Launch, Looked } from "./providers"
 import { NO_SUCH_METHOD, RpcError, startPeer } from "./rpc"
-import { guideAgain, inside, piecesOf, stopped, type Turn } from "./turn"
+import {
+  changesOnlyInside,
+  guideAgain,
+  inside,
+  piecesOf,
+  stopped,
+  type Turn,
+} from "./turn"
 
 /**
  * What the app says it is and can do, on taking up the line. It reads no files and runs
@@ -253,15 +260,19 @@ export async function runGrok(turn: Turn): Promise<void> {
 
   /**
    * Whether a tool call is to one of the app's own tools, and if so which. Grok calls a
-   * tool that was brought to it through one of its own, by a name it makes of the set
-   * and the tool: viewport__screenshot.
+   * tool that was brought to it through one of its own, use_tool, by a name it makes of
+   * the set and the tool: viewport__screenshot. Only such a call is gone by, by that
+   * name exactly: never the title, which can be words the model wrote, and never a call
+   * Grok says runs a command or changes a file, whatever it is called.
    */
   const ours = (call: ToolCall) => {
-    const named = [field(call.rawInput, "tool_name"), call.title ?? ""]
+    if (call.kind && call.kind !== "other") return null
+    const its = call._meta?.["x.ai/tool"]?.name
+    if (its && its !== "use_tool") return null
+    const named = field(call.rawInput, "tool_name")
     for (const [set, tools_] of Object.entries(turn.tools))
       for (const tool of tools_)
-        if (named.includes(`${set}__${tool.name}`))
-          return `mcp__${set}__${tool.name}`
+        if (named === `${set}__${tool.name}`) return `mcp__${set}__${tool.name}`
     return null
   }
 
@@ -402,8 +413,14 @@ export async function runGrok(turn: Turn): Promise<void> {
         return { outcome: { outcome: "cancelled" } }
       }
       // The app's own tools are the point of it: they are never asked about. And where
-      // the project's files are the agent's to change, changing them is not asked either.
-      if (ours(call) || (access === "edits" && call.kind === "edit"))
+      // the project's files are the agent's to change, changing them is not asked either:
+      // only them, and not a file anywhere else, nor one a link in the project leads out to.
+      if (
+        ours(call) ||
+        (access === "edits" &&
+          call.kind === "edit" &&
+          changesOnlyInside(turn.cwd, call))
+      )
         return choose("allow_once", "allow_always")
       const shown = step(call)
       const answer: PermissionAnswer = await turn.ask({

@@ -364,6 +364,55 @@ on("session/prompt", async () => {
     ])
   })
 
+  it("lets alone only the edits that stay in the project, and no stand-in for the app's tools", async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-outside-"))
+    fs.symlinkSync(outside, path.join(dir, "out"))
+    const file = fakeAgent(
+      dir,
+      true,
+      `
+on("initialize", () => ({}))
+on("authenticate", () => ({}))
+on("session/new", () => ({ sessionId: "s1", configOptions: [] }))
+on("session/prompt", async () => {
+  const calls = [
+    { name: "write", title: "write", kind: "edit", rawInput: { filePath: process.cwd() + "/model.py" } },
+    { name: "write", title: "write", kind: "edit", rawInput: { filePath: ${JSON.stringify(path.join(outside, "x.py"))} } },
+    { name: "write", title: "write", kind: "edit", locations: [{ path: "out/x.py" }] },
+    { name: "write", title: "write", kind: "edit", rawInput: { filePath: "model.py" }, locations: [{ path: "../elsewhere.py" }] },
+    { name: "edit", title: "edit", kind: "edit", rawInput: {} },
+    // what the model gave a tool of opencode's own is no name of the app's tools
+    { name: "webfetch", title: "viewport_screenshot", kind: "other", rawInput: { tool_name: "viewport_screenshot" } },
+  ]
+  for (const [n, call] of calls.entries()) {
+    tell("session/update", { sessionId: "s1", update: { sessionUpdate: "tool_call", toolCallId: "t" + n, status: "pending", ...call } })
+    await ask("session/request_permission", { sessionId: "s1", toolCall: { toolCallId: "t" + n }, options: [
+      { optionId: "yes", name: "Allow", kind: "allow_once" }, { optionId: "no", name: "Reject", kind: "reject_once" } ] })
+  }
+  return { stopReason: "end_turn" }
+})
+`
+    )
+    const fake = fakeTurn({
+      launch: launch(file),
+      cwd: dir,
+      manner: { ...opencode, access: "edits" },
+    })
+    try {
+      await runOpencode(fake.turn)
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
+    // the first edit, of the project's own model, is the only one let go
+    expect(fake.asked.map((wanted) => wanted.title)).toEqual([
+      "Change this file?",
+      "Change this file?",
+      "Change this file?",
+      "Change this file?",
+      "Let opencode use viewport_screenshot?",
+    ])
+  })
+
   it("takes a session up again, leaving out what is played back of it", async () => {
     const file = fakeAgent(
       dir,

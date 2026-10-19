@@ -188,6 +188,69 @@ export function bare(command: string): string {
 }
 
 /**
+ * Where a file really is, links followed: its own real path where it is there, and
+ * otherwise the real path of the nearest folder above it that is, with the rest of the
+ * way after it. Null for a link that leads nowhere yet: what is written to it lands
+ * wherever it leads.
+ */
+export function realPath(file: string): string | null {
+  const rest: string[] = []
+  let at = path.resolve(file)
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(at), ...rest)
+    } catch {
+      try {
+        if (fs.lstatSync(at).isSymbolicLink()) return null
+      } catch {
+        // not there at all: the folder above it is looked at
+      }
+      const up = path.dirname(at)
+      if (up === at) return path.resolve(file)
+      rest.unshift(path.basename(at))
+      at = up
+    }
+  }
+}
+
+/**
+ * Whether a file, given whole or from `root`, is really inside it: wherever a link on the
+ * way leads, and whatever other way to the folder the agent knows it by.
+ */
+export function isInside(root: string, file: string): boolean {
+  const base = realPath(root)
+  const real = realPath(path.resolve(root, file))
+  if (!base || !real) return false
+  return (
+    real === base ||
+    real.startsWith(base.endsWith(path.sep) ? base : base + path.sep)
+  )
+}
+
+/** Where an agent that speaks ACP says a call's files are, in what it was given. */
+const PATH_FIELDS = ["path", "file_path", "filePath", "target_file"]
+
+/**
+ * Whether a call to change files, as an agent that speaks ACP puts it, changes only
+ * files inside the project: every one it names, where it says it is and in what it was
+ * given, is. A call that names none, or that carries a patch, which can name more than
+ * it says, is not known to.
+ */
+export function changesOnlyInside(
+  root: string,
+  call: { locations?: { path?: string }[] | null; rawInput?: unknown }
+): boolean {
+  const given = (call.rawInput ?? {}) as Record<string, unknown>
+  if (["patch", "patchText", "patch_text"].some((key) => key in given))
+    return false
+  const files = [
+    ...(call.locations ?? []).map((one) => one.path),
+    ...PATH_FIELDS.map((key) => given[key]),
+  ].filter((file): file is string => typeof file === "string" && file !== "")
+  return files.length > 0 && files.every((file) => isInside(root, file))
+}
+
+/**
  * Says where a file is as seen from a folder, for a file inside it: an agent gives the
  * whole path, and may know the folder by another way to it than the app does.
  */

@@ -26,9 +26,9 @@ describe("savedAccess", () => {
     expect(savedAccess("full")).toBe("full")
   })
 
-  it("starts with full access", () => {
-    expect(savedAccess(null)).toBe("full")
-    expect(savedAccess("nonsense")).toBe("full")
+  it("starts with auto, and gives full access only where it was chosen", () => {
+    expect(savedAccess(null)).toBe("auto")
+    expect(savedAccess("nonsense")).toBe("auto")
   })
 })
 

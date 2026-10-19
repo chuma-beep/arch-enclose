@@ -4,7 +4,72 @@ import path from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { bare, guideAgain, inside, piecesOf, Saying, stopped } from "./turn"
+import {
+  bare,
+  changesOnlyInside,
+  guideAgain,
+  inside,
+  isInside,
+  piecesOf,
+  Saying,
+  stopped,
+} from "./turn"
+
+describe("isInside", () => {
+  it("goes by where a file really is, wherever links lead", () => {
+    // (on a Mac the temporary folder is a link itself: /var is /private/var)
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-inside-"))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-outside-"))
+    try {
+      fs.mkdirSync(path.join(root, "parts"))
+      fs.symlinkSync(outside, path.join(root, "out"))
+      fs.symlinkSync(path.join(outside, "gone"), path.join(root, "nowhere"))
+      const real = fs.realpathSync(root)
+      expect(isInside(root, "model.py")).toBe(true)
+      expect(isInside(root, path.join(real, "parts", "new", "lid.py"))).toBe(
+        true
+      )
+      expect(isInside(real, path.join(root, "model.py"))).toBe(true)
+      expect(isInside(root, "../elsewhere.py")).toBe(false)
+      expect(isInside(root, "out/x.py")).toBe(false)
+      expect(isInside(root, "out/new/x.py")).toBe(false)
+      // a link that leads nowhere yet: whatever is written to it lands out there
+      expect(isInside(root, "nowhere")).toBe(false)
+      expect(isInside(root, `${root}-sibling/x.py`)).toBe(false)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("changesOnlyInside", () => {
+  const root = os.tmpdir()
+  it("is every file the call names being inside", () => {
+    expect(
+      changesOnlyInside(root, {
+        locations: [{ path: "a.py" }],
+        rawInput: { file_path: "b.py" },
+      })
+    ).toBe(true)
+    expect(
+      changesOnlyInside(root, {
+        locations: [{ path: "a.py" }],
+        rawInput: { filePath: "/etc/hosts" },
+      })
+    ).toBe(false)
+  })
+
+  it("is not known of a call that names nothing, or carries a patch", () => {
+    expect(changesOnlyInside(root, { rawInput: {} })).toBe(false)
+    expect(
+      changesOnlyInside(root, {
+        locations: [{ path: "a.py" }],
+        rawInput: { patchText: "*** Update File: /etc/hosts" },
+      })
+    ).toBe(false)
+  })
+})
 
 describe("bare", () => {
   it("is a command without the shell it was wrapped in to be run", () => {

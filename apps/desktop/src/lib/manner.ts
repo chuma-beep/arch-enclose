@@ -11,11 +11,15 @@ import {
   type ProviderId,
 } from "@shared/api"
 
-/** How much an agent may do without asking, as it was last chosen and kept. */
+/**
+ * How much an agent may do without asking, as it was last chosen and kept. Nothing
+ * chosen yet, it does what is routine and asks about the rest: full access is the
+ * user's to give.
+ */
 export function savedAccess(kept: string | null): Access {
   // what an earlier version called the one of its two that asked
   if (kept === "ask") return "edits"
-  return ACCESSES.find((access) => access === kept) ?? "full"
+  return ACCESSES.find((access) => access === kept) ?? "auto"
 }
 
 /**

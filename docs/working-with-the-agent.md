@@ -356,19 +356,24 @@ it asks is put to you: a question is no leave to do something.
 
 ## Model, effort and access
 
-Under the message, one line says how it will be answered: "Using Opus 5.5, High, Full
-access". Click it for the three choices behind it: which of the agent's models answers,
+Under the message, one line says how it will be answered: "Using Opus 5.5, High,
+Auto". Click it for the three choices behind it: which of the agent's models answers,
 how hard it thinks, and what it may do without asking. The models are the ones the agent
 offers; "Default" leaves the model, and how hard it thinks, as the agent is set.
 
-The agent starts out with full access and never asks leave.
+The agent starts out on Auto: it does what is routine and asks about the rest. Full
+access, where it never asks leave, is yours to give it; once chosen, a choice is kept.
 
-| Access            | What the agent does                              |
-| ----------------- | ------------------------------------------------ |
-| Full access       | Never asks                                       |
-| Auto              | Does what is routine and asks about the rest     |
-| Auto-accept edits | Edits files freely and asks before anything else |
-| Supervised        | Asks before it changes a file or runs anything   |
+| Access            | What the agent does                                              |
+| ----------------- | ---------------------------------------------------------------- |
+| Full access       | Never asks                                                       |
+| Auto              | Does what is routine and asks about the rest                     |
+| Auto-accept edits | Edits the project's files freely and asks before anything else   |
+| Supervised        | Asks before it changes a file or runs anything                   |
+
+With Auto-accept edits, an edit outside the project's folder is still asked about: for
+Grok and opencode the app looks at every file an edit changes, and a link in the folder
+that leads out of it does not count as in it.
 
 A folder you opened can have settings of its own for Claude Code
 (`.claude/settings.json`, `.claude/settings.local.json` or `.mcp.json`), which can have

@@ -291,6 +291,56 @@ on("session/prompt", async (params) => {
     }
   })
 
+  it("lets alone only the edits that stay in the project, and no stand-in for the app's tools", async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-outside-"))
+    fs.symlinkSync(outside, path.join(dir, "out"))
+    const file = fakeAgent(
+      dir,
+      true,
+      `
+on("initialize", () => ({ _meta: {} }))
+on("authenticate", () => ({}))
+on("session/new", () => ({ sessionId: "s1" }))
+on("session/prompt", async () => {
+  const calls = [
+    { title: "search_replace", kind: "edit", rawInput: { file_path: process.cwd() + "/model.py" } },
+    { title: "search_replace", kind: "edit", rawInput: { file_path: ${JSON.stringify(path.join(outside, "x.py"))} } },
+    { title: "search_replace", kind: "edit", rawInput: { file_path: "out/x.py" } },
+    { title: "search_replace", kind: "edit", rawInput: {} },
+    // a command titled as one of the app's tools is still a command
+    { title: "viewport__screenshot", kind: "execute", rawInput: { command: "rm -rf build", tool_name: "viewport__screenshot" } },
+    // and a tool of Grok's own is not one of the app's, whatever it was given
+    { title: "viewport__screenshot", rawInput: { tool_name: "viewport__screenshot" }, _meta: { "x.ai/tool": { name: "web_fetch", kind: "fetch" } } },
+  ]
+  for (const [n, call] of calls.entries()) {
+    tell("session/update", { sessionId: "s1", update: { sessionUpdate: "tool_call", toolCallId: "t" + n, status: "pending", ...call } })
+    await ask("session/request_permission", { sessionId: "s1", toolCall: { toolCallId: "t" + n }, options: [
+      { optionId: "yes", name: "Allow", kind: "allow_once" }, { optionId: "no", name: "Reject", kind: "reject_once" } ] })
+  }
+  return { stopReason: "end_turn" }
+})
+`
+    )
+    const fake = fakeTurn({
+      launch: launch(file),
+      cwd: dir,
+      manner: { ...grok, access: "edits" },
+    })
+    try {
+      await runGrok(fake.turn)
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
+    // the first edit, of the project's own model, is the only one let go
+    expect(fake.asked.map((wanted) => wanted.title)).toEqual([
+      "Change this file?",
+      "Change this file?",
+      "Change this file?",
+      "Run this command?",
+      expect.stringMatching(/^Let Grok use /),
+    ])
+  })
+
   it("takes a session up again, leaving out what is played back of it", async () => {
     const file = fakeAgent(
       dir,
