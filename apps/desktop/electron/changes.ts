@@ -22,6 +22,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { missing, writeWhole } from "./atomic"
+import { Locks } from "./locks"
 
 /** One file a turn touched: what was in it before and after, as a hash; null where there was none. */
 type Touched = { path: string; before: string | null; after: string | null }
@@ -162,11 +163,15 @@ export class Changes {
   private indexes = new Map<string, Index>()
   /** the copies put aside for turns that are not yet over, by id */
   private pending = new Set<string>()
-  /** one thing at a time is done with a project's changes */
-  private queues = new Map<string, Promise<unknown>>()
+  /**
+   * one thing at a time is done with a project's changes: and, where the lock is the one
+   * everything else done in its folder holds (see locks.ts), with its folder
+   */
+  private readonly locks: Locks
 
-  constructor(dir: string) {
+  constructor(dir: string, locks = new Locks()) {
     this.dir = dir
+    this.locks = locks
   }
 
   private root(projectId: string, id?: string) {
@@ -266,15 +271,7 @@ export class Changes {
 
   /** One after another: a copy is not gone through while a change is being taken back. */
   private queued<T>(projectId: string, work: () => Promise<T>): Promise<T> {
-    const next = (this.queues.get(projectId) ?? Promise.resolve()).then(
-      work,
-      work
-    )
-    this.queues.set(
-      projectId,
-      next.catch(() => {})
-    )
-    return next
+    return this.locks.hold(projectId, work)
   }
 
   /**

@@ -68,7 +68,10 @@ cannot be had, it says what was asked. Colours you give parts go in too, a few s
 after the last of them ("Recolored parts by hand"), or with the turn the agent is at. Each
 conversation that has [its own version](working-with-the-agent.md#versions) of the project
 has a branch of its own: the first is `main`, and each after it `version/<what it began
-with>`, from where the project was when it began. With versions off, everything is on `main`. What the build writes
+with>`, from where the project was when it began. A commit goes on the branch of the
+conversation whose version the folder holds: turning to another waits for the commit of
+the turn that just ended, and the backup the app makes as it opens goes on the branch of
+the conversation turned to last. With versions off, everything is on `main`. What the build writes
 (`build/`), a Python of the project's own, Python's caches and `.env` files are left
 out, in `.gitignore`; a file of 50 MB or more is kept with Git LFS. A folder too big to
 have [versions](working-with-the-agent.md#versions) has no history kept either. The app brings its own git,

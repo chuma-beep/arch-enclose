@@ -74,6 +74,7 @@ import { Previews } from "./previews"
 import { changeLog } from "./gist"
 import { Changes, tookOf } from "./changes"
 import { Versions } from "./versions"
+import { Locks } from "./locks"
 import { zipOf } from "./zip"
 import { isRepository } from "./backup"
 import { Backups, type BackingUp } from "./backups"
@@ -474,9 +475,14 @@ function keepColours(id: string) {
  * window is not told it was.
  */
 async function turnTo(id: string, conversationId: string): Promise<boolean> {
+  if (!projects.get(id)) return false
+  const kept = settings.get().versions
+  // What was asked to be committed of the folder as it is goes in first, on the branch
+  // of the conversation it is now: it is that one's, and not the one's it is to be.
+  if (kept && versions.on(id) !== conversationId)
+    await backups.committed(id)
   const project = projects.get(id)
   if (!project) return false
-  const kept = settings.get().versions
   const turned = await versions.turnTo(id, conversationId, project.path, {
     kept,
     // the manifest goes last: its being written is what the view loads the rest again for
@@ -2087,11 +2093,13 @@ if (!app.requestSingleInstanceLock()) {
       broadcast,
       (id, root, board) => previews.written(id, root, board)
     )
-    changes = new Changes(path.join(data, "changes"))
+    // (one thing at a time in a project's folder, whichever of these it is)
+    const locks = new Locks()
+    changes = new Changes(path.join(data, "changes"), locks)
     saving = new SaveFolder(path.join(data, "save-folder"), () =>
       app.getPath("downloads")
     )
-    versions = new Versions(path.join(data, "versions"))
+    versions = new Versions(path.join(data, "versions"), locks)
     pictures = new Pictures(path.join(data, "pictures"))
     connection = new Connection({
       saved: () => settings.github(),
@@ -2112,6 +2120,8 @@ if (!app.requestSingleInstanceLock()) {
       keep: (id) => projects.keep(id),
       fits: (dir) => versions.fits(dir),
       versioned: () => settings.get().versions,
+      on: (id) => versions.on(id),
+      hold: (id, work) => locks.hold(id, work),
       github: () => connection.connected(),
       signedOut: () => connection.signedOut(),
       onProgress: (progress) => {

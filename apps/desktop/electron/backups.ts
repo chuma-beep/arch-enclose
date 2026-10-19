@@ -55,6 +55,16 @@ export type BackupsDeps = {
   fits: (dir: string) => Promise<boolean>
   /** whether each conversation has the project its own way (versions.ts) */
   versioned: () => boolean
+  /**
+   * The conversation a project's folder is now, where each has the project its own way
+   * (versions.ts): what it holds is committed on that one's branch, and on no other.
+   */
+  on?: (id: string) => string | null
+  /**
+   * Do something in a project's folder once nothing else is being done there (locks.ts):
+   * what it holds is not committed as it is being put as another conversation has it.
+   */
+  hold?: <T>(id: string, work: () => Promise<T>) => Promise<T>
   /** GitHub, where it is connected, and who is signed in to it */
   github: () => { client: GitHub; account: Account } | null
   /** the app is no longer signed in, and has to be connected again */
@@ -79,6 +89,11 @@ function builtOf(project: Backed): string | null {
 
 export class Backups {
   private queues = new Map<string, Promise<unknown>>()
+  /**
+   * what has been asked to be committed in each project, until it has been or could not
+   * be: its folder is not to be put as another conversation has it before that
+   */
+  private committing = new Map<string, Promise<unknown>>()
   /** the projects with commits GitHub does not have yet */
   private unpushed = new Set<string>()
   private again: ReturnType<typeof setTimeout> | null = null
@@ -108,6 +123,32 @@ export class Backups {
   /** Resolves once all that was asked of every project until now is done, or has failed. */
   async settled(): Promise<void> {
     await Promise.all([...this.queues.values()])
+  }
+
+  /**
+   * Resolves once what was asked until now to be committed in a project has been, or
+   * could not be: what it was asked of is the folder as it is now. (It does not wait
+   * for what is pushed.)
+   */
+  async committed(id: string): Promise<void> {
+    await this.committing.get(id)
+  }
+
+  /** Something is to be committed in a project: call what this returns once it has been. */
+  private toCommit(id: string): () => void {
+    let done = () => {}
+    const now = new Promise<void>((resolve) => (done = resolve))
+    const all = Promise.all([this.committing.get(id), now])
+    this.committing.set(id, all)
+    void all.then(() => {
+      if (this.committing.get(id) === all) this.committing.delete(id)
+    })
+    return done
+  }
+
+  /** In the project's folder, once nothing else is being done there. */
+  private hold<T>(id: string, work: () => Promise<T>): Promise<T> {
+    return this.deps.hold ? this.deps.hold(id, work) : work()
   }
 
   private author(): Author {
@@ -151,11 +192,22 @@ export class Backups {
    * made, or a folder that was no repository. What it holds now is the first commit.
    */
   prepare(id: string, message: string): Promise<unknown> {
+    const done = this.toCommit(id)
     return this.queue(id, async () => {
-      const project = this.project(id)
-      if (!project) return
-      if (!(await this.keeps(project))) return
-      await this.commit(project, null, message, message)
+      try {
+        const project = this.project(id)
+        if (!project) return
+        if (!(await this.keeps(project))) return
+        await this.commit(
+          project,
+          { conversationId: null },
+          message,
+          message,
+          done
+        )
+      } finally {
+        done()
+      }
     })
   }
 
@@ -173,7 +225,11 @@ export class Backups {
       return false
     if (!(await this.deps.fits(project.path))) return false
     const { git } = this.deps
-    if (!(await setUp(git, project.path, builtOf(project), project.made)))
+    if (
+      !(await this.hold(project.id, () =>
+        setUp(git, project.path, builtOf(project), project.made)
+      ))
+    )
       return false
     this.deps.keep(project.id)
     return true
@@ -199,36 +255,66 @@ export class Backups {
       log?: (files: string[]) => Promise<string[] | null>
     }
   ): Promise<unknown> {
+    const done = this.toCommit(id)
     return this.queue(id, async () => {
-      const project = this.project(id)
-      if (!project || !ours(project)) return
-      const plain = messageOf(what, conversation)
-      await this.commit(
-        project,
-        conversationId,
-        what,
-        log
-          ? async (files) => {
-              const lines = await log(files).catch(() => null)
-              return lines?.length ? loggedAs(lines, conversation) : plain
-            }
-          : plain
-      )
+      try {
+        const project = this.project(id)
+        if (!project || !ours(project)) return
+        const plain = messageOf(what, conversation)
+        await this.commit(
+          project,
+          { conversationId },
+          what,
+          log
+            ? async (files) => {
+                const lines = await log(files).catch(() => null)
+                return lines?.length ? loggedAs(lines, conversation) : plain
+              }
+            : plain,
+          done
+        )
+      } finally {
+        done()
+      }
     })
   }
 
+  /**
+   * Commit what a project's folder holds, on the branch of the conversation it is of:
+   * the one given, or (`on`) whichever the folder is now. Where the folder has become
+   * another conversation's since this was asked for, it is not committed: what it holds
+   * is that one's, and what this one left goes in with its next commit, when the folder
+   * is its own again. `done` is called once the commit is made, or is not to be.
+   */
   private async commit(
     project: Backed,
-    conversationId: string | null,
+    of: { conversationId: string | null } | "on",
     what: string,
-    message: string | ((files: string[]) => Promise<string>)
+    message: string | ((files: string[]) => Promise<string>),
+    done: () => void = () => {}
   ) {
-    const branch = await this.branchOf(project.path, conversationId, what)
-    const { commit } = await commitAll(this.deps.git, project.path, {
-      branch,
-      message,
-      author: this.author(),
-    })
+    const versioned = this.deps.versioned()
+    const committed = await this.hold(project.id, async () => {
+      const now = this.deps.on?.(project.id) ?? null
+      const conversationId =
+        of === "on" ? (versioned ? now : null) : of.conversationId
+      if (
+        of !== "on" &&
+        conversationId !== null &&
+        versioned &&
+        this.deps.on &&
+        now !== conversationId
+      )
+        return null
+      const branch = await this.branchOf(project.path, conversationId, what)
+      return commitAll(this.deps.git, project.path, {
+        branch,
+        message,
+        author: this.author(),
+      })
+    }).finally(done)
+    if (!committed) return
+    const { commit } = committed
     const pushedOnce = await this.pushedOnce(project)
     // A project with no model yet has no repository made for it: most that are begun
     // and come to nothing are, and are cleared away. It is made with the model.
@@ -360,14 +446,21 @@ export class Backups {
     say()
     await Promise.all(
       projects.map(async (project) => {
+        const committed = this.toCommit(project.id)
         await this.queue(project.id, async () => {
-          if (!(await this.keeps(project))) return
-          await this.commit(
-            project,
-            null,
-            "Backed up by Enclose",
-            "Backed up by Enclose"
-          )
+          try {
+            if (!(await this.keeps(project))) return
+            // (on the branch of the conversation the folder is now: it is that one's)
+            await this.commit(
+              project,
+              "on",
+              "Backed up by Enclose",
+              "Backed up by Enclose",
+              committed
+            )
+          } finally {
+            committed()
+          }
         })
         done++
         say()

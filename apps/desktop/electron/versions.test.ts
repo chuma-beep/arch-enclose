@@ -4,6 +4,8 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
+import { Changes } from "./changes"
+import { Locks } from "./locks"
 import { Versions } from "./versions"
 
 let dir: string
@@ -286,6 +288,31 @@ describe("Versions", () => {
     write("model.py", "box(10)")
     await versions.turnTo("p1", "a", folder)
     expect(read("model.py")).toBeNull()
+  })
+
+  it("waits for a change being taken back in the folder, holding the same lock", async () => {
+    const locks = new Locks()
+    const versions = new Versions(kept, locks)
+    const changes = new Changes(path.join(dir, "changes"), locks)
+    await versions.turnTo("p1", "a", folder)
+    const pending = await changes.before("p1", folder)
+    write("model.py", "box(20)")
+    await changes.after(pending!, folder, {
+      conversationId: "a",
+      what: "Taller",
+    })
+    const done: string[] = []
+    const undoing = changes.undo("p1", folder, null, "a").then((outcome) => {
+      done.push("undone")
+      return outcome
+    })
+    const turning = versions.turnTo("p1", "b", folder).then(() => {
+      done.push("turned")
+    })
+    await Promise.all([undoing, turning])
+    expect(done).toEqual(["undone", "turned"])
+    // the change was taken back in a's version, which b began from
+    expect(read("model.py")).toBe("box(10)")
   })
 
   it("is busy for as long as a folder is being put another way", async () => {

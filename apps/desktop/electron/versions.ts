@@ -21,6 +21,7 @@ import path from "node:path"
 
 import { writeWhole } from "./atomic"
 import { copy, filesOf, hashOf } from "./changes"
+import { Locks } from "./locks"
 
 /** Which conversation a project's folder is, and which it was being put as, if it was. */
 type Index = {
@@ -61,13 +62,17 @@ const named = (id: unknown): id is string =>
 export class Versions {
   private readonly dir: string
   private indexes = new Map<string, Index>()
-  /** one thing at a time is done with a project's versions */
-  private queues = new Map<string, Promise<unknown>>()
+  /**
+   * one thing at a time is done with a project's versions: and, where the lock is the
+   * one everything else done in its folder holds (see locks.ts), with its folder
+   */
+  private readonly locks: Locks
   /** how much is under way, or waiting to be, by project */
   private under = new Map<string, number>()
 
-  constructor(dir: string) {
+  constructor(dir: string, locks = new Locks()) {
     this.dir = dir
+    this.locks = locks
   }
 
   private root(projectId: string, conversationId?: string) {
@@ -115,14 +120,7 @@ export class Versions {
       if (left > 0) this.under.set(projectId, left)
       else this.under.delete(projectId)
     }
-    const next = (this.queues.get(projectId) ?? Promise.resolve())
-      .then(work, work)
-      .finally(over)
-    this.queues.set(
-      projectId,
-      next.catch(() => {})
-    )
-    return next
+    return this.locks.hold(projectId, work).finally(over)
   }
 
   /** The conversation a project's folder is as it has it. Null if it has been nobody's yet. */

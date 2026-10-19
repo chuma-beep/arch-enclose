@@ -5,9 +5,10 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
 import { BIG } from "./backup"
-import { Backups, type Backed } from "./backups"
+import { Backups, type Backed, type BackupsDeps } from "./backups"
 import { git } from "./git"
 import type { GitHub } from "./github"
+import { Locks } from "./locks"
 
 let root: string
 let project: Backed
@@ -39,7 +40,7 @@ const github = {
   pushing: async () => ({}),
 } as unknown as GitHub
 
-const backups = (connected: boolean) =>
+const backups = (connected: boolean, more: Partial<BackupsDeps> = {}) =>
   new Backups({
     git,
     projects: () => [project],
@@ -54,6 +55,7 @@ const backups = (connected: boolean) =>
         : null,
     signedOut: () => {},
     onProgress: () => {},
+    ...more,
   })
 
 beforeEach(() => {
@@ -153,6 +155,81 @@ describe("Backups", () => {
     expect(
       await show(project.path, "branch", "--format=%(refname:short)")
     ).toBe("main")
+  })
+
+  it("commits a conversation's turn only while the folder is still that conversation's", async () => {
+    let on = "c1"
+    const kept = backups(false, { on: () => on })
+    write("model.py", "a = 1")
+    await kept.prepare("p1", "Started in Enclose")
+    write("model.py", "a = 2")
+    await kept.record("p1", {
+      what: "One",
+      conversation: null,
+      conversationId: "c1",
+    })
+    // the folder became another's before the commit asked for got to it: what it holds
+    // is that one's, and is not put on the first one's branch
+    on = "c2xxxx"
+    write("model.py", "a = 3")
+    await kept.record("p1", {
+      what: "Two",
+      conversation: null,
+      conversationId: "c1",
+    })
+    expect(await show(project.path, "log", "--format=%s", "main")).toBe(
+      "One\nStarted in Enclose"
+    )
+    // and a backup of every project commits on the branch of the one it is now
+    await kept.all(false)
+    expect(
+      await show(project.path, "branch", "--format=%(refname:short)")
+    ).toBe("main\nversion/backed-up-by-enclose-c2xxxx")
+    expect(
+      await show(
+        project.path,
+        "log",
+        "--format=%s",
+        "version/backed-up-by-enclose-c2xxxx",
+        "-1"
+      )
+    ).toBe("Backed up by Enclose")
+    expect(await show(project.path, "log", "--format=%s", "main", "-1")).toBe(
+      "One"
+    )
+  })
+
+  it("commits once nothing else is being done in the folder, and says when it has", async () => {
+    const locks = new Locks()
+    const kept = backups(false, {
+      hold: (id, work) => locks.hold(id, work),
+    })
+    write("model.py", "a = 1")
+    await kept.prepare("p1", "Started in Enclose")
+    let release = () => {}
+    // the folder being put another way, say
+    const busy = locks.hold(
+      "p1",
+      () => new Promise<void>((resolve) => (release = resolve))
+    )
+    write("model.py", "a = 2")
+    const recorded = kept.record("p1", {
+      what: "One",
+      conversation: null,
+      conversationId: null,
+    })
+    let committed = false
+    void kept.committed("p1").then(() => (committed = true))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(committed).toBe(false)
+    expect(await show(project.path, "log", "--format=%s")).toBe(
+      "Started in Enclose"
+    )
+    release()
+    await busy
+    await recorded
+    expect(committed).toBe(true)
+    expect(await show(project.path, "log", "--format=%s", "-1")).toBe("One")
   })
 
   it("backs up projects made before GitHub was connected, and renames a repository with its project", async () => {
