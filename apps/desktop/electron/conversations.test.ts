@@ -2,15 +2,20 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { ThreadItem } from "../shared/api"
 import {
+  digestOf,
   forgetConversations,
   newConversation,
   readConversations,
+  readItems,
+  readShelved,
   writeConversation,
   writeConversationSoon,
+  writeSummaries,
+  type Conversation,
 } from "./conversations"
 
 let dir: string
@@ -227,5 +232,140 @@ describe("conversations on disk", () => {
     forgetConversations(dir, "p1")
     expect(fs.readdirSync(dir)).toEqual(["p2"])
     expect(readConversations(dir, "p2", none)).toHaveLength(1)
+  })
+})
+
+const answered = (id: string, text: string, at = 1): ThreadItem => ({
+  kind: "assistant",
+  id,
+  at,
+  text,
+  streaming: false,
+})
+const noted = (id: string, at = 1): ThreadItem => ({
+  kind: "notice",
+  id,
+  at,
+  tone: "info",
+  text: "Stopped.",
+})
+
+describe("digestOf", () => {
+  it("keeps the first item, the first said, the last said by either and the last, in order", () => {
+    const items = [
+      noted("n0"),
+      said("u1", "A cube"),
+      answered("a1", "Done"),
+      said("u2", "With a hole"),
+      answered("a2", "Done again"),
+      noted("n1"),
+    ]
+    expect(digestOf(items).map((item) => item.id)).toEqual([
+      "n0",
+      "u1",
+      "a2",
+      "n1",
+    ])
+    expect(digestOf([said("u1", "A cube")])).toEqual([said("u1", "A cube")])
+    expect(digestOf([])).toEqual([])
+  })
+
+  it("keeps a board made in the background without what was done in making it", () => {
+    const job: ThreadItem = {
+      kind: "job",
+      id: "j",
+      at: 2,
+      board: "main",
+      name: "Main board",
+      state: "done",
+      items: [answered("x", "Placed")],
+      ended: 3,
+    }
+    expect(digestOf([said("u1", "A board"), job])).toEqual([
+      said("u1", "A board"),
+      { ...job, items: [] },
+    ])
+  })
+})
+
+describe("conversations as the sidebar has them", () => {
+  const long = (id: string) => ({
+    ...newConversation(),
+    id,
+    items: [
+      said("u1", "A cube"),
+      answered("a1", "Done"),
+      said("u2", "With a hole"),
+      answered("a2", "Done again"),
+    ],
+  })
+  /** how many times each conversation's own file is read while `work` is done */
+  const readsOf = (work: () => void) => {
+    const read = vi.spyOn(fs, "readFileSync")
+    try {
+      work()
+      return read.mock.calls.filter(
+        ([file]) =>
+          typeof file === "string" &&
+          file.endsWith(".json") &&
+          file.includes(`${path.sep}p1${path.sep}`)
+      ).length
+    } finally {
+      read.mockRestore()
+    }
+  }
+
+  it("has only what each card needs, and all of it from the file when wanted", () => {
+    writeConversation(dir, "p1", long("c1"))
+    const [shelved] = readShelved(dir, "p1", none)
+    expect(shelved).toMatchObject({ id: "c1", shelved: true })
+    expect(shelved.items.map((item) => item.id)).toEqual(["u1", "a2"])
+    expect(readItems(dir, "p1", "c1")).toEqual(long("c1").items)
+    expect(readItems(dir, "p1", "gone")).toBeNull()
+  })
+
+  it("reads none of the conversations' files where the summaries are as they are", () => {
+    writeConversation(dir, "p1", long("c1"))
+    writeConversation(dir, "p1", { ...long("c2"), name: "The lid" })
+    let first: Conversation[] = []
+    expect(readsOf(() => (first = readShelved(dir, "p1", none)))).toBe(2)
+    let again: Conversation[] = []
+    expect(readsOf(() => (again = readShelved(dir, "p1", none)))).toBe(0)
+    const byId = (conversations: Conversation[]) =>
+      [...conversations].sort((a, b) => a.id.localeCompare(b.id))
+    expect(byId(again)).toEqual(byId(first))
+    expect(byId(again)[1]).toMatchObject({ name: "The lid" })
+  })
+
+  it("reads again the one whose file was written since, and forgets one that is gone", () => {
+    writeConversation(dir, "p1", long("c1"))
+    writeConversation(dir, "p1", long("c2"))
+    readShelved(dir, "p1", none)
+    writeConversation(dir, "p1", {
+      ...long("c1"),
+      items: [...long("c1").items, said("u3", "In red")],
+    })
+    fs.rmSync(path.join(dir, "p1", "c2.json"))
+    let read: Conversation[] = []
+    expect(readsOf(() => (read = readShelved(dir, "p1", none)))).toBe(1)
+    expect(read.map((one) => one.id)).toEqual(["c1"])
+    expect(read[0].items.at(-1)).toEqual(said("u3", "In red"))
+    // and the summaries are as the files are again
+    expect(readsOf(() => readShelved(dir, "p1", none))).toBe(0)
+  })
+
+  it("writes the summaries anew where they cannot be read, and keeps them from what is written", () => {
+    writeConversation(dir, "p1", long("c1"))
+    fs.writeFileSync(path.join(dir, "p1", "summaries.index"), "{ cut short")
+    expect(readShelved(dir, "p1", none).map((one) => one.id)).toEqual(["c1"])
+    expect(readsOf(() => readShelved(dir, "p1", none))).toBe(0)
+    // a conversation is never taken for one: nor is it moved aside
+    expect(readConversations(dir, "p1", none).map((one) => one.id)).toEqual([
+      "c1",
+    ])
+    // what is written of them goes by what each was when its file was written
+    const [shelved] = readShelved(dir, "p1", none)
+    writeSummaries(dir, "p1", [{ ...shelved, name: "Renamed" }])
+    expect(readShelved(dir, "p1", none)[0].name).toBeNull()
   })
 })

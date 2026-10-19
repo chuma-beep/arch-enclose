@@ -2,7 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Seen } from "../shared/api"
 import { fakeAgent, until } from "./testing"
@@ -1122,6 +1122,111 @@ describe("a conversation as it is written down", () => {
     ) as { name: string; items: { text?: string }[] }
     expect(file.name).toBe("Box 4")
     expect(file.items.at(-1)?.text).toBe("Note 4")
+  })
+})
+
+describe("conversations as the app is opened", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** how many times a conversation's own file is read while `work` is done */
+  const readsOf = <T>(work: () => T): [T, number] => {
+    const read = vi.spyOn(fs, "readFileSync")
+    try {
+      const done = work()
+      return [
+        done,
+        read.mock.calls.filter(
+          ([file]) =>
+            typeof file === "string" &&
+            file.includes(
+              `${path.sep}conversations${path.sep}${ID}${path.sep}`
+            ) &&
+            file.endsWith(".json")
+        ).length,
+      ]
+    } finally {
+      read.mockRestore()
+    }
+  }
+
+  it("are listed without being read whole, and read whole once opened or carried on", async () => {
+    const first = talking(dir)
+    const box = first.say("Make a box", null) as string
+    first.go()
+    await first.idle()
+    first.hold()
+    const lid = first.say("Make a lid", null) as string
+    first.go()
+    await first.idle()
+    first.threads.close()
+
+    // the app opened again: the cards are drawn from the summaries alone
+    const { threads, say, said, go, idle } = talking(dir)
+    const [cards, reads] = readsOf(() => threads.summaries(ID))
+    expect(reads).toBe(0)
+    expect(
+      cards.map((card) => [card.id, card.title, card.lastMessage])
+    ).toEqual([
+      [lid, "Make a lid", "Done."],
+      [box, "Make a box", "Done."],
+    ])
+    // opened, it is read whole
+    expect(readsOf(() => threads.items(ID, box))[1]).toBe(1)
+    expect(said(box)).toEqual(["Make a box"])
+    // and carried on, as it was
+    expect(say("And a hole", lid)).toBe(lid)
+    go()
+    await idle()
+    expect(said(lid)).toEqual(["Make a lid", "And a hole"])
+    expect(threads.items(ID, lid).map((item) => item.kind)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ])
+  })
+
+  it("are put back on the shelf but for the one shown, once all of them is written down", async () => {
+    const first = talking(dir)
+    const box = first.say("Make a box", null) as string
+    first.go()
+    await first.idle()
+    first.threads.close()
+
+    const { threads, say, go, idle } = talking(dir)
+    threads.items(ID, box)
+    threads.shelve(ID, "another")
+    // it is read whole again when it is wanted
+    expect(readsOf(() => threads.items(ID, box))[1]).toBe(1)
+    // not while it is being answered, or has anything of it not yet written down
+    say("And a lid", box)
+    threads.shelve(ID, "another")
+    expect(readsOf(() => threads.items(ID, box))[1]).toBe(0)
+    go()
+    await idle()
+    threads.noted(ID, box, "Kept")
+    threads.shelve(ID, "another")
+    expect(readsOf(() => threads.items(ID, box))[1]).toBe(0)
+    await threads.saved()
+    // nor the one shown
+    threads.shelve(ID, box)
+    expect(readsOf(() => threads.items(ID, box))[1]).toBe(0)
+    threads.shelve(ID, null)
+    const [items, reads] = readsOf(() => threads.items(ID, box))
+    expect(reads).toBe(1)
+    expect(items.map((item) => item.kind)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "notice",
+    ])
   })
 })
 

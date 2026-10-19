@@ -1791,6 +1791,8 @@ function wire() {
       // shown again, it is tried again
       unturned.delete(id)
       follow()
+      // the project's other conversations are read again when they are wanted
+      threads.shelve(id, conversationId)
     }
   )
 
@@ -2177,10 +2179,12 @@ if (!app.requestSingleInstanceLock()) {
       },
       vault
     )
+    // (what is in each project's folder is looked for once the window is opening)
     projects = new Projects(
       path.join(data, "projects.json"),
       broadcast,
-      (id, root, board) => previews.written(id, root, board)
+      (id, root, board) => previews.written(id, root, board),
+      { later: true }
     )
     // (one thing at a time in a project's folder, whichever of these it is)
     const locks = new Locks()
@@ -2410,10 +2414,33 @@ if (!app.requestSingleInstanceLock()) {
       updates.start()
     }
 
+    // a folder or a CAD file on the command line is opened, like `code <folder>`
+    const given = process.argv
+      .slice(app.isPackaged ? 1 : 2)
+      .filter((arg) => !arg.startsWith("-"))
+    // (the projects there were before: one opened now has its model made as it is)
+    const listed = projects.ids()
+    let first: string | null = null
+    try {
+      first = open(given).id
+    } catch (error) {
+      console.error("[open]", error)
+    }
+    // The window is opened before anything more is read: it loads meanwhile, and asks for
+    // the projects once it has, which is answered when all this is done.
+    createWindow(first)
+    unreadable(
+      projects.aside &&
+        `The list of your projects could not be read, so it starts empty: add their folders again. The file was moved aside as it was, to ${projects.aside}.`,
+      settings.aside &&
+        `Your settings could not be read, so the defaults are in use. The file was moved aside as it was, to ${settings.aside}.`
+    )
+    projects.locateAll()
+
     // Files that were still being made a model of when the app was last quit, or that
     // could not be: tried again, now that whatever was wanting may be there. Only in
     // folders of the app's own making: nobody else's build is run unasked.
-    for (const { id } of projects.list(() => [])) {
+    for (const id of listed) {
       const project = projects.get(id)
       if (
         project?.made &&
@@ -2426,24 +2453,6 @@ if (!app.requestSingleInstanceLock()) {
 
     // what changed in the projects while the app was not open goes to GitHub, unshown
     if (connection.connected() && !CAPTURE) void backups.all(false)
-
-    // a folder or a CAD file on the command line is opened, like `code <folder>`
-    const given = process.argv
-      .slice(app.isPackaged ? 1 : 2)
-      .filter((arg) => !arg.startsWith("-"))
-    let first: string | null = null
-    try {
-      first = open(given).id
-    } catch (error) {
-      console.error("[open]", error)
-    }
-    createWindow(first)
-    unreadable(
-      projects.aside &&
-        `The list of your projects could not be read, so it starts empty: add their folders again. The file was moved aside as it was, to ${projects.aside}.`,
-      settings.aside &&
-        `Your settings could not be read, so the defaults are in use. The file was moved aside as it was, to ${settings.aside}.`
-    )
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(null)

@@ -347,6 +347,21 @@ describe("Projects", () => {
     projects.close()
   })
 
+  it("looks into the folders later, where it is told to, and then into each once", () => {
+    write("thing/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const id = new Projects(file, () => {}).add(path.join(root, "thing"))
+    const projects = new Projects(file, () => {}, undefined, { later: true })
+    expect(projects.knows(path.join(root, "thing"))).toBe(true)
+    expect(projects.get(id)?.manifest).toBeNull()
+    projects.locateAll()
+    expect(projects.get(id)?.manifest).toBe(path.join(root, "thing/model.json"))
+    const revision = projects.list(idle)[0].revision
+    projects.locateAll()
+    expect(projects.list(idle)[0].revision).toBe(revision)
+    projects.close()
+  })
+
   it("takes a missing project's folder, opened again, for that project", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")

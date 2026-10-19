@@ -62,10 +62,16 @@ import type { Arrangement } from "./imports"
 import {
   forgetConversations,
   newConversation,
-  readConversations,
+  readItems,
+  readShelved,
+  stampOf,
+  summedOf,
   writeConversation,
   writeConversationSoon,
+  writeSummaries,
+  writeSummariesSoon,
   type Conversation,
+  type Summed,
 } from "./conversations"
 import { findModel, type Projects } from "./projects"
 import type { Shown } from "./pictures"
@@ -1308,6 +1314,9 @@ function firstLine(text: string): string {
   return line.length > 140 ? `${line.slice(0, 140)}…` : line
 }
 
+/** How long after a conversation is written down its project's summaries are, ms. */
+const SUMMARIES_AFTER_MS = 2000
+
 /** The most letters a conversation's name can have. */
 const NAME_LENGTH = 80
 
@@ -1326,6 +1335,14 @@ export class Threads {
    */
   private writing = new Map<string, Promise<void>>()
   private again = new Set<string>()
+  /**
+   * The same of the summaries kept beside each project's conversations (see
+   * conversations.ts): the projects whose summaries are to be written soon, those being
+   * written, and those to be written again after. All by project.
+   */
+  private summing = new Map<string, NodeJS.Timeout>()
+  private summarising = new Map<string, Promise<void>>()
+  private resum = new Set<string>()
   private counter = 0
   /** the messages put to be summed up: one at a time, and none of them twice */
   private gists: Promise<void> = Promise.resolve()
@@ -1347,7 +1364,8 @@ export class Threads {
   private book(projectId: string): Book {
     let book = this.books.get(projectId)
     if (!book) {
-      const read = readConversations(this.deps.dir, projectId, () =>
+      // (each with only what its card in the sidebar needs: see `full`)
+      const read = readShelved(this.deps.dir, projectId, () =>
         this.deps.projects.takeSession(projectId)
       )
       book = {
@@ -1359,6 +1377,57 @@ export class Threads {
       this.books.set(projectId, book)
     }
     return book
+  }
+
+  /**
+   * Have all of a conversation's items, where only the few its card needs were read:
+   * before anything is shown of it, said in it or written of it. (Where its file is not
+   * there any more, or cannot be read, it goes on from those few.)
+   */
+  private full(projectId: string, conversation: Conversation) {
+    if (!conversation.shelved) return
+    const items = readItems(this.deps.dir, projectId, conversation.id)
+    conversation.shelved = false
+    if (items) conversation.items = items
+    else
+      console.error(
+        "[conversations]",
+        `${conversation.id} of ${projectId} could not be read whole`
+      )
+  }
+
+  /**
+   * Put the conversations of a project back on the shelf, all but the one the window
+   * shows (`shown`): with only what their cards need, the rest left in their files,
+   * where it is read again when it is wanted. Not one that is being answered, or has
+   * anything waiting in it, or anything of it not yet written down.
+   */
+  shelve(projectId: string, shown: string | null) {
+    const book = this.books.get(projectId)
+    if (!book) return
+    const busy = new Set(
+      [
+        book.run?.conversation,
+        book.job?.conversation,
+        ...book.waiting.map((one) => one.conversation),
+      ].map((one) => one?.id)
+    )
+    for (const conversation of book.conversations.values()) {
+      const { id, summed } = conversation
+      if (
+        conversation.shelved ||
+        id === shown ||
+        busy.has(id) ||
+        !summed ||
+        this.saving.has(id) ||
+        this.writing.has(id) ||
+        this.again.has(id) ||
+        this.unwritten.has(id)
+      )
+        continue
+      conversation.items = summed.items
+      conversation.shelved = true
+    }
   }
 
   /**
@@ -1377,9 +1446,11 @@ export class Threads {
       this.again.add(conversation.id)
       return
     }
+    // (never only what its card needs)
+    this.full(projectId, conversation)
     try {
       writeConversation(this.deps.dir, projectId, conversation)
-      this.written(conversation)
+      this.written(projectId, conversation, summedOf(conversation, ""))
     } catch (error) {
       this.unsaved(projectId, conversation, error)
     }
@@ -1398,13 +1469,16 @@ export class Threads {
       this.again.add(id)
       return
     }
+    this.full(projectId, conversation)
+    // (what the summaries are to keep of it, as it is written)
+    const summed = summedOf(conversation, "")
     const writing = writeConversationSoon(
       this.deps.dir,
       projectId,
       conversation
     )
       .then(
-        () => this.written(conversation),
+        () => this.written(projectId, conversation, summed),
         (error: unknown) => {
           // (one taken off the list meanwhile has nothing left to say it in)
           if (this.books.get(projectId)?.conversations.get(id))
@@ -1418,9 +1492,50 @@ export class Threads {
     this.writing.set(id, writing)
   }
 
-  /** A conversation has been written down. */
-  private written(conversation: Conversation) {
+  /**
+   * A conversation has been written down, as the summaries are to keep it (`summed`,
+   * but for how its file now stands).
+   */
+  private written(
+    projectId: string,
+    conversation: Conversation,
+    summed: Summed
+  ) {
     this.unwritten.delete(conversation.id)
+    const stamp = stampOf(this.deps.dir, projectId, conversation.id)
+    conversation.summed = stamp ? { ...summed, stamp } : undefined
+    this.sumSoon(projectId)
+  }
+
+  /** Have a project's summaries written down soon: not at every conversation written. */
+  private sumSoon(projectId: string) {
+    if (this.summing.has(projectId)) return
+    this.summing.set(
+      projectId,
+      setTimeout(() => this.sum(projectId), SUMMARIES_AFTER_MS)
+    )
+  }
+
+  /** Write a project's summaries down, without holding the app up: one write at a time. */
+  private sum(projectId: string) {
+    clearTimeout(this.summing.get(projectId))
+    this.summing.delete(projectId)
+    const book = this.books.get(projectId)
+    if (!book) return
+    if (this.summarising.has(projectId)) {
+      this.resum.add(projectId)
+      return
+    }
+    const writing = writeSummariesSoon(this.deps.dir, projectId, [
+      ...book.conversations.values(),
+    ])
+      // (they are written anew from the conversations' files the next time, then)
+      .catch((error: unknown) => console.error("[conversations]", error))
+      .finally(() => {
+        this.summarising.delete(projectId)
+        if (this.resum.delete(projectId)) this.sum(projectId)
+      })
+    this.summarising.set(projectId, writing)
   }
 
   /** A conversation could not be written down: said in it, the first time. */
@@ -1454,6 +1569,10 @@ export class Threads {
           this.writeSoon(projectId, conversation)
     while (this.writing.size > 0)
       await Promise.allSettled([...this.writing.values()])
+    // and their summaries
+    for (const projectId of [...this.summing.keys()]) this.sum(projectId)
+    while (this.summarising.size > 0)
+      await Promise.allSettled([...this.summarising.values()])
   }
 
   /**
@@ -1479,6 +1598,7 @@ export class Threads {
 
   /** Add an item, or replace the one with the same id. */
   private put(projectId: string, conversation: Conversation, item: ThreadItem) {
+    this.full(projectId, conversation)
     const index = conversation.items.findIndex((i) => i.id === item.id)
     if (index < 0) conversation.items.push(item)
     else conversation.items[index] = item
@@ -1502,7 +1622,10 @@ export class Threads {
   }
 
   items(projectId: string, conversationId: string): ThreadItem[] {
-    return this.book(projectId).conversations.get(conversationId)?.items ?? []
+    const conversation = this.book(projectId).conversations.get(conversationId)
+    if (!conversation) return []
+    this.full(projectId, conversation)
+    return conversation.items
   }
 
   /** How many conversations a project has had. */
@@ -1750,7 +1873,12 @@ export class Threads {
     const book = this.book(projectId)
     book.run?.abort.abort()
     book.job?.abort.abort()
+    clearTimeout(this.summing.get(projectId))
+    this.summing.delete(projectId)
+    this.resum.delete(projectId)
     const writing: Promise<void>[] = []
+    const summarising = this.summarising.get(projectId)
+    if (summarising) writing.push(summarising)
     for (const { id } of book.conversations.values()) {
       clearTimeout(this.saving.get(id))
       this.saving.delete(id)
@@ -3113,6 +3241,15 @@ export class Threads {
         this.again.delete(id)
         this.write(projectId, conversation)
       }
+      if (!this.summing.has(projectId) && !this.resum.has(projectId)) continue
+      clearTimeout(this.summing.get(projectId))
+      this.summing.delete(projectId)
+      this.resum.delete(projectId)
+      this.safely("conversations", () =>
+        writeSummaries(this.deps.dir, projectId, [
+          ...book.conversations.values(),
+        ])
+      )
     }
   }
 }

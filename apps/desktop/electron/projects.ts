@@ -401,10 +401,15 @@ export class Projects {
   /** one of a project's circuit boards was written: in its folder, by what it is known by */
   private readonly onBoard: (id: string, root: string, board: string) => void
 
+  /**
+   * `later`: what is in each project's folder is looked for only once `locateAll` is
+   * called, and not as the list is read: the app has its window opened in between.
+   */
   constructor(
     file: string,
     onChange: () => void,
-    onBoard: (id: string, root: string, board: string) => void = () => {}
+    onBoard: (id: string, root: string, board: string) => void = () => {},
+    { later = false }: { later?: boolean } = {}
   ) {
     this.file = file
     this.onChange = onChange
@@ -435,8 +440,14 @@ export class Projects {
         this.save()
       }
     }
+    if (!later) this.locateAll()
+  }
+
+  /** Look into each project's folder that has not been looked into yet. */
+  locateAll() {
     for (const project of this.saved)
-      if (!this.unavailable.has(project.id)) this.locate(project)
+      if (!this.unavailable.has(project.id) && !this.found.has(project.id))
+        this.locate(project)
   }
 
   private save() {
