@@ -6,6 +6,7 @@ import { Letter } from "@/components/mark"
 import { nearestAxis, normalOf, turnTo, type Axis } from "@/lib/orient"
 import { useStore } from "@/lib/store"
 import { bridge, useOrientation } from "./bridge"
+import { cutChosen } from "./put-away"
 
 /** Half the side of each square, on a cube of side 1; a little short, so they stay apart. */
 const H = 0.4
@@ -46,8 +47,12 @@ const WALLS: { axis: Axis; corners: Vec3[] }[] = [
   },
 ]
 
-/** A section through the middle of the model across one axis, with the near half cut away. */
+/**
+ * A section through the middle of the model across one axis, with the near half cut away.
+ * It is a cut chosen afresh, and is said to be: the section's handle comes back for it.
+ */
 export function sectionAcross(axis: Axis, middle: Vec3) {
+  cutChosen()
   const index = { x: 0, y: 1, z: 2 }[axis]
   const eye = bridge.eye?.() ?? [0, -1, 0]
   // keep the half further from the camera, so the cut face is what you see

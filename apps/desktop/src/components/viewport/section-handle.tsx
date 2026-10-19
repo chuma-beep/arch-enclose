@@ -14,6 +14,7 @@ import type { Section } from "@/lib/store"
 import { bridge } from "./bridge"
 import { dragAlong, seenAs } from "./drag"
 import { EDGE } from "./paint"
+import { stillAway, useCutsChosen, type PutAway } from "./put-away"
 
 /** How long the arrow is on the screen, in pixels. The rest is in parts of that. */
 const SIZE = 78
@@ -457,11 +458,6 @@ function Tilt({
   )
 }
 
-/** The same cut: through the same point, and turned the same way. */
-const sameCut = (a: Moved, b: Moved) =>
-  a.position.every((v, i) => v === b.position[i]) &&
-  a.turn.every((v, i) => v === b.turn[i])
-
 /**
  * The section's handle: an arrow to push the cut through the model, and two rings to
  * tilt it about the two directions that lie in it. With it, a faint square where the cut
@@ -472,7 +468,7 @@ const sameCut = (a: Moved, b: Moved) =>
  * Once it has been dragged and let go of, the cut is where it was wanted, and the handle
  * goes, for as long as the cut stays there: it stands in the middle of what was cut open
  * to be looked at. A click on nothing puts it away as well. A cut chosen afresh brings
- * it back (S again, an axis, Reset cut).
+ * it back (S again, an axis, Reset cut), even one where the cut already was (put-away.ts).
  */
 export function SectionHandle({
   section,
@@ -519,9 +515,11 @@ export function SectionHandle({
     []
   )
 
-  // where the cut was last dragged to, until it is let go of; and where it was let go
+  // where the cut was last dragged to, until it is let go of; and where it was let go,
+  // or put away, with how many cuts had been chosen afresh by then
   const dragged = React.useRef<Moved | null>(null)
-  const [left, setLeft] = React.useState<Moved | null>(null)
+  const [away, setAway] = React.useState<PutAway | null>(null)
+  const chosen = useCutsChosen()
   const moved = React.useCallback(
     (to: Moved) => {
       dragged.current = to
@@ -531,18 +529,21 @@ export function SectionHandle({
   )
   const onLetGo = React.useCallback(() => {
     // taken hold of and let go without moving it, it stays
-    if (dragged.current) setLeft(dragged.current)
+    if (dragged.current) setAway({ cut: dragged.current, chosen })
     dragged.current = null
-  }, [])
+  }, [chosen])
   React.useImperativeHandle(
     ref,
     () => ({
       putAway: () =>
-        setLeft({ position: section.position, turn: section.turn }),
+        setAway({
+          cut: { position: section.position, turn: section.turn },
+          chosen,
+        }),
     }),
-    [section.position, section.turn]
+    [section.position, section.turn, chosen]
   )
-  if (left && sameCut(left, section)) return null
+  if (stillAway(away, section, chosen)) return null
 
   const piece = { section, frame, colors, onChange: moved, onLit, onLetGo }
   return (
