@@ -103,6 +103,7 @@ import { groupNameOf } from "./naming"
 import { Pace } from "./pace"
 import { Pictures } from "./pictures"
 import { SaveFolder } from "./saving"
+import { serveFile } from "./serve"
 import {
   folderName,
   folderSize,
@@ -1185,20 +1186,11 @@ function wire() {
     const from = servedFrom(url.hostname)
     const file = from && resolveInside(from, decodeURIComponent(url.pathname))
     if (!file) return new Response(null, { status: 404 })
-    try {
-      const data = await fs.promises.readFile(file)
-      return new Response(new Uint8Array(data), {
-        headers: {
-          "content-type":
-            MIME[path.extname(file).toLowerCase()] ??
-            "application/octet-stream",
-          "access-control-allow-origin": "*",
-          "cache-control": "no-store",
-        },
-      })
-    } catch {
-      return new Response(null, { status: 404 })
-    }
+    return serveFile(
+      file,
+      request,
+      MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream"
+    )
   })
 
   ipcMain.handle(CHANNEL.projectsList, () => list())
