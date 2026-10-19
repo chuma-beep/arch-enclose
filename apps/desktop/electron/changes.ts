@@ -256,7 +256,12 @@ export class Changes {
   }
 
   private drop(projectId: string, id: string) {
-    fs.rmSync(this.root(projectId, id), { recursive: true, force: true })
+    try {
+      fs.rmSync(this.root(projectId, id), { recursive: true, force: true })
+    } catch (error) {
+      // (left where it is, taking up room, and let go of with the rest the next time)
+      console.error("[changes]", error)
+    }
   }
 
   /** One after another: a copy is not gone through while a change is being taken back. */

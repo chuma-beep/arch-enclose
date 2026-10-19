@@ -2024,6 +2024,15 @@ function wire() {
   })
 }
 
+// What goes wrong with nothing there to hear of it (a write that fails in a timer, a
+// promise nobody waits on) is logged, and the app goes on. Left to itself Electron puts
+// up a dialog for each, which something that goes wrong again and again, every few
+// hundred milliseconds, would bury the window under; and it went on after them anyway.
+process.on("uncaughtException", (error) => console.error("[uncaught]", error))
+process.on("unhandledRejection", (reason) =>
+  console.error("[unhandled]", reason)
+)
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {

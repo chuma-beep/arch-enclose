@@ -965,6 +965,43 @@ describe("a turn whose folder could not be made its conversation's", () => {
   })
 })
 
+describe("a conversation that cannot be written down", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("says so once, and the turn goes on to its end, and to what waits after it", async () => {
+    // where the conversations go is a file: nothing can be written there
+    const blocked = path.join(dir, "blocked")
+    fs.writeFileSync(blocked, "")
+    const turned: string[] = []
+    const { threads, now, say, said, go, idle } = talking(dir, {
+      deps: {
+        dir: blocked,
+        onTurned: (_, __, what) => turned.push(what),
+      },
+    })
+    const into = say("Make a box", null) as string
+    say("And a lid", into)
+    go()
+    await until(() => said(into).length === 2)
+    await idle()
+    expect(turned).toEqual(["Make a box", "And a lid"])
+    const errors = threads
+      .items(ID, into)
+      .filter((item) => item.kind === "notice" && item.tone === "error")
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatchObject({
+      text: expect.stringContaining("could not be saved"),
+    })
+    expect(now().status).toBe("idle")
+  })
+})
+
 describe("what is said while a conversation is being answered", () => {
   let dir: string
   beforeEach(() => {

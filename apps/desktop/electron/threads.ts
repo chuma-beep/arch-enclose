@@ -1323,6 +1323,11 @@ export class Threads {
   /** the messages put to be summed up: one at a time, and none of them twice */
   private gists: Promise<void> = Promise.resolve()
   private asked = new Set<string>()
+  /**
+   * the conversations that could not be written down the last time they were tried, by
+   * id: each has said so once, and says so again only after it has been written
+   */
+  private unwritten = new Set<string>()
 
   constructor(deps: ThreadsDeps) {
     this.deps = deps
@@ -1345,12 +1350,45 @@ export class Threads {
     return book
   }
 
+  /**
+   * Write a conversation down. Where it cannot be (a disk that is full, say), it says
+   * so, once, and is tried again the next time anything is said or done in it: nothing
+   * that was to come after it is kept from happening.
+   */
   private write(projectId: string, conversation: Conversation) {
     clearTimeout(this.saving.get(conversation.id))
     this.saving.delete(conversation.id)
     // a project taken off the list in the middle of a turn has nothing left to keep
-    if (this.books.get(projectId)?.conversations.get(conversation.id))
+    if (!this.books.get(projectId)?.conversations.get(conversation.id)) return
+    try {
       writeConversation(this.deps.dir, projectId, conversation)
+      this.unwritten.delete(conversation.id)
+    } catch (error) {
+      console.error("[conversations]", error)
+      if (this.unwritten.has(conversation.id)) return
+      this.unwritten.add(conversation.id)
+      // (which has it written again soon, and tried again then)
+      this.notice(
+        projectId,
+        conversation,
+        "error",
+        `This conversation could not be saved (${
+          error instanceof Error ? error.message : String(error)
+        }). It is tried again as it goes on; until then, what is new in it is lost if Enclose is quit.`
+      )
+    }
+  }
+
+  /**
+   * Do something at the end of a turn that may go wrong without anything after it being
+   * kept from happening: what went wrong is only logged.
+   */
+  private safely(what: string, work: () => void) {
+    try {
+      work()
+    } catch (error) {
+      console.error(`[${what}]`, error)
+    }
   }
 
   /** Have a conversation written down soon: often enough, without doing it at every word. */
@@ -2172,10 +2210,15 @@ export class Threads {
             own ? conversation.id : undefined
           )
           .catch(() => this.deps.changes.discard(pending))
-      else if (pending) this.deps.changes.discard(pending)
+      else if (pending)
+        this.safely("changes", () => this.deps.changes.discard(pending))
       // the agent may have created, moved or rebuilt the model
-      this.deps.projects.refresh(projectId)
+      this.safely("projects", () => this.deps.projects.refresh(projectId))
       if (book.run === run) book.run = null
+      // (whether it went wrong is by what it ended in, before anything is said of its
+      // being written down)
+      const latest = conversation.items.at(-1)
+      const failed = latest?.kind === "notice" && latest.tone === "error"
       this.write(projectId, conversation)
       // a board it asked to have made in detail is begun now, in the background
       if (run.boardJob && !abort.signal.aborted && !book.job)
@@ -2189,8 +2232,6 @@ export class Threads {
       // What was said here meanwhile is said now, if the turn got through, or was stopped
       // to make way for it. After one that was stopped, or went wrong, it waits to be
       // sent by hand: what was wanted next may no longer be.
-      const latest = conversation.items.at(-1)
-      const failed = latest?.kind === "notice" && latest.tone === "error"
       // A turn that asked for a new version of the project ends in one, which is then
       // what is carried on: unless it was stopped, which takes the asking back.
       const goesOn =
@@ -2201,7 +2242,10 @@ export class Threads {
             this.next(projectId, book, conversation)))
       // and with nothing at work in the folder any more, a project that has just been
       // given its shape can take its name
-      if (!goesOn) this.deps.projects.christen(projectId, this.deps.onRenamed)
+      if (!goesOn)
+        this.safely("projects", () =>
+          this.deps.projects.christen(projectId, this.deps.onRenamed)
+        )
       // and what it left is kept in the project's history, where the app keeps that
       if (this.books.get(projectId) === book)
         this.deps.onTurned(
@@ -2428,7 +2472,8 @@ export class Threads {
             what: job.what,
           })
           .catch(() => this.deps.changes.discard(pending))
-      else if (pending) this.deps.changes.discard(pending)
+      else if (pending)
+        this.safely("changes", () => this.deps.changes.discard(pending))
       const outcome = job.abort.signal.aborted
         ? "stopped"
         : failed
@@ -2447,7 +2492,7 @@ export class Threads {
         // its file has gone, or does not read: it is not one to be made
       }
       if (book.job === job) book.job = null
-      this.deps.projects.refresh(projectId)
+      this.safely("projects", () => this.deps.projects.refresh(projectId))
       this.write(projectId, conversation)
       if (this.books.get(projectId) === book) {
         const said = job.item.items.findLast((one) => one.kind === "assistant")
