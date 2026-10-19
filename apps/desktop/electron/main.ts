@@ -132,34 +132,43 @@ import {
   saveTheme,
 } from "./themes"
 import { ToolServer } from "./tools"
-import { Updates } from "./update"
+import { onThisMachine, Updates } from "./update"
+import { tryOtherApp } from "./github"
 
 const HERE = import.meta.dirname
 const DEV_URL = process.env.VITE_DEV_SERVER_URL
 // the app's icon, in the sizes each system asks for (scripts/icons.mjs makes them)
 const ICONS = path.join(HERE, "../icons")
 
-// For checking the app without clicking through it:
+// For checking the app without clicking through it, run from a checkout (the packaged
+// app is told none of this, but where to look for its newer versions, on this machine):
 //   ENCLOSE_USER_DATA=<dir>  keep state, and new projects, somewhere other than the real ones
 //   --capture=<file.png>     load (window hidden), save a picture of it, quit
 //   --script=<file.js>       run this in the window first; it may return a promise
 //   --wait=<ms>              how long to let the window settle before each step
 //   <folder or CAD file>     open it as a project, as if it were dropped on the window
+//                            (this one the packaged app takes too)
 //   ENCLOSE_EXAMPLES_URL=<url>  fetch the examples from there (it ends in a slash), even
 //                            when the app has them beside it
 //   ENCLOSE_UPDATES_URL=<url>  look there for the app's newer versions, where what `npm
 //                            run dist` wrote to release/ is served, and not among its
-//                            releases (the packaged app only: no other looks for any)
+//                            releases (the packaged app only: no other looks for any; and
+//                            only at an address on this machine, 127.0.0.1 or localhost)
 //   ENCLOSE_ANALYTICS_KEY=<key>  send the count of how the app is used to that PostHog
 //                            project: run from a checkout it is sent nowhere otherwise
+//   ENCLOSE_GITHUB_CLIENT_ID, ENCLOSE_GITHUB_APP  back up through another GitHub App
+const CHECKOUT = !app.isPackaged
 const flag = (name: string) =>
-  process.argv
-    .find((a) => a.startsWith(`--${name}=`))
-    ?.slice(name.length + 3) ?? null
+  CHECKOUT
+    ? (process.argv
+        .find((a) => a.startsWith(`--${name}=`))
+        ?.slice(name.length + 3) ?? null)
+    : null
 const CAPTURE = flag("capture")
-const EXAMPLES_FROM = process.env.ENCLOSE_EXAMPLES_URL || null
-const UPDATES_FROM = process.env.ENCLOSE_UPDATES_URL || null
-const ANALYTICS_KEY = process.env.ENCLOSE_ANALYTICS_KEY || null
+const EXAMPLES_FROM = (CHECKOUT && process.env.ENCLOSE_EXAMPLES_URL) || null
+const UPDATES_FROM = onThisMachine(process.env.ENCLOSE_UPDATES_URL)
+const ANALYTICS_KEY = (CHECKOUT && process.env.ENCLOSE_ANALYTICS_KEY) || null
+if (CHECKOUT) tryOtherApp(process.env)
 /** what the systems the app runs on are called, where the count of its use says which */
 const SYSTEMS: Partial<Record<NodeJS.Platform, string>> = {
   darwin: "macOS",
@@ -182,7 +191,7 @@ app.setName("Enclose")
 /** How often the agents in use are looked at for a newer version, while the app is open. */
 const NEWER_EVERY_MS = 6 * 60 * 60 * 1000
 
-const ELSEWHERE = process.env.ENCLOSE_USER_DATA ?? null
+const ELSEWHERE = (CHECKOUT && process.env.ENCLOSE_USER_DATA) || null
 if (ELSEWHERE) app.setPath("userData", ELSEWHERE)
 
 protocol.registerSchemesAsPrivileged([

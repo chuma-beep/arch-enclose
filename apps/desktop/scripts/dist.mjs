@@ -147,6 +147,18 @@ const shared = {
   // the app's repository, the latest of them. It is written into the app, and is why
   // latest-mac.yml (or latest-linux.yml) is made.
   publish: { provider: "github", owner: "enclosedev", repo: "enclose" },
+  // What the app's own Electron is let do, set in it for good (its fuses): it is never
+  // Node for whoever starts it with ELECTRON_RUN_AS_NODE, takes no NODE_OPTIONS and no
+  // --inspect, and loads the app from its archive alone. (Nothing of the app runs
+  // itself as Node: the agents are the user's own programs, and git is git.) Checking
+  // the archive against what the app was signed with is left out for now: it has not
+  // been tried with a release yet, and on Linux Electron cannot do it at all.
+  electronFuses: {
+    runAsNode: false,
+    enableNodeOptionsEnvironmentVariable: false,
+    enableNodeCliInspectArguments: false,
+    onlyLoadAppFromAsar: true,
+  },
 }
 
 let made

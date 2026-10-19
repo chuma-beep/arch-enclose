@@ -6,11 +6,23 @@
 
 /**
  * Enclose's GitHub App: what it is known by, and where it is installed from. A build
- * that has none (`ENCLOSE_GITHUB_CLIENT_ID` overrides it) cannot connect.
+ * that has none cannot connect. Run from a checkout, another can be tried (`tryOtherApp`).
  */
 export const GITHUB_APP = {
-  clientId: process.env.ENCLOSE_GITHUB_CLIENT_ID ?? "Iv23liAe5DFtoTwOSFB8",
-  slug: process.env.ENCLOSE_GITHUB_APP ?? "enclose-cad",
+  clientId: "Iv23liAe5DFtoTwOSFB8",
+  slug: "enclose-cad",
+}
+
+/**
+ * Back up through another GitHub App, where ENCLOSE_GITHUB_CLIENT_ID and
+ * ENCLOSE_GITHUB_APP name one: as a run from a checkout is told to, and never the
+ * packaged app, whose token would otherwise go to whatever app it is told of.
+ */
+export function tryOtherApp(env: NodeJS.ProcessEnv) {
+  if (env.ENCLOSE_GITHUB_CLIENT_ID !== undefined)
+    GITHUB_APP.clientId = env.ENCLOSE_GITHUB_CLIENT_ID
+  if (env.ENCLOSE_GITHUB_APP !== undefined)
+    GITHUB_APP.slug = env.ENCLOSE_GITHUB_APP
 }
 
 const SITE = "https://github.com"

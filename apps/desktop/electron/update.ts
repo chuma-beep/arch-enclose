@@ -22,6 +22,24 @@ export type Updater = {
   on(event: "error", listener: (error: Error) => void): unknown
 }
 
+/**
+ * Where the app is told to look for its newer versions instead (ENCLOSE_UPDATES_URL), if
+ * that is an address on this machine, as where `npm run dist` wrote them is served to try
+ * one out: anywhere else, nothing it is told counts, and it looks where it was made to.
+ */
+export function onThisMachine(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    const { protocol, hostname } = new URL(url)
+    return (protocol === "http:" || protocol === "https:") &&
+      ["127.0.0.1", "localhost", "[::1]"].includes(hostname)
+      ? url
+      : null
+  } catch {
+    return null
+  }
+}
+
 export type UpdatesDeps = {
   updater: Updater
   /** told where things are, each time that changes */

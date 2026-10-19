@@ -3,7 +3,24 @@ import { EventEmitter } from "node:events"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { Update } from "../shared/api"
-import { Updates, type Updater } from "./update"
+import { onThisMachine, Updates, type Updater } from "./update"
+
+describe("onThisMachine", () => {
+  it("is an address on this machine, and nothing else", () => {
+    expect(onThisMachine("http://127.0.0.1:8123/")).toBe(
+      "http://127.0.0.1:8123/"
+    )
+    expect(onThisMachine("http://localhost:8123/")).toBe(
+      "http://localhost:8123/"
+    )
+    expect(onThisMachine("http://[::1]:8123/")).toBe("http://[::1]:8123/")
+    expect(onThisMachine("https://updates.example.com/")).toBeNull()
+    expect(onThisMachine("http://127.0.0.1.example.com/")).toBeNull()
+    expect(onThisMachine("file:///tmp/release/")).toBeNull()
+    expect(onThisMachine("not a url")).toBeNull()
+    expect(onThisMachine(undefined)).toBeNull()
+  })
+})
 
 /** An updater that does what it is told to, and keeps what was asked of it. */
 function fakeUpdater() {

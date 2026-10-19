@@ -138,7 +138,7 @@ run examples` packs them again after a change, into `release/examples/`, and wri
 sizes and sums into the list; the archives then go up as a release under a new name (the
 list says which), since an app already made goes on fetching the ones it was made with.
 `ENCLOSE_EXAMPLES_URL` has them fetched from somewhere else, a folder of them served on
-your own machine say.
+your own machine say, when the app is run from a checkout.
 
 ### The installer
 
@@ -302,7 +302,9 @@ app from treating itself as one of those, so a deb, pacman package or rpm is rep
 installing the newer one instead. Run from a checkout, the app looks for nothing.
 
 To try an update before there is a release of it, serve what `npm run dist` wrote and
-start an installed app that has an earlier version, telling it to look there:
+start an installed app that has an earlier version, telling it to look there (on this
+machine: the installed app takes no other address, and none of the other variables and
+flags a checkout takes, `--capture`, `--script`, `ENCLOSE_USER_DATA` and the rest):
 
 ```
 python3 -m http.server 8123 --bind 127.0.0.1 --directory release
