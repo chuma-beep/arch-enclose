@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { ThreadItem } from "@shared/api"
-import { atWork, inBlocks, spelledOut, type Steps } from "./steps"
+import { atWork, inBlocks, sameSteps, spelledOut, type Steps } from "./steps"
 
 const user = (id: string, at = 0): ThreadItem => ({
   kind: "user",
@@ -289,5 +289,34 @@ describe("spelledOut", () => {
     const pieces = spelledOut(stretch)
     expect(pieces.map((piece) => piece.id)).toEqual(["a", "b", "c", "d"])
     expect((pieces[1] as Steps).took).toBe(8000)
+  })
+})
+
+describe("sameSteps", () => {
+  it("finds a stretch gathered again from items that did not change the same", () => {
+    const items = [user("u"), step("a"), step("b"), says("s")]
+    const [, first] = inBlocks(items) as [unknown, Steps]
+    // the last thing said changed: the stretch before it is a new list of the same steps
+    const [, again] = inBlocks([...items.slice(0, 3), says("s", 1)]) as [
+      unknown,
+      Steps,
+    ]
+    expect(again).not.toBe(first)
+    expect(sameSteps(first.steps, again.steps)).toBe(true)
+  })
+
+  it("finds it changed when one of its steps did, or another came", () => {
+    const items = [user("u"), step("a", "running"), says("s")]
+    const [, first] = inBlocks(items) as [unknown, Steps]
+    const [, done] = inBlocks([user("u"), step("a"), says("s")]) as [
+      unknown,
+      Steps,
+    ]
+    expect(sameSteps(first.steps, done.steps)).toBe(false)
+    const [, more] = inBlocks([items[0]!, items[1]!, step("b")]) as [
+      unknown,
+      Steps,
+    ]
+    expect(sameSteps(first.steps, more.steps)).toBe(false)
   })
 })

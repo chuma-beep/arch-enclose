@@ -14,9 +14,10 @@ import {
 
 /**
  * Something Claude said. What it said outright is shown; what it set off from that, for
- * whoever wants it, is behind a line under it that opens as the steps do.
+ * whoever wants it, is behind a line under it that opens as the steps do. Drawn again
+ * only when it changes, and not for every word of what is being said after it.
  */
-export function Reply({
+export const Reply = React.memo(function Reply({
   item,
 }: {
   item: Extract<ThreadItem, { kind: "assistant" }>
@@ -52,4 +53,4 @@ export function Reply({
       </Collapsible>
     </div>
   )
-}
+})

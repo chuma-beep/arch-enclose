@@ -129,7 +129,7 @@ function Bubble({
   )
 }
 
-function UserMessage({
+const UserMessage = React.memo(function UserMessage({
   item,
   project,
   waiting,
@@ -282,13 +282,13 @@ function UserMessage({
       )}
     </div>
   )
-}
+})
 
 /**
  * Something said while the conversation was being answered, which waits its turn: as it
  * will be said, with a way to say it at once, and one to take it back.
  */
-function Queued({
+const Queued = React.memo(function Queued({
   item,
   project,
   elsewhere,
@@ -351,7 +351,7 @@ function Queued({
       </div>
     </div>
   )
-}
+})
 
 function PermissionCard({
   item,
@@ -435,7 +435,12 @@ function AtWork({
   )
 }
 
-function Item({
+/**
+ * One thing in the conversation that is not a stretch of steps. Each keeps its object
+ * until it changes (see withItem in lib/store.ts), and is drawn again only then: not for
+ * every word of the answer that is coming in under it.
+ */
+const Item = React.memo(function Item({
   item,
   project,
 }: {
@@ -472,7 +477,7 @@ function Item({
         </div>
       )
   }
-}
+})
 
 /**
  * A circuit board made in detail in the background, beside the conversation: all of it in

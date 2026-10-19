@@ -73,6 +73,18 @@ export function inBlocks(items: ThreadItem[]): Block[] {
 }
 
 /**
+ * Whether two lists of steps are the same steps, each the very one it was. A stretch is
+ * gathered again from the conversation's items whenever any of them changes, and is a
+ * new list each time; the items in it are the same until they themselves change.
+ */
+export function sameSteps(
+  a: readonly (Step | Aside)[],
+  b: readonly (Step | Aside)[]
+): boolean {
+  return a.length === b.length && a.every((step, index) => step === b[index])
+}
+
+/**
  * A stretch of steps spelled out, as it is shown while Claude is still at it: what it
  * said on the way stands in the conversation, each thing by itself, and the steps
  * between are each a stretch of their own, which knows how long it took once something

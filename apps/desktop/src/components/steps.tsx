@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/collapsible"
 import { Markdown } from "@/components/markdown"
 import { usePreferences } from "@/lib/preferences"
-import type { Aside, Step } from "@/lib/steps"
+import { sameSteps, type Aside, type Step } from "@/lib/steps"
 import { duration, elapsed, useNow } from "@/lib/time"
 
 /** A line of the steps, whichever one; and of anything else that opens as they do. */
@@ -170,89 +170,98 @@ export function Meanwhile({
  * What Claude did before it answered, as one line. While it is at it, the line is the
  * step it is on, or what it is at between them; afterwards, how long it was at them. It
  * opens into all of them, with what Claude said on the way between one and the next.
+ * Drawn again only when one of them changes (see sameSteps), and not for every word
+ * said after them.
  */
-export function Steps({
-  steps,
-  took,
-  working,
-  doing = null,
-}: {
-  steps: (Step | Aside)[]
-  /** how long Claude was at them, in ms, if they are over and that is known */
-  took: number | null
-  /** Claude is still on the turn these are the latest of, and may add to them */
-  working: boolean
-  /** what Claude is at after them where nothing shows it, while it is working */
-  doing?: Doing | null
-}) {
-  const [open, setOpen] = React.useState(false)
-  const whole = useKeptInView<HTMLDivElement>(open)
-  const taken = steps.filter((step) => step.kind === "tool")
-  const current =
-    taken.findLast((step) => step.state === "running") ?? taken.at(-1)
-  if (!current) return null
-  const busy = working || current.state === "running"
-  const meanwhile = working ? doing : null
+export const Steps = React.memo(
+  function Steps({
+    steps,
+    took,
+    working,
+    doing = null,
+  }: {
+    steps: (Step | Aside)[]
+    /** how long Claude was at them, in ms, if they are over and that is known */
+    took: number | null
+    /** Claude is still on the turn these are the latest of, and may add to them */
+    working: boolean
+    /** what Claude is at after them where nothing shows it, while it is working */
+    doing?: Doing | null
+  }) {
+    const [open, setOpen] = React.useState(false)
+    const whole = useKeptInView<HTMLDivElement>(open)
+    const taken = steps.filter((step) => step.kind === "tool")
+    const current =
+      taken.findLast((step) => step.state === "running") ?? taken.at(-1)
+    if (!current) return null
+    const busy = working || current.state === "running"
+    const meanwhile = working ? doing : null
 
-  // one step with no time to give is the whole of it: there is nothing to open, unless
-  // something has taken its place in the line
-  if (steps.length === 1 && !meanwhile && (busy || took === null))
+    // one step with no time to give is the whole of it: there is nothing to open, unless
+    // something has taken its place in the line
+    if (steps.length === 1 && !meanwhile && (busy || took === null))
+      return (
+        <div className={LINE}>
+          <StepLine step={current} live={busy} />
+        </div>
+      )
+
     return (
-      <div className={LINE}>
-        <StepLine step={current} live={busy} />
-      </div>
-    )
-
-  return (
-    <Collapsible
-      ref={whole}
-      open={open}
-      onOpenChange={setOpen}
-      className="scroll-my-6"
-    >
-      <CollapsibleTrigger
-        className={cn(
-          LINE,
-          "group/steps max-w-full rounded-md text-left outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        )}
+      <Collapsible
+        ref={whole}
+        open={open}
+        onOpenChange={setOpen}
+        className="scroll-my-6"
       >
-        {busy && !open ? (
-          // each step takes the place of the one before it, with no show made of it
-          <span className="flex min-w-0 items-center gap-2">
-            {meanwhile ? (
-              <Meanwhile doing={meanwhile} among />
-            ) : (
-              <StepLine step={current} live />
-            )}
-          </span>
-        ) : busy || took === null ? (
-          <span className={cn(busy && LIVE)}>
-            {taken.length === 1 ? "1 step" : `${taken.length} steps`}
-          </span>
-        ) : (
-          <span>Worked for {duration(took)}</span>
-        )}
-        <ChevronDownIcon className="size-3.5 shrink-0 opacity-60 transition-transform group-data-panel-open/steps:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
-        <ol className="mt-1.5 ml-0.5 flex flex-col gap-1.5 border-l pl-3">
-          {steps.map((step) =>
-            step.kind === "tool" ? (
-              <li key={step.id} className={LINE}>
-                <StepLine step={step} />
-              </li>
-            ) : (
-              // said on the way: in full, since here is the one place it is kept,
-              // and as words alone among the steps
-              <li key={step.id}>
-                <Markdown className="gap-1.5 text-xs leading-5 text-muted-foreground">
-                  {step.text}
-                </Markdown>
-              </li>
-            )
+        <CollapsibleTrigger
+          className={cn(
+            LINE,
+            "group/steps max-w-full rounded-md text-left outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           )}
-        </ol>
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
+        >
+          {busy && !open ? (
+            // each step takes the place of the one before it, with no show made of it
+            <span className="flex min-w-0 items-center gap-2">
+              {meanwhile ? (
+                <Meanwhile doing={meanwhile} among />
+              ) : (
+                <StepLine step={current} live />
+              )}
+            </span>
+          ) : busy || took === null ? (
+            <span className={cn(busy && LIVE)}>
+              {taken.length === 1 ? "1 step" : `${taken.length} steps`}
+            </span>
+          ) : (
+            <span>Worked for {duration(took)}</span>
+          )}
+          <ChevronDownIcon className="size-3.5 shrink-0 opacity-60 transition-transform group-data-panel-open/steps:rotate-180" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
+          <ol className="mt-1.5 ml-0.5 flex flex-col gap-1.5 border-l pl-3">
+            {steps.map((step) =>
+              step.kind === "tool" ? (
+                <li key={step.id} className={LINE}>
+                  <StepLine step={step} />
+                </li>
+              ) : (
+                // said on the way: in full, since here is the one place it is kept,
+                // and as words alone among the steps
+                <li key={step.id}>
+                  <Markdown className="gap-1.5 text-xs leading-5 text-muted-foreground">
+                    {step.text}
+                  </Markdown>
+                </li>
+              )
+            )}
+          </ol>
+        </CollapsibleContent>
+      </Collapsible>
+    )
+  },
+  (was, now) =>
+    was.took === now.took &&
+    was.working === now.working &&
+    was.doing === now.doing &&
+    sameSteps(was.steps, now.steps)
+)

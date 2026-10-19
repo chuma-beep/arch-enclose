@@ -729,8 +729,12 @@ function partChoices(): Choice[] {
   }))
 }
 
-/** Where a message to Claude is written, with what has been said of parts to go with it. */
-export function Composer({
+/**
+ * Where a message to Claude is written, with what has been said of parts to go with it.
+ * It looks after itself: the conversation above it coming in word by word is not
+ * reason enough to draw it again.
+ */
+export const Composer = React.memo(function Composer({
   placeholder,
   autoFocus,
 }: {
@@ -1118,4 +1122,4 @@ export function Composer({
       </InputGroupAddon>
     </InputGroup>
   )
-}
+})
