@@ -738,6 +738,8 @@ on("turn/interrupt", () => {
   const begun: { from: string; to: string }[] = []
   /** how each board made in the background went */
   const made: BoardMade[] = []
+  /** how many times the project was asked to take the name of its model */
+  let christened = 0
   const threads = new Threads({
     dir: path.join(dir, "conversations"),
     projects: {
@@ -746,7 +748,7 @@ on("turn/interrupt", () => {
       hasMeshes: () => false,
       goesByOwnSettings: () => true,
       refresh: () => {},
-      christen: () => {},
+      christen: () => void christened++,
     } as unknown as ThreadsDeps["projects"],
     changes: {
       before: async () => null,
@@ -781,6 +783,7 @@ on("turn/interrupt", () => {
     now,
     begun,
     made,
+    christened: () => christened,
     /** how many turns have been given the app's tools: under way, with all they need */
     served: () => given.length,
     say: (text: string, into: string | null) =>
@@ -916,6 +919,69 @@ describe("a board made in the background", () => {
       steps: { connecting: null, routing: null, checking: null },
     })
     expect(made[0].steps.placing).toBeGreaterThanOrEqual(0)
+    hold()
+  })
+
+  it("is stopped when its project is taken off the list", async () => {
+    const { threads, say, go, hold, make, made } = talking(dir, { each: true })
+    say("Make the board in detail", null)
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    threads.forget(ID)
+    await until(() => made.length === 1)
+    expect(made[0].outcome).toBe("stopped")
+    hold()
+  })
+
+  it("keeps the project from being named, and its folder renamed, until it is done", async () => {
+    const { threads, say, go, hold, make, christened } = talking(dir, {
+      each: true,
+    })
+    say("Make the board in detail", null)
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    await until(() => threads.summaries(ID)[0].status === "idle")
+    expect(christened()).toBe(0)
+    go()
+    await until(() => threads.jobOf(ID) === null)
+    expect(christened()).toBe(1)
+    hold()
+  })
+
+  it("keeps what it changed as its conversation's, where the folder is that one's alone", async () => {
+    const kept: (string | undefined)[] = []
+    const { threads, say, go, hold, make } = talking(dir, {
+      each: true,
+      deps: {
+        turnTo: async () => true,
+        changes: {
+          before: async () => ({ id: "x" }),
+          after: async (
+            _: unknown,
+            __: unknown,
+            about: { what: string },
+            of?: string
+          ) => {
+            kept.push(`${about.what}: ${of}`)
+            return null
+          },
+          discard: () => {},
+          toTell: () => ({ undone: [], redone: [] }),
+        } as unknown as ThreadsDeps["changes"],
+      },
+    })
+    const into = say("Make the board in detail", null) as string
+    await make("main", "A clock board.")
+    go()
+    await until(() => threads.jobOf(ID) !== null)
+    go()
+    await until(() => threads.jobOf(ID) === null)
+    expect(kept).toEqual([
+      `Make the board in detail: ${into}`,
+      `Made Main board in detail: ${into}`,
+    ])
     hold()
   })
 

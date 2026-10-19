@@ -1636,10 +1636,14 @@ export class Threads {
     this.deps.onSummary()
   }
 
-  /** Forget everything said about a project: it is being taken off the list. */
+  /**
+   * Forget everything said about a project: it is being taken off the list. What is at
+   * work in it, a board in the background as well, is stopped.
+   */
   forget(projectId: string) {
     const book = this.book(projectId)
     book.run?.abort.abort()
+    book.job?.abort.abort()
     for (const { id } of book.conversations.values()) {
       clearTimeout(this.saving.get(id))
       this.saving.delete(id)
@@ -2234,7 +2238,8 @@ export class Threads {
             conversation,
             run.boardJob.board,
             run.boardJob.brief,
-            run.manner
+            run.manner,
+            own
           )
         )
       // What was said here meanwhile is said now, if the turn got through, or was stopped
@@ -2249,8 +2254,9 @@ export class Threads {
           ((run.makingWay || !(abort.signal.aborted || failed)) &&
             this.next(projectId, book, conversation)))
       // and with nothing at work in the folder any more, a project that has just been
-      // given its shape can take its name
-      if (!goesOn)
+      // given its shape can take its name (a board begun in the background has the
+      // folder until it is done, and the project is named then)
+      if (!goesOn && !book.job)
         this.safely("projects", () =>
           this.deps.projects.christen(projectId, this.deps.onRenamed)
         )
@@ -2279,7 +2285,9 @@ export class Threads {
     conversation: Conversation,
     board: string,
     brief: string,
-    manner: Manner
+    manner: Manner,
+    /** the folder is the conversation's alone, as each has the project its own way */
+    own: boolean
   ) {
     const book = this.book(projectId)
     const project = this.deps.projects.get(projectId)
@@ -2473,12 +2481,16 @@ export class Threads {
       finish()
       job.notes.end()
       for (const settle of [...job.pending.values()]) settle("deny")
+      // (a change of its conversation's, where the folder is that one's alone: one that
+      // is no conversation's would cut what can be taken back in every one)
       if (pending && this.books.get(projectId) === book)
         await this.deps.changes
-          .after(pending, project.path, {
-            conversationId: conversation.id,
-            what: job.what,
-          })
+          .after(
+            pending,
+            project.path,
+            { conversationId: conversation.id, what: job.what },
+            own ? conversation.id : undefined
+          )
           .catch(() => this.deps.changes.discard(pending))
       else if (pending)
         this.safely("changes", () => this.deps.changes.discard(pending))
@@ -2511,6 +2523,12 @@ export class Threads {
           conversation.name ?? null,
           said?.kind === "assistant" ? said.text : ""
         )
+        // with nothing at work in the folder any more, a project that was given its
+        // shape as the board was asked for can take its name
+        if (!book.run)
+          this.safely("projects", () =>
+            this.deps.projects.christen(projectId, this.deps.onRenamed)
+          )
         // what was said in another conversation meanwhile goes on now
         const waited = book.waiting[0]
         if (!book.run && waited) this.next(projectId, book, waited.conversation)
