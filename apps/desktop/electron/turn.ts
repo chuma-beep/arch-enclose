@@ -29,6 +29,12 @@ export type Asked = {
 export type Turn = {
   /** the project's folder, which the agent works in */
   cwd: string
+  /**
+   * The agent goes by the settings the folder has of its own as well as the user's
+   * (Claude Code's .claude/settings.json and the like): a folder the app made, one with
+   * none, or one whose settings the user has said to trust (projects.ts).
+   */
+  ownSettings?: boolean
   /** what to start, and with what around it */
   launch: Launch
   manner: Manner

@@ -188,6 +188,12 @@ export type Project = {
    * taking the project off the list forgets them. At most one is running at a time.
    */
   conversations: ConversationSummary[]
+  /**
+   * The folder is one the user opened, with settings for Claude Code of its own
+   * (.claude/settings.json, .claude/settings.local.json or .mcp.json), and the user is
+   * yet to say whether to trust them: until they do, the agent goes by the user's alone.
+   */
+  settingsToTrust: boolean
 }
 
 /**
@@ -806,6 +812,11 @@ export type CadApi = {
      * its folder is left as it is called.
      */
     rename(id: string, name: string): Promise<void>
+    /**
+     * Say, once, whether the agent goes by the settings the project's folder has of its
+     * own (see Project.settingsToTrust).
+     */
+    trustSettings(id: string, trusted: boolean): Promise<void>
     reveal(id: string): Promise<void>
     onChange(listener: (projects: Project[]) => void): () => void
   }
@@ -1127,6 +1138,7 @@ export const CHANNEL = {
   projectsExampleProgress: "projects:example-progress",
   projectsRemove: "projects:remove",
   projectsRename: "projects:rename",
+  projectsTrustSettings: "projects:trust-settings",
   projectsReveal: "projects:reveal",
   projectsChanged: "projects:changed",
   modelRead: "model:read",

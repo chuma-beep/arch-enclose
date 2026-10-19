@@ -101,7 +101,8 @@ export const isRepository = (dir: string) =>
 
 /** Whether a folder is a repository, or in one: its own, or one a folder above it is. */
 export function inRepository(dir: string): boolean {
-  for (let at = path.resolve(dir); ; ) {
+  let at = path.resolve(dir)
+  for (;;) {
     if (isRepository(at)) return true
     const up = path.dirname(at)
     if (up === at) return false

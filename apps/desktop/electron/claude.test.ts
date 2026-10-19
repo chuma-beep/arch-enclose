@@ -8,7 +8,15 @@ import {
   extraArgs,
   followDoing,
   modelChoices,
+  settingSources,
 } from "./claude"
+
+describe("settingSources", () => {
+  it("takes the folder's own settings only where it is trusted to say", () => {
+    expect(settingSources(true)).toEqual(["user", "project", "local"])
+    expect(settingSources(false)).toEqual(["user"])
+  })
+})
 
 describe("modelChoices", () => {
   it("offers the models as Claude Code lists them", () => {

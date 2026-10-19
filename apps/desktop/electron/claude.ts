@@ -318,18 +318,28 @@ export function commandChoices(
 }
 
 /**
+ * Where Claude Code takes its settings from: the user's own, and the folder's as well
+ * where the folder is trusted to say what it may do (projects.ts). The folder's own
+ * hooks and servers of tools run with no asking, and so does what they say.
+ */
+export const settingSources = (folders: boolean): SettingSource[] =>
+  folders ? ["user", "project", "local"] : ["user"]
+
+/**
  * The commands and skills the installed Claude Code has in a folder: its own, the
- * user's, the folder's, and what plugins bring. None, if it would not say.
+ * user's, the folder's (where it goes by the folder's own settings: see projects.ts),
+ * and what plugins bring. None, if it would not say.
  */
 export async function listCommands(
   launch: Launch | null,
-  cwd: string
+  cwd: string,
+  folders: boolean
 ): Promise<Commands> {
   const found =
     launch &&
     (await asked(
       launch,
-      { cwd, settingSources: ["user", "project", "local"] },
+      { cwd, settingSources: settingSources(folders) },
       async (session) =>
         commandChoices(
           await session.supportedCommands(),

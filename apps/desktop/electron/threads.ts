@@ -52,7 +52,7 @@ import { pictureMark, pictureName } from "../shared/pictures"
 import { replyOf } from "../shared/reply"
 import { Following } from "./boards"
 import type { Changes } from "./changes"
-import { followDoing, running } from "./claude"
+import { followDoing, running, settingSources } from "./claude"
 import { runCodex } from "./codex"
 import { GIST_FROM, gistOf, plain } from "./gist"
 import { runGrok } from "./grok"
@@ -1976,6 +1976,7 @@ export class Threads {
 
     const turn: Turn = {
       cwd: project.path,
+      ownSettings: this.deps.projects.goesByOwnSettings(projectId),
       // (a turn with nothing to run it is over before this is read)
       launch: this.deps.launch(provider) ?? { path: "", args: [], env: {} },
       manner,
@@ -2242,6 +2243,7 @@ export class Threads {
     }
     const turn: Turn = {
       cwd: project.path,
+      ownSettings: this.deps.projects.goesByOwnSettings(projectId),
       launch: this.deps.launch(provider) ?? { path: "", args: [], env: {} },
       manner,
       content: jobAsked(board, name, brief),
@@ -2762,7 +2764,7 @@ export class Threads {
           ...running(turn.launch),
           abortController: abort,
           includePartialMessages: true,
-          settingSources: ["user", "project", "local"],
+          settingSources: settingSources(turn.ownSettings === true),
           systemPrompt: {
             type: "preset",
             preset: "claude_code",

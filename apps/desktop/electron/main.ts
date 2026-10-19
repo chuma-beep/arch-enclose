@@ -1182,6 +1182,11 @@ function wire() {
     projects.rename(String(id), String(name))
     void backups.renamed(String(id))
   })
+  ipcMain.handle(
+    CHANNEL.projectsTrustSettings,
+    (_, id: string, trusted: unknown) =>
+      projects.trust(String(id), trusted === true)
+  )
   ipcMain.handle(CHANNEL.githubGet, () => githubState())
   ipcMain.handle(CHANNEL.githubConnect, () => {
     // (heard of as it goes: the window is not kept waiting on the user's typing)
@@ -1772,7 +1777,13 @@ function wire() {
     let asking = commands.get(project.id)
     if (!asking) {
       asking = providers.found
-        .then(() => listCommands(providers.launch("claude"), project.path))
+        .then(() =>
+          listCommands(
+            providers.launch("claude"),
+            project.path,
+            projects.goesByOwnSettings(project.id)
+          )
+        )
         .finally(() => commands.delete(project.id))
       commands.set(project.id, asking)
     }

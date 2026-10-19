@@ -247,6 +247,37 @@ describe("Projects", () => {
     again.close()
   })
 
+  it("goes by a folder's own settings for Claude Code only once the user trusts them", () => {
+    const file = path.join(root, "state/projects.json")
+    write("opened/.claude/settings.json", { hooks: {} })
+    write("plain/model.py", "")
+    write("made/.claude/settings.json", { hooks: {} })
+    const projects = new Projects(file, () => {})
+    const opened = projects.add(path.join(root, "opened"))
+    const plain = projects.add(path.join(root, "plain"))
+    const made = projects.add(path.join(root, "made"), { name: "Made" })
+    const asking = () =>
+      projects
+        .list(idle)
+        .filter((p) => p.settingsToTrust)
+        .map((p) => p.id)
+    expect(asking()).toEqual([opened])
+    expect(projects.goesByOwnSettings(opened)).toBe(false)
+    expect(projects.goesByOwnSettings(plain)).toBe(true)
+    expect(projects.goesByOwnSettings(made)).toBe(true)
+    // a folder that has some later is asked about then
+    write("plain/.mcp.json", { mcpServers: {} })
+    expect(projects.goesByOwnSettings(plain)).toBe(false)
+    projects.trust(opened, true)
+    projects.trust(plain, false)
+    expect(asking()).toEqual([])
+    const again = new Projects(file, () => {})
+    expect(again.goesByOwnSettings(opened)).toBe(true)
+    expect(again.goesByOwnSettings(plain)).toBe(false)
+    projects.close()
+    again.close()
+  })
+
   it("hands over the session of the one conversation a project used to have, once", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")

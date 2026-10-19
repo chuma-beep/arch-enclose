@@ -36,6 +36,12 @@ type Saved = {
    * Only this says so: never what the repository says of itself.
    */
   kept?: boolean
+  /**
+   * What the user said of the settings for Claude Code the folder has of its own (see
+   * `ownSettings`), asked once: true, the agent goes by them; false, it never does. Not
+   * asked yet, it does not. A folder the app made goes by its own without asking.
+   */
+  trusted?: boolean
   /** `name` is a stand-in, until what is being made gives the project a name of its own */
   standIn?: boolean
   /**
@@ -259,6 +265,24 @@ export function readBranch(dir: string): string | null {
     at = up
   }
 }
+
+/**
+ * The files of settings for Claude Code a folder has of its own: what can have it run
+ * commands with no asking (hooks, servers of tools, what it is let do), which are the
+ * folder's to say only where the user trusts it.
+ */
+export const OWN_SETTINGS = [
+  path.join(".claude", "settings.json"),
+  path.join(".claude", "settings.local.json"),
+  ".mcp.json",
+]
+
+/** Whether a folder has settings for Claude Code of its own. */
+export const ownSettings = (dir: string) =>
+  OWN_SETTINGS.some((file) => fs.existsSync(path.join(dir, file)))
+
+/** Whether the app made a project's folder (from before `made` was kept: by its name). */
+const madeHere = (project: Saved) => project.made ?? project.name !== undefined
 
 /** `file` as a path inside `root`, or null if it would land outside. */
 export function resolveInside(root: string, file: string): string | null {
@@ -730,8 +754,33 @@ export class Projects {
         undo: null,
         redo: null,
         conversations: conversations(p.id),
+        settingsToTrust:
+          !madeHere(p) && p.trusted === undefined && ownSettings(p.path),
       }
     })
+  }
+
+  /**
+   * Whether the agent goes by the settings a project's folder has of its own, as well as
+   * the user's: where the app made it, where it has none, or where the user trusts them.
+   */
+  goesByOwnSettings(id: string): boolean {
+    const project = this.saved.find((p) => p.id === id)
+    if (!project) return false
+    return (
+      madeHere(project) ||
+      project.trusted === true ||
+      !ownSettings(project.path)
+    )
+  }
+
+  /** The user says whether the agent goes by the settings the folder has of its own. */
+  trust(id: string, trusted: boolean) {
+    const project = this.saved.find((p) => p.id === id)
+    if (!project) return
+    project.trusted = trusted
+    this.save()
+    this.onChange()
   }
 
   /**
@@ -873,8 +922,7 @@ export class Projects {
     this.boardsWatched.delete(id)
     this.bringing.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
-    // projects made before `made` was kept are known by having a name of their own
-    if (project.made ?? project.name !== undefined) removeIfEmpty(project.path)
+    if (madeHere(project)) removeIfEmpty(project.path)
     this.save()
     this.onChange()
   }

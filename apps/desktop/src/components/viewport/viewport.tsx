@@ -16,6 +16,7 @@ import type { PartFact } from "@/lib/custom-tools/types"
 import { Blueprint } from "@/components/blueprint/blueprint"
 import { Floating } from "@/components/floating"
 import { NewerAgent } from "@/components/newer-agent"
+import { TrustSettings } from "@/components/trust-settings"
 import { Options } from "@/components/blueprint/options"
 import { Logo } from "@/components/mark"
 import { atWork } from "@/lib/steps"
@@ -1905,9 +1906,11 @@ function Model({ project }: { project: Project }) {
       {/* at the foot of the view, in the middle: what the app has to tell, and what to
           do with the parts picked out together and with the scene the model is set in,
           over how far apart the parts are pulled. Each is a pill floating over the model;
-          a newer agent, and what was just done, are told with no model there as well */}
+          a newer agent, a folder's settings to trust, and what was just done, are told
+          with no model there as well */}
       <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center gap-2.5">
         <NewerAgent />
+        <TrustSettings project={project} />
         <BackingUp />
         {loaded ? (
           <>

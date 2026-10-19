@@ -740,6 +740,7 @@ on("turn/interrupt", () => {
       get: () => ({ path: dir, manifest: null, build: null, name: "Box" }),
       takeSession: () => null,
       hasMeshes: () => false,
+      goesByOwnSettings: () => true,
       refresh: () => {},
       christen: () => {},
     } as unknown as ThreadsDeps["projects"],

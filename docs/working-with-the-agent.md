@@ -370,6 +370,15 @@ The agent starts out with full access and never asks leave.
 | Auto-accept edits | Edits files freely and asks before anything else |
 | Supervised        | Asks before it changes a file or runs anything   |
 
+A folder you opened can have settings of its own for Claude Code
+(`.claude/settings.json`, `.claude/settings.local.json` or `.mcp.json`), which can have
+it run commands without asking, whatever its access: hooks, servers of tools, what it is
+let do. Until you say to trust them, Claude goes by your own settings alone, and so
+leaves out the folder's `CLAUDE.md`, skills and commands as well. A pill at the foot of
+the view asks, once: **Trust this folder's settings**, or **Ignore them**. A folder the
+app made, from nothing or from an example, goes by its own without asking, and so does
+one with none of those files.
+
 ## Taking a change back
 
 Cmd+Z takes back the last thing done to the model, and Cmd+Shift+Z puts it back. That is
