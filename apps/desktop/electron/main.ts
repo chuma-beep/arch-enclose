@@ -2158,6 +2158,7 @@ if (!app.requestSingleInstanceLock()) {
       ids: () => projects.list(() => []).map((project) => project.id),
       project: (id) => projects.get(id),
       working: (id) => threads.working(id),
+      mayBuild: (id, command) => threads.mayBuild(id, command),
       env: cleanEnv,
       onChange: broadcast,
     })

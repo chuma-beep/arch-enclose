@@ -7,6 +7,12 @@
 // the agent is at work: then it is put away, and the project's own build is what is seen.
 // A project whose enclose.py is an older copy, which knows nothing of drafts and would
 // write its own build/ instead, has none.
+//
+// The build is the project's command, from its enclose.json, run through a shell: which
+// the agent can write as well as model.py. One that runs a Python file of the project's
+// is run as it is; any other only where the turn may (threads.ts `mayBuild`): in Full
+// access, or where it is what the project had when the turn began, or once the user has
+// said yes to it.
 import fs from "node:fs"
 import path from "node:path"
 
@@ -32,10 +38,31 @@ export type DraftsDeps = {
   } | null
   /** whether an agent is at work in a project now */
   working: (projectId: string) => boolean
+  /** whether a draft may be built with a command that does more than run a Python file */
+  mayBuild: (projectId: string, command: string) => Promise<boolean>
   /** what a build is run with */
   env: () => NodeJS.ProcessEnv
   /** a draft was made to be shown, or one that was shown was put away */
   onChange: () => void
+}
+
+/**
+ * Whether a build command runs a Python file of the project's, and no more: a Python by
+ * name, or one within the project (its own .venv, say), and a script within it.
+ */
+export function runsPython(command: string): boolean {
+  const words = command.trim().split(/ +/)
+  if (words.length !== 2) return false
+  const [python, script] = words
+  // a path within the project, with nothing in it a shell would make more of
+  const within = (file: string) =>
+    /^[\w.][\w.-]*(\/[\w.-]+)*$/.test(file) && !file.split("/").includes("..")
+  return (
+    within(python) &&
+    /^python(3(\.\d+)?)?$/.test(path.posix.basename(python)) &&
+    within(script) &&
+    script.endsWith(".py")
+  )
 }
 
 export class Drafts {
@@ -137,13 +164,22 @@ export class Drafts {
     } catch {
       return
     }
+    const { build } = project
+    if (runsPython(build)) return this.build(id, project.path, build)
+    void this.deps.mayBuild(id, build).then((may) => {
+      if (may && this.deps.working(id) && !this.running.has(id))
+        this.build(id, project.path, build)
+    })
+  }
+
+  private build(id: string, root: string, command: string) {
     // a folder to each draft, so that the one shown is never written over
     const dir = path.join(this.deps.folder, id, String(++this.count))
     fs.mkdirSync(dir, { recursive: true })
     const began = Date.now()
     const build = runBuild(
-      project.path,
-      project.build,
+      root,
+      command,
       // (and nothing of it in the project's folder, not even Python's cache)
       { ...this.deps.env(), [DRAFT]: dir, PYTHONDONTWRITEBYTECODE: "1" },
       () => {}

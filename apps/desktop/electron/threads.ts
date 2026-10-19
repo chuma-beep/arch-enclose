@@ -18,6 +18,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 
 import type {
+  Access,
   Attached,
   ConversationSummary,
   Doing,
@@ -65,7 +66,7 @@ import {
   writeConversation,
   type Conversation,
 } from "./conversations"
-import type { Projects } from "./projects"
+import { findModel, type Projects } from "./projects"
 import type { Shown } from "./pictures"
 import type { Launch } from "./providers"
 import type { AppScene } from "./reference"
@@ -86,6 +87,29 @@ import {
   type ToolServer,
 } from "./tools"
 import { Saying, type Content, type Turn } from "./turn"
+
+/**
+ * How the model's drafts are built while a turn is under way (drafts.ts): in Full
+ * access, as the project says; short of it, with the build command the project had when
+ * the turn began, and with any other only once the user says yes to it (see `mayBuild`).
+ * A build is run through a shell, and enclose.json is the agent's to write.
+ */
+type Builds = {
+  access: Access
+  /** the project's build command when the turn began */
+  began: string | null
+  /** how the turn puts a question to the user, once it is under way */
+  ask: Turn["ask"] | null
+  /** what the user said, or is being asked, of each other command, in this turn */
+  said: Map<string, Promise<boolean>>
+}
+
+const buildsOf = (access: Access, dir: string): Builds => ({
+  access,
+  began: findModel(dir).build,
+  ask: null,
+  said: new Map(),
+})
 
 type Run = {
   /** the conversation being carried on */
@@ -125,6 +149,8 @@ type Run = {
    * did, and its brief: when the turn is over, that is begun (see `startJob`).
    */
   boardJob: { board: string; brief: string } | null
+  /** how drafts of the model may be built meanwhile */
+  builds: Builds
 }
 
 /**
@@ -144,6 +170,8 @@ type Job = {
   what: string
   /** how the board comes along: how far each build of it has got */
   following: Following
+  /** how drafts of the model may be built meanwhile */
+  builds: Builds
 }
 
 /** How the making of a board in the background went, once it is over. */
@@ -1706,6 +1734,32 @@ export class Threads {
     return book?.run != null || book?.job != null
   }
 
+  /**
+   * Whether a draft of the model may be built with this command while the agent is at
+   * work in a project (drafts.ts): in Full access, or where it is the command the
+   * project had when the turn began. Another, which the agent may have written, is put
+   * to the user first, once in a turn, in the conversation.
+   */
+  mayBuild(projectId: string, command: string): Promise<boolean> {
+    const book = this.books.get(projectId)
+    const builds = (book?.run ?? book?.job)?.builds
+    if (!builds) return Promise.resolve(false)
+    if (builds.access === "full" || command === builds.began)
+      return Promise.resolve(true)
+    const ask = builds.ask
+    if (!ask) return Promise.resolve(false)
+    let said = builds.said.get(command)
+    if (!said) {
+      said = ask({
+        title: "Build the model with this command?",
+        detail: command,
+        canAlways: false,
+      }).then((answer) => answer !== "deny")
+      builds.said.set(command, said)
+    }
+    return said
+  }
+
   /** Say something in a conversation that neither the user nor Claude said: the app did. */
   noted(projectId: string, conversationId: string, text: string) {
     const conversation = this.book(projectId).conversations.get(conversationId)
@@ -1853,6 +1907,7 @@ export class Threads {
       version: asked.version === true,
       goesOn: null,
       boardJob: null,
+      builds: buildsOf(manner.access, project.path),
     }
     book.run = run
     this.deps.onSummary()
@@ -2043,6 +2098,8 @@ export class Threads {
       describe: (name, input) => describeTool(name, input, project.path),
       id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
     }
+    // (a build command the agent wrote meanwhile is asked about as anything it does is)
+    run.builds.ask = turn.ask
 
     // The folder as it is now is put aside, so that what this turn does to it can be
     // taken back. (Stopped before that was done, the turn is over before it began.)
@@ -2188,6 +2245,7 @@ export class Threads {
       notes: new Saying(),
       what: `Made ${name} in detail`,
       following,
+      builds: buildsOf(manner.access, project.path),
     }
     book.job = job
     const show = (item: Job["item"]) => {
@@ -2302,6 +2360,7 @@ export class Threads {
       describe: (name, input) => describeTool(name, input, project.path),
       id: (kind) => `${kind}-${++this.counter}-${Date.now()}`,
     }
+    job.builds.ask = turn.ask
 
     const pending = await this.deps.changes
       .before(projectId, project.path)

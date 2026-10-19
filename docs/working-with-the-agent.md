@@ -64,9 +64,14 @@ The model changes on screen as the agent writes it, and not only when it builds 
 While the agent is at work, each time it saves the model's script the app builds the
 model again by itself, into a folder of its own and without the STEP downloads, and
 shows that until the agent's own build is newer. What it builds is no part of the
-project: when the turn is over the view shows the project's own build again. A project
-whose `enclose.py` is an older copy has the agent copy in the app's before it changes
-the model; until then the model shows only when it is built.
+project: when the turn is over the view shows the project's own build again. It builds
+with the project's build command, from its `enclose.json`, which is run as a command
+line. Short of Full access, a command that does more than run a Python file of the
+project's, and that is not what the project had when the turn began, is asked about in
+the conversation first ("Build the model with this command?"), once in a turn: until you
+say yes, no draft is built with it. A project whose `enclose.py` is an older copy has
+the agent copy in the app's before it changes the model; until then the model shows
+only when it is built.
 
 Parts that the agent adds to a model are shown coming. When the model it built is on
 screen they are all light for a moment, where they stand; a light goes across them,
