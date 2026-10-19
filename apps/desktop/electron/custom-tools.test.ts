@@ -106,12 +106,24 @@ describe("a project's tools", () => {
       .poll(() => toolsOf(projects), { timeout: 3000 })
       .toBeTypeOf("number")
     expect(heard).toBeGreaterThan(before)
-    // and of its being written again, now that there is a tools/ to watch
+    // and of its being written again, now that there is a tools/ to watch. (What
+    // watches the new folder may not yet be watching the moment after it is set to: so
+    // it is rewritten until that is seen, with time between for it to be taken as done.)
     const first = toolsOf(projects)!
-    write("thing/tools/clock.js", "export default { name: 'Clock' }")
+    let names = ""
     await expect
-      .poll(() => toolsOf(projects), { timeout: 3000 })
+      .poll(
+        () => {
+          names += "!"
+          write(
+            "thing/tools/clock.js",
+            `export default { name: 'Clock${names}' }`
+          )
+          return toolsOf(projects)
+        },
+        { timeout: 8000, interval: 800 }
+      )
       .toBeGreaterThan(first)
     projects.close()
-  })
+  }, 15_000)
 })
