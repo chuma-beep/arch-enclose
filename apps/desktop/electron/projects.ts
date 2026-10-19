@@ -11,6 +11,7 @@ import { findGuides } from "./assembly"
 import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
 import { markedManaged } from "./backup"
+import { isInside } from "./turn"
 import {
   BOARD_FOLDER,
   BOARD_SOURCE,
@@ -284,13 +285,17 @@ export const ownSettings = (dir: string) =>
 /** Whether the app made a project's folder (from before `made` was kept: by its name). */
 const madeHere = (project: Saved) => project.made ?? project.name !== undefined
 
-/** `file` as a path inside `root`, or null if it would land outside. */
+/**
+ * `file` as a path inside `root`, or null if it would land outside: by what the path
+ * says, and by where it really is, so that a link in the folder that leads out of it
+ * leads nowhere here.
+ */
 export function resolveInside(root: string, file: string): string | null {
   const full = path.resolve(root, `.${path.sep}${file}`)
   const inside =
     full === root ||
     full.startsWith(root.endsWith(path.sep) ? root : root + path.sep)
-  return inside ? full : null
+  return inside && isInside(root, full) ? full : null
 }
 
 export class Projects {

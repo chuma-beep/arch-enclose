@@ -46,6 +46,36 @@ describe("resolveInside", () => {
     expect(resolveInside("/models/a", "/../../etc/passwd")).toBeNull()
     expect(resolveInside("/models/a", "step/../../a-sibling/x")).toBeNull()
   })
+
+  it("refuses a link in the folder that leads out of it", () => {
+    write("model/top.glb", "mesh")
+    write("secret/key", "hush")
+    fs.symlinkSync(path.join(root, "secret"), path.join(root, "model", "out"))
+    fs.symlinkSync(
+      path.join(root, "secret", "key"),
+      path.join(root, "model", "key.glb")
+    )
+    fs.symlinkSync(
+      path.join(root, "secret", "gone"),
+      path.join(root, "model", "nowhere")
+    )
+    const model = path.join(root, "model")
+    expect(resolveInside(model, "top.glb")).toBe(path.join(model, "top.glb"))
+    expect(resolveInside(model, "new/part.step")).toBe(
+      path.join(model, "new", "part.step")
+    )
+    expect(resolveInside(model, "out/key")).toBeNull()
+    expect(resolveInside(model, "key.glb")).toBeNull()
+    expect(resolveInside(model, "out/new/file")).toBeNull()
+    expect(resolveInside(model, "nowhere")).toBeNull()
+  })
+
+  it("goes by where the folder really is, whatever way to it it is given by", () => {
+    write("model/top.glb", "mesh")
+    fs.symlinkSync(path.join(root, "model"), path.join(root, "linked"))
+    const linked = path.join(root, "linked")
+    expect(resolveInside(linked, "top.glb")).toBe(path.join(linked, "top.glb"))
+  })
 })
 
 describe("findModel", () => {
