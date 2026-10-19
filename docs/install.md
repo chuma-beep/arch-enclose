@@ -16,7 +16,8 @@ Enclose is for macOS, 13 (Ventura) or newer, and for Linux (x86_64 and aarch64).
   [build123d](https://build123d.readthedocs.io): where the `python3` your terminal runs
   has build123d, Enclose uses it. Where it has not, Enclose makes a Python of its own with
   build123d in it the first time it opens, once (a few hundred MB to download, kept in its
-  own folder), and builds with that.
+  own folder), and builds with that: the build123d it is known to work with (0.11.1), not
+  whichever is newest.
 - For circuit boards, [Node.js](https://nodejs.org) 18 or later. Boards are designed
   with [tscircuit](https://tscircuit.com), which the first board fetches, once.
 

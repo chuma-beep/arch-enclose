@@ -16,6 +16,12 @@ const run = promisify(execFile)
 /** The Python that is made: one that build123d's wheels are built for. */
 const VERSION = "3.12"
 
+/**
+ * The build123d put in it: the one the app's exporter and examples are known to work
+ * with, and not whatever is newest the day it is made.
+ */
+export const BUILD123D = "build123d==0.11.1"
+
 /** The uv fetched to make it, for each kind of Mac and of Linux, as its release names it. */
 const UV_VERSION = "0.13.1"
 const UV: Partial<Record<string, { name: string; sha256: string }>> = {
@@ -221,7 +227,7 @@ export class Python {
           "--compile-bytecode",
           "--python",
           path.join(this.env, "bin", "python3"),
-          "build123d",
+          BUILD123D,
         ],
         options
       )

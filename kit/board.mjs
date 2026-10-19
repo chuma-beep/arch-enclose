@@ -55,9 +55,11 @@ const TSCIRCUIT = "tscircuit@0.0.2892"
 
 /**
  * What tscircuit is run with. npm 12 fetches nothing from git unless it is let:
- * tscircuit has a part that is (as an environment variable, which an older npm passes
- * over). And tscircuit counts how its command line is used unless it is told not to:
- * it is told, as the privacy policy says.
+ * tscircuit has a part that is (@tscircuit/pcb-trace-linter, which it has from GitHub),
+ * and so it is let, as an environment variable, which an older npm passes over. Its
+ * install scripts are left to run: sharp, which a build reaches, gets its binary so.
+ * And tscircuit counts how its command line is used unless it is told not to: it is
+ * told, as the privacy policy says.
  */
 const TSCI_ENV = {
   ...process.env,

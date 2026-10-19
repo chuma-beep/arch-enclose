@@ -90,6 +90,8 @@ describe("Python", () => {
       "ours",
     ])
     expect(asked()).toHaveLength(2)
+    // the build123d the app is known to work with, and not whichever is newest
+    expect(asked()[1].split(" ").at(-1)).toBe("build123d==0.11.1")
 
     // the next time the app opens, the one it made is there to be used
     const again = make(theirs, uv)
