@@ -34,12 +34,40 @@ const { kept, used, sent, turned } = vi.hoisted(() => {
   return { kept, used, sent, turned }
 })
 
-import type { Project, Vec3 } from "@shared/api"
+import type { CadApi, Project, Vec3 } from "@shared/api"
 import { RECOLOUR, useStore, type Section } from "./store"
 
 const fresh = useStore.getState()
 const state = () => useStore.getState()
 const view = () => state().view
+
+/** What a message that was sent went with, by name, as the app's process is told it. */
+function message(at: number) {
+  const [
+    projectId,
+    conversationId,
+    text,
+    notes,
+    objects,
+    manner,
+    reference,
+    pictures,
+    quotes,
+    board,
+  ] = sent[at] as Parameters<CadApi["thread"]["send"]>
+  return {
+    projectId,
+    conversationId,
+    text,
+    notes,
+    objects,
+    manner,
+    reference,
+    pictures,
+    quotes,
+    board,
+  }
+}
 
 /** A cut across the model, a little way up it. */
 const cut: Section = {
@@ -387,10 +415,10 @@ describe("words picked out of the conversation", () => {
     state().quote({ quote: "Something else" })
     state().send()
     expect(sent).toHaveLength(1)
-    expect(sent[0][0]).toBe("clock")
-    expect(sent[0][8]).toEqual([{ quote: "Which screws?", text: "M3" }])
+    expect(message(0).projectId).toBe("clock")
+    expect(message(0).quotes).toEqual([{ quote: "Which screws?", text: "M3" }])
     // and no circuit board was on screen for it to be about
-    expect(sent[0][9]).toBeNull()
+    expect(message(0).board).toBeNull()
     // (what was being said of other words when it went is let go of)
     expect(state()).toMatchObject({ quoting: null, quotes: { clock: [] } })
     // nothing waiting is nothing to send
@@ -410,9 +438,9 @@ describe("recolouring a project", () => {
     state().recolour("lamp")
     expect(state()).toMatchObject({ activeId: "lamp", threadOpen: true })
     expect(sent).toHaveLength(1)
-    expect(sent[0][0]).toBe("lamp")
+    expect(message(0).projectId).toBe("lamp")
     // in a new conversation, there being none
-    expect(sent[0][1]).toBeNull()
-    expect(sent[0][2]).toBe(RECOLOUR)
+    expect(message(0).conversationId).toBeNull()
+    expect(message(0).text).toBe(RECOLOUR)
   })
 })

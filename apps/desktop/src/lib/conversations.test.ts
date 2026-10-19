@@ -66,7 +66,7 @@ describe("stackOf", () => {
     expect(laid([left("a", 5)], undefined, 1)).toEqual([null, ["a"], null])
   })
 
-  it("never settles one that Claude is still at work on", () => {
+  it("never settles one that the agent is still at work on", () => {
     expect(laid([left("a", 4, "working")])).toEqual(["a", [], "a"])
     expect(laid([left("a", 4, "asking")])).toEqual(["a", [], "a"])
   })
@@ -107,7 +107,7 @@ describe("finishedNow", () => {
   const busy = (id: string) => left(id, 0, "working")
   const asking = (id: string) => left(id, 0, "asking")
 
-  it("takes note of a conversation Claude has just got to the end of", () => {
+  it("takes note of a conversation the agent has just got to the end of", () => {
     expect(
       finishedNow([], [busy("a"), idle("b")], [idle("a"), idle("b")], null)
     ).toEqual(["a"])

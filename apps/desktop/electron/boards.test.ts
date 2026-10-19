@@ -152,7 +152,8 @@ describe("boardsIn", () => {
     write("pcb/main.board.json", "{ not json")
     const [board] = boardsIn(root)
     expect(board.name).toBe("Main")
-    expect(board.trouble).toBeTruthy()
+    // in the words of what read it: that it is not JSON
+    expect(board.trouble).toMatch(/JSON/)
   })
 })
 

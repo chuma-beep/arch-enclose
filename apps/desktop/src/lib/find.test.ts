@@ -49,7 +49,7 @@ describe("lookFor", () => {
     expect(named("REGUL")).toEqual(["part:u3"])
   })
 
-  it("finds a part by its id, which is what Claude calls it", () => {
+  it("finds a part by its id, which is what the agent calls it", () => {
     expect(named("u3")).toEqual(["part:u3"])
   })
 

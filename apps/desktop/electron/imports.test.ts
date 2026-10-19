@@ -239,7 +239,7 @@ describe("modelScript", () => {
     expect(script).toContain('    "source/it\'s.step",')
   })
 
-  it("writes the names and groups Claude gave, each body by the id it is read under", () => {
+  it("writes the names and groups the agent gave, each body by the id it is read under", () => {
     const script = modelScript("Clock", ["source/clock.step"], {
       what: 'a "wall" clock\\',
       name: null,
@@ -271,7 +271,7 @@ describe("modelScript", () => {
     expect(script).toContain('model = Model("Clock")\n')
   })
 
-  it("has the model name the reference scene Claude said suits it", () => {
+  it("has the model name the reference scene the agent said suits it", () => {
     const script = modelScript("Stool", ["source/stool.step"], {
       what: "a stool",
       name: null,

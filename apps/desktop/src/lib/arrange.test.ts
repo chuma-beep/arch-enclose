@@ -78,7 +78,7 @@ describe("grouped", () => {
     expect(Object.keys(shown(all, { g1: "Fixings" }))).not.toContain("Fixings")
   })
 
-  it("goes by the name Claude gave it, and before that by one written by hand", () => {
+  it("goes by the name the agent gave it, and before that by one written by hand", () => {
     expect(Object.keys(shown(made, { g1: "Fixings" }))[0]).toBe("Fixings")
     const called = renamed(
       told,

@@ -129,7 +129,7 @@ describe("inBlocks", () => {
     ).toEqual(["a", "permission", "b"])
   })
 
-  it("times a stretch from when Claude was asked to what came after it", () => {
+  it("times a stretch from when the agent was asked to what came after it", () => {
     const blocks = inBlocks([
       user("u", 1_000),
       step("a", "done", 9_000),
@@ -173,12 +173,12 @@ describe("inBlocks", () => {
 })
 
 describe("atWork", () => {
-  it("says nothing while Claude has only been asked", () => {
+  it("says nothing while the agent has only been asked", () => {
     expect(atWork([])).toBeNull()
     expect(atWork([user("u")])).toBeNull()
   })
 
-  it("says the step Claude is on, in the conversation's words for it", () => {
+  it("says the step the agent is on, in the conversation's words for it", () => {
     expect(atWork([user("u"), step("a", "running")])).toBe(
       "Run python3 model.py"
     )
@@ -202,7 +202,7 @@ describe("atWork", () => {
     ).toBe("Look")
   })
 
-  it("says so when Claude is writing, and when it waits on the user", () => {
+  it("says so when the agent is writing, and when it waits on the user", () => {
     expect(atWork([user("u"), step("a"), says("s")])).toBe(
       "Writing what it found"
     )
@@ -212,7 +212,7 @@ describe("atWork", () => {
     expect(atWork([user("u"), asked("p", "denied")])).toBeNull()
   })
 
-  it("says so too while something Claude asked waits on an answer", () => {
+  it("says so too while something the agent asked waits on an answer", () => {
     const question = (state: "pending" | "answered"): ThreadItem => ({
       kind: "question",
       id: "q",
@@ -229,17 +229,15 @@ describe("atWork", () => {
     expect(atWork([user("u"), question("answered")])).toBeNull()
   })
 
-  it("says Claude is thinking between steps, but not before the first", () => {
+  it("says the agent is thinking between steps, but not before the first", () => {
     const thinking = { kind: "thinking", since: 0, tokens: 3000 } as const
     expect(atWork([user("u"), step("a")], thinking)).toBe("Thinking")
-    expect(atWork([user("u"), step("a"), says("s")], thinking)).toBe(
-      "Thinking"
-    )
+    expect(atWork([user("u"), step("a"), says("s")], thinking)).toBe("Thinking")
     // what it was asked says more of it then
     expect(atWork([user("u")], thinking)).toBeNull()
   })
 
-  it("says when the API is being tried again, whatever Claude was at", () => {
+  it("says when the API is being tried again, whatever the agent was at", () => {
     const retrying = { kind: "retrying", attempt: 2, of: 10 } as const
     expect(atWork([user("u")], retrying)).toBe("Retrying, attempt 2 of 10")
     expect(atWork([user("u"), step("a", "running")], retrying)).toBe(

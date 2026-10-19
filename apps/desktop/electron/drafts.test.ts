@@ -115,6 +115,12 @@ describe("Drafts", { timeout: 15_000 }, () => {
     await new Promise((done) => setTimeout(done, 1600))
     expect(drafts.shown("p")).toBeNull()
     expect(fs.statSync(manifest).mtimeMs).toBeLessThan(Date.now() - 30_000)
+    // and it was heard: brought up to date, the exporter makes one
+    write("enclose.py", 'DRAFT = "ENCLOSE_DRAFT"\n')
+    await vi.waitFor(() => expect(drafts.shown("p")).not.toBeNull(), {
+      timeout: WAIT_MS,
+    })
+    expect(fs.statSync(manifest).mtimeMs).toBeLessThan(Date.now() - 30_000)
   })
 
   it("makes none while no agent is at work", async () => {
@@ -126,5 +132,16 @@ describe("Drafts", { timeout: 15_000 }, () => {
     await new Promise((done) => setTimeout(done, 1600))
     expect(drafts.shown("p")).toBeNull()
     expect(changes).toBe(0)
+    // none was made unseen, either: with an agent at work now, there is still none
+    working = true
+    expect(drafts.shown("p")).toBeNull()
+    // until the script is written again
+    drafts.sync()
+    await watched()
+    write("model.py", "print('changed')")
+    await vi.waitFor(() => expect(drafts.shown("p")).not.toBeNull(), {
+      timeout: WAIT_MS,
+    })
+    expect(changes).toBe(1)
   })
 })
