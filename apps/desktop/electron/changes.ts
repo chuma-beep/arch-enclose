@@ -422,6 +422,8 @@ export class Changes {
   /**
    * Put the files of a change as they were on one side of it. `last` is a file to see
    * to after all the others: the one whose being written is taken for the rest being so.
+   * What is to go goes first: a file that was a folder on the other side, or the other
+   * way round, has the way cleared for it before it is written.
    */
   private async put(
     projectId: string,
@@ -431,9 +433,9 @@ export class Changes {
     last: string | null
   ) {
     const from = path.join(this.root(projectId, change.id), as)
-    const ordered = [...change.files].sort(
-      (a, b) => Number(a.path === last) - Number(b.path === last)
-    )
+    const rank = (file: Touched) =>
+      file[as] === null ? 0 : file.path === last ? 2 : 1
+    const ordered = [...change.files].sort((a, b) => rank(a) - rank(b))
     for (const file of ordered) {
       const at = path.join(folder, file.path)
       if (file[as] !== null) {

@@ -115,8 +115,11 @@ export type Undone =
   | { ok: true; what: string }
   | {
       ok: false
-      why: "nothing" | "busy" | "board" | "changed"
+      /** failed: the files could not all be written, and are part of the way there */
+      why: "nothing" | "busy" | "board" | "changed" | "failed"
       files: string[]
+      /** what went wrong, where it failed */
+      detail?: string
     }
 
 /**

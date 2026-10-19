@@ -1030,6 +1030,11 @@ async function turnBack(projectId: string, way: "undo" | "redo") {
   try {
     const saying = saidOf(way, await window.cad.changes[way](projectId), MAC)
     if (saying) useStore.getState().say(saying)
+  } catch {
+    // (nothing came back to say what came of it)
+    useStore
+      .getState()
+      .say(`It could not be ${way === "undo" ? "undone" : "redone"}`)
   } finally {
     turning = false
   }

@@ -241,5 +241,7 @@ export function saidOf(
     const more = rest.length > 0 ? ` and ${rest.length} more` : ""
     return `Not ${done}: ${first}${more} changed since`
   }
+  if (outcome.why === "failed")
+    return `Only part of it could be ${done}: ${outcome.detail ?? "the files could not be written"}`
   return null
 }

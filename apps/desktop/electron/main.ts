@@ -374,7 +374,22 @@ async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   // the manifest goes last: its being written is what the view loads the rest again for
   const manifest =
     project.manifest && path.relative(project.path, project.manifest)
-  const outcome = await changes[way](id, project.path, manifest, whose(id))
+  let outcome: Awaited<ReturnType<Changes["undo"]>>
+  try {
+    outcome = await changes[way](id, project.path, manifest, whose(id))
+  } catch (error) {
+    // Part of it may have been written: the model is loaded again as it now is. (The
+    // change is still the latest, but the files it would be taken back from are not
+    // all as it left them now, which is said if it is tried again.)
+    projects.refresh(id)
+    projects.changed(id)
+    return {
+      ok: false,
+      why: "failed",
+      files: [],
+      detail: error instanceof Error ? error.message : String(error),
+    }
+  }
   if (!outcome.ok) return outcome
   const { change } = outcome
   // (what was asked, without the stop it may end in: the line has its own)

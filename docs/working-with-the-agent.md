@@ -421,7 +421,10 @@ your next message, so that it does not go on as though its change were still the
 
 Nothing the agent did is taken back while it is at work, or over a file that has been
 changed since the turn, by you in an editor say: the app names the file that is in the way and
-leaves all of it as it is. The last twelve turns that changed anything are kept for each
+leaves all of it as it is. What you changed in the project's files while the turn was
+going on is part of the turn, though, and goes back with it. Where the files cannot all
+be written (a full disk, say), the foot of the view says that only part of it was done,
+and why: the files are then part of the way back, and the model is shown as they are. The last twelve turns that changed anything are kept for each
 conversation, which are the ones Cmd+Z takes back in [its version](#versions) of the
 project; with versions switched off, for each project. What is not the project's own is
 left out, and left alone: `.git`,

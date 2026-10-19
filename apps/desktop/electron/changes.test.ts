@@ -211,6 +211,24 @@ describe("Changes", () => {
     expect(read("env/lib/site.py")).toBe("changed")
   })
 
+  it("takes back and puts back a file that became a folder, and a folder that became a file", async () => {
+    const changes = new Changes(kept)
+    write("parts/lid.py", "lid()")
+    await turn(changes, "Folders to files", () => {
+      // a file where there was a folder, and a folder where there was a file
+      fs.rmSync(path.join(folder, "parts"), { recursive: true })
+      write("parts", "lid() and base()")
+      fs.rmSync(path.join(folder, "notes.txt"))
+      write("notes.txt/today.txt", "keep me, in a folder")
+    })
+    expect((await changes.undo("p1", folder)).ok).toBe(true)
+    expect(read("parts/lid.py")).toBe("lid()")
+    expect(read("notes.txt")).toBe("keep me")
+    expect((await changes.redo("p1", folder)).ok).toBe(true)
+    expect(read("parts")).toBe("lid() and base()")
+    expect(read("notes.txt/today.txt")).toBe("keep me, in a folder")
+  })
+
   it("keeps what was done from one run of the app to the next", async () => {
     await turn(new Changes(kept), "Taller", () => write("model.py", "box(20)"))
     const again = new Changes(kept)

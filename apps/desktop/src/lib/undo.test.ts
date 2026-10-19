@@ -169,6 +169,13 @@ describe("saidOf", () => {
         true
       )
     ).toBe("Not redone: model.py and 2 more changed since")
+    expect(
+      saidOf(
+        "undo",
+        { ok: false, why: "failed", files: [], detail: "no space left" },
+        true
+      )
+    ).toBe("Only part of it could be undone: no space left")
   })
 
   it("says nothing where there was nothing to do", () => {
