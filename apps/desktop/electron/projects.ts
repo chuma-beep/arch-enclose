@@ -172,9 +172,41 @@ const MAX_DEPTH = 6
 const MAX_FOLDERS = 4000
 const MAX_MANIFEST_BYTES = 5_000_000
 
+/**
+ * What was found of each file looked at for a manifest: how big it was and when it was
+ * written, and whether it was one. A model is looked for again after every step an
+ * agent takes, and its manifest can run to megabytes: one that is as it was is not read
+ * again. (The latest MANIFESTS_KEPT, the one looked at longest ago let go first.)
+ */
+const manifests = new Map<
+  string,
+  { size: number; mtimeMs: number; is: boolean }
+>()
+const MANIFESTS_KEPT = 256
+
 function isManifest(file: string): boolean {
+  let stat: fs.Stats
   try {
-    if (fs.statSync(file).size > MAX_MANIFEST_BYTES) return false
+    stat = fs.statSync(file)
+  } catch {
+    return false
+  }
+  const { size, mtimeMs } = stat
+  const had = manifests.get(file)
+  manifests.delete(file)
+  const is =
+    had && had.size === size && had.mtimeMs === mtimeMs
+      ? had.is
+      : readsAsManifest(file, size)
+  manifests.set(file, { size, mtimeMs, is })
+  if (manifests.size > MANIFESTS_KEPT)
+    manifests.delete(manifests.keys().next().value!)
+  return is
+}
+
+function readsAsManifest(file: string, size: number): boolean {
+  try {
+    if (size > MAX_MANIFEST_BYTES) return false
     const json: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
     const parts = (json as { parts?: unknown }).parts
     return (

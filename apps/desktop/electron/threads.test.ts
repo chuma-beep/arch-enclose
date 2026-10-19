@@ -1188,6 +1188,35 @@ describe("what is said while a conversation is being answered", () => {
   })
 })
 
+describe("where the conversations stand", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("changes as a turn begins and ends, and as something waits, and not as it is said", async () => {
+    const { threads, say, go, idle } = talking(dir)
+    expect(threads.standing()).toBe("")
+    const into = say("Make a box", null) as string
+    expect(threads.has(ID, into)).toBe(true)
+    expect(threads.has(ID, "another")).toBe(false)
+    const working = threads.standing()
+    expect(working).toContain(into)
+    // something said in it, which the conversation shows, is nothing of where it stands
+    threads.noted(ID, into, "Building")
+    expect(threads.standing()).toBe(working)
+    say("And a lid", into)
+    expect(threads.standing()).not.toBe(working)
+    go()
+    await until(() => threads.items(ID, into).length >= 5)
+    await idle()
+    expect(threads.standing()).toBe("")
+  })
+})
+
 describe("drafts built while the agent works", () => {
   let dir: string
   beforeEach(() => {

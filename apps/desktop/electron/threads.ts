@@ -1437,6 +1437,39 @@ export class Threads {
     return this.book(projectId).conversations.size
   }
 
+  /** Whether a project has had a conversation by this id. */
+  has(projectId: string, conversationId: string): boolean {
+    return this.book(projectId).conversations.has(conversationId)
+  }
+
+  /**
+   * Where the conversations stand, in a line: which are being answered, which wait on
+   * the user, what waits to be said, which are to end in a new version, and the boards
+   * being made. The same line for as long as none of that changes, whatever is said or
+   * done meanwhile: what the window is told of at once, where the rest can wait a moment.
+   */
+  standing(): string {
+    const lines: string[] = []
+    for (const [projectId, { run, job, waiting }] of this.books) {
+      if (!run && !job && waiting.length === 0) continue
+      lines.push(
+        [
+          projectId,
+          run?.conversation.id ?? "",
+          !run
+            ? "idle"
+            : run.pending.size > 0 || run.asked.size > 0
+              ? "asking"
+              : "working",
+          run && run.goesOn !== null ? "versioning" : "",
+          job ? `${job.conversation.id}:${job.item.state}` : "",
+          waiting.map((one) => one.item.id).join(","),
+        ].join(" ")
+      )
+    }
+    return lines.join("\n")
+  }
+
   /** A project's conversations as the sidebar shows them, the latest first. */
   summaries(projectId: string): ConversationSummary[] {
     const { conversations, run, waiting, job } = this.book(projectId)

@@ -2,7 +2,7 @@ import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   findModel,
@@ -113,6 +113,25 @@ describe("findModel", () => {
       manifest: path.join(root, "deep/down/here/custom.json"),
       build: "python3 make.py",
     })
+  })
+
+  it("reads a manifest again only once it has been written to", () => {
+    write("model.json", MANIFEST)
+    const manifest = path.join(root, "model.json")
+    const read = vi.spyOn(fs, "readFileSync")
+    const reads = () =>
+      read.mock.calls.filter(([file]) => file === manifest).length
+    try {
+      expect(findModel(root).manifest).toBe(manifest)
+      expect(findModel(root).manifest).toBe(manifest)
+      expect(reads()).toBe(1)
+      // written again as something that is no manifest: it is read, and is none
+      write("model.json", { parts: [] })
+      expect(findModel(root).manifest).toBeNull()
+      expect(reads()).toBe(2)
+    } finally {
+      read.mockRestore()
+    }
   })
 })
 

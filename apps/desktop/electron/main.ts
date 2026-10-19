@@ -426,7 +426,30 @@ const send = (channel: string, ...args: unknown[]) => {
 const pace = new Pace((projectId, conversationId, item) =>
   send(CHANNEL.threadItem, projectId, conversationId, item)
 )
-const broadcast = () => send(CHANNEL.projectsChanged, list())
+/**
+ * How long what the conversations are doing waits before the window is told of it, ms:
+ * a turn says something new many times a second, and the list it is told of is all the
+ * projects, with every conversation of each.
+ */
+const SUMMARIES_MS = 150
+let summing: NodeJS.Timeout | null = null
+/** where the conversations stood as the window was last told of the projects */
+let stood = ""
+const broadcast = () => {
+  if (summing) clearTimeout(summing)
+  summing = null
+  stood = threads.standing()
+  send(CHANNEL.projectsChanged, list())
+}
+/**
+ * Tell the window of the projects soon: at once where a conversation has begun or ended,
+ * waits on the user, or has something new waiting to be said (see `standing`), and
+ * otherwise once what the conversations are doing has settled for a moment.
+ */
+function broadcastSoon() {
+  if (threads.standing() !== stood) return broadcast()
+  summing ??= setTimeout(broadcast, SUMMARIES_MS)
+}
 const githubState = (): GitHubState => ({
   connection: connection.state,
   backingUp,
@@ -547,7 +570,7 @@ function follow() {
     if (versions.on(id) === conversationId) continue
     if (unturned.get(id) === conversationId) continue
     if (threads.working(id) || builds.has(id)) continue
-    if (!threads.summaries(id).some((one) => one.id === conversationId)) {
+    if (!threads.has(id, conversationId)) {
       showing.delete(id)
       continue
     }
@@ -2238,7 +2261,7 @@ if (!app.requestSingleInstanceLock()) {
       onSummary: () => {
         // a turn may have begun, or be over: the model is built as it is written meanwhile
         drafts.sync()
-        broadcast()
+        broadcastSoon()
         // a turn may be over: the folder it was had in is free to be another's
         follow()
       },
@@ -2475,6 +2498,7 @@ async function settle() {
 
 /** Let go of everything, as the app goes. */
 function letGo() {
+  if (summing) clearTimeout(summing)
   for (const stop of builds.values()) stop()
   threads?.close()
   toolServer.close()
