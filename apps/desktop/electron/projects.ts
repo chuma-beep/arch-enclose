@@ -448,20 +448,33 @@ export class Projects {
     )
   }
 
-  /** Find the project's model and watch its manifest, so a rebuild shows up by itself. */
-  private locate(project: Saved) {
+  /**
+   * Find the project's model and watch its manifest, so a rebuild shows up by itself.
+   * True if anything of the project's is not where, or as, it was last found.
+   */
+  private locate(project: Saved): boolean {
+    const scene = this.scenes.get(project.id)
     this.locateScene(project)
-    this.locateTools(project)
-    this.locateGuides(project)
-    this.locateBoards(project)
-    this.locateColours(project)
+    const tools = this.locateTools(project)
+    const guides = this.locateGuides(project)
+    const boards = this.locateBoards(project)
+    const colours = this.locateColours(project)
     const found = findModel(project.path)
     const before = this.found.get(project.id)?.manifest ?? null
     this.found.set(project.id, found)
-    if (found.manifest === before) return
-
-    this.bump(project.id)
-    this.watch(project)
+    const moved = found.manifest !== before
+    if (moved) {
+      this.bump(project.id)
+      this.watch(project)
+    }
+    return (
+      moved ||
+      this.scenes.get(project.id) !== scene ||
+      tools ||
+      guides ||
+      boards ||
+      colours
+    )
   }
 
   /** Watch a project's manifest where it now is. */
@@ -1178,28 +1191,47 @@ export class Projects {
     this.onChange()
   }
 
-  /** Look again for the model: Claude may just have created or moved it. */
-  refresh(id: string) {
+  /**
+   * Look again for the model: Claude may just have created or moved it. True if
+   * anything of the project's is not where, or as, it was last found.
+   */
+  refresh(id: string): boolean {
     const project = this.saved.find((p) => p.id === id)
-    if (project && !this.unavailable.has(id)) this.locate(project)
+    return project && !this.unavailable.has(id) ? this.locate(project) : false
   }
 
   /**
-   * Look again at every project: for its model, and for its folder, which may have gone
-   * since, or come back. Whether any folder went or came back.
+   * Look again for every project's folder, which may have gone since, or come back:
+   * one that came back is looked into again. Whether any folder went or came back.
    */
-  refreshAll(): boolean {
+  lookForFolders(): boolean {
     let changed = false
     for (const project of this.saved) {
       const there = fs.existsSync(project.path)
-      if (there === this.unavailable.has(project.id)) {
-        changed = true
-        if (there) this.unavailable.delete(project.id)
-        else this.unavailable.add(project.id)
-      }
-      if (there) this.locate(project)
+      if (there !== this.unavailable.has(project.id)) continue
+      changed = true
+      if (there) {
+        this.unavailable.delete(project.id)
+        this.locate(project)
+      } else this.unavailable.add(project.id)
     }
     return changed
+  }
+
+  /**
+   * Look again at every project: for its folder, which may have gone since, or come
+   * back, and for its model. Whether any folder went or came back.
+   */
+  refreshAll(): boolean {
+    const changed = this.lookForFolders()
+    for (const project of this.saved)
+      if (!this.unavailable.has(project.id)) this.locate(project)
+    return changed
+  }
+
+  /** What each project on the list is known by, in the order they were added. */
+  ids(): string[] {
+    return this.saved.map((project) => project.id)
   }
 
   close() {

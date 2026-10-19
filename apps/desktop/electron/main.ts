@@ -629,6 +629,41 @@ function askViewport(
 
 // --- the window -----------------------------------------------------------------------
 
+/** How often the projects are looked at again as the window is gone back to, at most, ms. */
+const LOOK_AGAIN_MS = 2000
+let lookedAgain = 0
+/** the projects still to be looked at again, after the window was last gone back to */
+let behind: string[] = []
+/** of those looked at so far, whether any was not as it was */
+let behindChanged = false
+
+/**
+ * Look at the projects again, as the window is gone back to: for each one's folder,
+ * which may have gone or come back meanwhile, and at once into those the window has
+ * shown, for their models. The rest are looked into after, one at a time, in the app's
+ * own time, and the window is told of them again if any of that changed.
+ */
+function lookAgain() {
+  const now = Date.now()
+  if (now - lookedAgain < LOOK_AGAIN_MS) return
+  lookedAgain = now
+  projects.lookForFolders()
+  for (const id of showing.keys()) projects.refresh(id)
+  broadcast()
+  const already = behind.length > 0
+  behind = projects.ids().filter((id) => !showing.has(id))
+  if (!already) setTimeout(lookBehind)
+}
+
+function lookBehind() {
+  const id = behind.shift()
+  if (id === undefined) return
+  if (projects.refresh(id)) behindChanged = true
+  if (behind.length > 0) return void setTimeout(lookBehind)
+  if (behindChanged) broadcast()
+  behindChanged = false
+}
+
 function createWindow(openProject: string | null) {
   win = new BrowserWindow({
     width: 1512,
@@ -670,11 +705,8 @@ function createWindow(openProject: string | null) {
     event.preventDefault()
     app.quit()
   })
-  window.on("focus", () => {
-    // branches get switched and models rebuilt while the app is in the background
-    projects.refreshAll()
-    broadcast()
-  })
+  // branches get switched and models rebuilt while the app is in the background
+  window.on("focus", lookAgain)
 
   // links in Claude's answers open in the browser; the window itself never navigates away
   window.webContents.setWindowOpenHandler(({ url }) => {

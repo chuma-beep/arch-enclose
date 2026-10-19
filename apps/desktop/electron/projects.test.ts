@@ -312,6 +312,41 @@ describe("Projects", () => {
     projects.close()
   })
 
+  it("has a missing folder back on looking for the folders alone, model and all", () => {
+    write("thing/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const id = new Projects(file, () => {}).add(path.join(root, "thing"))
+    fs.renameSync(path.join(root, "thing"), path.join(root, "thing-away"))
+    const projects = new Projects(file, () => {})
+    expect(projects.lookForFolders()).toBe(false)
+    fs.renameSync(path.join(root, "thing-away"), path.join(root, "thing"))
+    expect(projects.lookForFolders()).toBe(true)
+    expect(projects.get(id)?.manifest).toBe(path.join(root, "thing/model.json"))
+    expect(projects.ids()).toEqual([id])
+    projects.close()
+  })
+
+  it("says, on looking again, whether anything of a project's is not as it was", () => {
+    write("thing/model.json", MANIFEST)
+    const projects = new Projects(
+      path.join(root, "state/projects.json"),
+      () => {}
+    )
+    const id = projects.add(path.join(root, "thing"))
+    expect(projects.refresh(id)).toBe(false)
+    // a model somewhere else
+    write("thing/model.json", { parts: [] })
+    write("thing/out/model.json", MANIFEST)
+    expect(projects.refresh(id)).toBe(true)
+    expect(projects.refresh(id)).toBe(false)
+    // a tool of its own
+    write("thing/tools/clock.js", "export default {}")
+    expect(projects.refresh(id)).toBe(true)
+    expect(projects.refresh(id)).toBe(false)
+    expect(projects.refresh("nobody")).toBe(false)
+    projects.close()
+  })
+
   it("takes a missing project's folder, opened again, for that project", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")
