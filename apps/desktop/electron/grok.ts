@@ -3,31 +3,20 @@
 // input and output: a session is a conversation, a prompt is one message answered, and
 // what it does on the way arrives as updates. The account it works for is whichever is
 // signed in to the Grok on this machine.
-import os from "node:os"
-
 import { EFFORTS, type Access, type ModelChoice } from "../shared/api"
 import {
-  ASKING_TIMEOUT_MS,
-  HELLO,
-  LOADING_TIMEOUT_MS,
-  REPLAY_QUIET_MS,
-  STOPPING_TIMEOUT_MS,
-  AcpTurn,
+  KINDS,
   field,
-  tooLong,
-  type AcpOption,
+  lookAt,
+  runTurn,
+  type AcpAgent,
+  type AcpPromptBlock,
+  type AcpStepContext,
   type AcpToolCall,
 } from "./acp"
 import type { Launch, Looked } from "./providers"
-import { NO_SUCH_METHOD, RpcError, startPeer } from "./rpc"
-import {
-  changesOnlyInside,
-  guideAgain,
-  inside,
-  piecesOf,
-  stopped,
-  type Turn,
-} from "./turn"
+import type { Peer } from "./rpc"
+import { guideAgain, changesOnlyInside, type Turn } from "./turn"
 
 /** The models Grok has, as it says so on taking up the line. */
 export type GrokModels = {
@@ -117,362 +106,167 @@ const command = (launch: Launch, access?: Access) => [
 ]
 
 /**
+ * Whether a tool call is to one of the app's own tools, and if so which. Grok calls a
+ * tool that was brought to it through one of its own, use_tool, by a name it makes of
+ * the set and the tool: viewport__screenshot. Only such a call is gone by, by that
+ * name exactly: never the title, which can be words the model wrote, and never a call
+ * Grok says runs a command or changes a file, whatever it is called.
+ */
+const ours = (call: AcpToolCall, turn: Turn) => {
+  if (call.kind && call.kind !== "other") return null
+  const its = call._meta?.["x.ai/tool"]?.name
+  if (its && its !== "use_tool") return null
+  const named = field(call.rawInput, "tool_name")
+  for (const [set, tools] of Object.entries(turn.tools))
+    for (const tool of tools)
+      if (named === `${set}__${tool.name}`) return `mcp__${set}__${tool.name}`
+  return null
+}
+
+/** A tool call in a few words: what kind of thing, and on what. */
+const step = (
+  call: AcpToolCall,
+  ctx: AcpStepContext
+): { name: string; detail: string } => {
+  if (ctx.own) return ctx.turn.describe(ctx.own, call.rawInput)
+  const its = call._meta?.["x.ai/tool"] ?? {}
+  // it looks a tool up before it calls on one it was brought
+  if (its.name === "search_tool")
+    return { name: "Find tool", detail: field(call.rawInput, "query") }
+  // what kind of thing it is, it says at first only in its own words
+  const kind = call.kind && call.kind !== "other" ? call.kind : (its.kind ?? "")
+  const file = field(
+    call.rawInput,
+    "path",
+    "file_path",
+    "filePath",
+    "target_file"
+  )
+  const detail =
+    kind === "execute"
+      ? field(call.rawInput, "command", "cmd")
+      : kind === "search"
+        ? field(call.rawInput, "pattern", "query", "regex")
+        : kind === "fetch"
+          ? field(call.rawInput, "url", "query")
+          : ctx.relative(file || (call.locations?.[0]?.path ?? ""))
+  if (KINDS[kind])
+    return { name: KINDS[kind], detail: detail || (call.title ?? "") }
+  // a tool someone else brought it, or one of its own that is none of the above
+  const called = field(call.rawInput, "tool_name") || call.title || "Tool"
+  return { name: called.replaceAll("__", " "), detail }
+}
+
+/**
+ * What the installed Grok says of itself: its version, the account it is signed in to,
+ * and the models it offers.
+ */
+const look = async (
+  peer: Peer,
+  launch: Launch,
+  hello: Hello
+): Promise<Looked> => {
+  const methodId = authMethod(launch, hello)
+  // it signs in with what it has kept, or says that it has nothing
+  const who = await peer
+    .request<{
+      _meta?: { subscription_tier?: string | null } | null
+    }>("authenticate", { methodId })
+    .catch(() => null)
+  return {
+    version: hello._meta?.agentVersion ?? null,
+    signedIn: who !== null,
+    account: who
+      ? (who._meta?.subscription_tier ??
+        (methodId === "xai.api_key" ? "API key" : "Grok account"))
+      : null,
+    trouble: null,
+    models: grokModels(hello._meta?.modelState),
+  }
+}
+
+// Grok takes no pictures in a message: it is told what it is told in words
+const prompt = (
+  turn: Turn,
+  resumed: boolean,
+  pieces: AcpPromptBlock[]
+): AcpPromptBlock[] => [
+  // a session taken up again keeps the rules it began with
+  ...(resumed && turn.guideChanged
+    ? [{ type: "text" as const, text: guideAgain(turn.guide) }]
+    : []),
+  ...pieces.flatMap((piece): AcpPromptBlock[] =>
+    piece.type === "text" ? [{ type: "text", text: piece.text }] : []
+  ),
+]
+
+/** Grok, as the shared ACP driver is handed it. */
+const grok: AcpAgent<Hello> = {
+  id: "grok",
+  name: "Grok",
+  command,
+  auth: (launch, hello) => ({
+    methodId: authMethod(launch, hello),
+    signedOut:
+      "Nobody is signed in to Grok. Run `grok login` in a terminal, then try again.",
+  }),
+  look,
+  session: {
+    meta: (turn, access) => ({
+      rules: turn.guide,
+      // how much it may do without asking, said again where a session can be told
+      ...(access === "full"
+        ? { yoloMode: true }
+        : access === "auto"
+          ? { autoMode: true }
+          : {}),
+    }),
+    settings: (turn) => [
+      ...(turn.manner.model
+        ? [{ configId: "model", value: turn.manner.model }]
+        : []),
+      ...(turn.manner.effort
+        ? [{ configId: "reasoning_effort", value: turn.manner.effort }]
+        : []),
+    ],
+  },
+  prompt,
+  tool: {
+    ours,
+    step,
+    // The app's own tools are the point of it: they are never asked about. And where
+    // the project's files are the agent's to change, changing them is not asked either:
+    // only them, and not a file anywhere else, nor one a link in the project leads out to.
+    allow: (call, access, { own, turn }) =>
+      own ||
+      (access === "edits" &&
+        call.kind === "edit" &&
+        changesOnlyInside(turn.cwd, call))
+        ? ["allow_once", "allow_always"]
+        : null,
+    // it would need its own form here; until then Grok asks in plain text
+    other: (method) =>
+      method === "_x.ai/ask_user_question" ||
+      method === "x.ai/ask_user_question"
+        ? { outcome: "cancelled" }
+        : undefined,
+  },
+  // Grok does not always answer the prompt it was sent: it also says so apart
+  done: (method, told, sessionId) =>
+    method === "_x.ai/session/prompt_complete" && told.sessionId === sessionId
+      ? (told.stopReason ?? null)
+      : undefined,
+}
+
+/**
  * What the installed Grok says of itself: its version, the account it is signed in to,
  * and the models it offers.
  */
 export async function lookAtGrok(launch: Launch): Promise<Looked> {
-  const peer = startPeer(launch.path, command(launch), {
-    cwd: os.tmpdir(),
-    env: launch.env,
-    versioned: true,
-    onNotification: () => {},
-    onRequest: (method) =>
-      Promise.reject(
-        new RpcError(NO_SUCH_METHOD, `Method not found: ${method}`)
-      ),
-  })
-  const asking = async (): Promise<Looked> => {
-    const hello = await peer.request<Hello>("initialize", HELLO)
-    const methodId = authMethod(launch, hello)
-    // it signs in with what it has kept, or says that it has nothing
-    const who = await peer
-      .request<{
-        _meta?: { subscription_tier?: string | null } | null
-      }>("authenticate", { methodId })
-      .catch(() => null)
-    return {
-      version: hello._meta?.agentVersion ?? null,
-      signedIn: who !== null,
-      account: who
-        ? (who._meta?.subscription_tier ??
-          (methodId === "xai.api_key" ? "API key" : "Grok account"))
-        : null,
-      trouble: null,
-      models: grokModels(hello._meta?.modelState),
-    }
-  }
-  try {
-    return await Promise.race([
-      asking(),
-      tooLong(ASKING_TIMEOUT_MS, "Grok did not answer."),
-    ])
-  } finally {
-    peer.close()
-  }
-}
-
-/** A tool call as Grok reports one, in as much as the app reads of it. */
-type ToolCall = AcpToolCall
-
-type Option = AcpOption
-
-/** What kind of thing a tool call is, in a word, by the kind Grok gives it. */
-const KINDS: Record<string, string> = {
-  read: "Read",
-  edit: "Edit",
-  delete: "Delete",
-  move: "Move",
-  search: "Search",
-  execute: "Run",
-  fetch: "Fetch",
-}
-
-/** What leave is asked for, by the kind of thing it is for. */
-const QUESTIONS: Record<string, string> = {
-  read: "Read this file?",
-  edit: "Change this file?",
-  delete: "Delete this file?",
-  move: "Move this file?",
-  execute: "Run this command?",
-  fetch: "Fetch this page?",
+  return lookAt(launch, grok)
 }
 
 /** One turn of a conversation, run by Grok. Resolves once it is over. */
 export async function runGrok(turn: Turn): Promise<void> {
-  const { launch, manner } = turn
-  const halt = stopped(turn.signal)
-  const run = turn.id("grok")
-  const relative = inside(turn.cwd)
-
-  /**
-   * Whether a tool call is to one of the app's own tools, and if so which. Grok calls a
-   * tool that was brought to it through one of its own, use_tool, by a name it makes of
-   * the set and the tool: viewport__screenshot. Only such a call is gone by, by that
-   * name exactly: never the title, which can be words the model wrote, and never a call
-   * Grok says runs a command or changes a file, whatever it is called.
-   */
-  const ours = (call: ToolCall) => {
-    if (call.kind && call.kind !== "other") return null
-    const its = call._meta?.["x.ai/tool"]?.name
-    if (its && its !== "use_tool") return null
-    const named = field(call.rawInput, "tool_name")
-    for (const [set, tools_] of Object.entries(turn.tools))
-      for (const tool of tools_)
-        if (named === `${set}__${tool.name}`) return `mcp__${set}__${tool.name}`
-    return null
-  }
-
-  /** A tool call in a few words: what kind of thing, and on what. */
-  const step = (call: ToolCall): { name: string; detail: string } => {
-    const own = ours(call)
-    if (own) return turn.describe(own, call.rawInput)
-    const its = call._meta?.["x.ai/tool"] ?? {}
-    // it looks a tool up before it calls on one it was brought
-    if (its.name === "search_tool")
-      return { name: "Find tool", detail: field(call.rawInput, "query") }
-    // what kind of thing it is, it says at first only in its own words
-    const kind =
-      call.kind && call.kind !== "other" ? call.kind : (its.kind ?? "")
-    const file = field(
-      call.rawInput,
-      "path",
-      "file_path",
-      "filePath",
-      "target_file"
-    )
-    const detail =
-      kind === "execute"
-        ? field(call.rawInput, "command", "cmd")
-        : kind === "search"
-          ? field(call.rawInput, "pattern", "query", "regex")
-          : kind === "fetch"
-            ? field(call.rawInput, "url", "query")
-            : relative(file || (call.locations?.[0]?.path ?? ""))
-    if (KINDS[kind])
-      return { name: KINDS[kind], detail: detail || (call.title ?? "") }
-    // a tool someone else brought it, or one of its own that is none of the above
-    const called = field(call.rawInput, "tool_name") || call.title || "Tool"
-    return { name: called.replaceAll("__", " "), detail }
-  }
-
-  // Grok does not always answer the prompt it was sent: it also says so apart
-  const state = new AcpTurn(turn, run, step, (method, told, sessionId) =>
-    method === "_x.ai/session/prompt_complete" && told.sessionId === sessionId
-      ? (told.stopReason ?? null)
-      : undefined
-  )
-
-  const onRequest = async (method: string, params: unknown) => {
-    if (method === "session/request_permission") {
-      const wanted = (params ?? {}) as {
-        toolCall?: ToolCall
-        options?: Option[]
-      }
-      const options = wanted.options ?? []
-      // what it asks leave for it has often said more of already
-      const call: ToolCall = {
-        ...state.call(wanted.toolCall?.toolCallId),
-        ...wanted.toolCall,
-      }
-      const choose = (...kinds: string[]) => {
-        for (const kind of kinds) {
-          const option = options.find((one) => one.kind === kind)
-          if (option)
-            return {
-              outcome: { outcome: "selected", optionId: option.optionId },
-            }
-        }
-        return { outcome: { outcome: "cancelled" } }
-      }
-      // The app's own tools are the point of it: they are never asked about. And where
-      // the project's files are the agent's to change, changing them is not asked either:
-      // only them, and not a file anywhere else, nor one a link in the project leads out to.
-      if (
-        ours(call) ||
-        (access === "edits" &&
-          call.kind === "edit" &&
-          changesOnlyInside(turn.cwd, call))
-      )
-        return choose("allow_once", "allow_always")
-      const shown = step(call)
-      const answer = await turn.ask({
-        title: QUESTIONS[call.kind ?? ""] ?? `Let Grok use ${shown.name}?`,
-        detail: shown.detail,
-        canAlways: options.some((one) => one.kind === "allow_always"),
-      })
-      if (turn.signal.aborted) return { outcome: { outcome: "cancelled" } }
-      return answer === "deny"
-        ? choose("reject_once")
-        : answer === "always"
-          ? choose("allow_always", "allow_once")
-          : choose("allow_once")
-    }
-    // it would need its own form here; until then Grok asks in plain text
-    if (
-      method === "_x.ai/ask_user_question" ||
-      method === "x.ai/ask_user_question"
-    )
-      return { outcome: "cancelled" }
-    throw new RpcError(NO_SUCH_METHOD, `Method not found: ${method}`)
-  }
-
-  // (a model is looked over with the app's tools: anything else is put to the user)
-  const access = turn.lookOver ? "supervised" : manner.access
-  const peer = startPeer(launch.path, command(launch, access), {
-    cwd: turn.cwd,
-    env: launch.env,
-    versioned: true,
-    onNotification: state.notification,
-    onRequest,
-  })
-  // gone before the turn was over: what it last said to stderr is why, if anything is
-  const died = peer.gone.then(() => {
-    throw new Error(peer.stderr() || "Grok exited before the turn was over.")
-  })
-  died.catch(() => {})
-
-  try {
-    const hello = await Promise.race([
-      peer.request<Hello>("initialize", HELLO),
-      halt,
-      died,
-    ])
-    await Promise.race([
-      peer.request("authenticate", { methodId: authMethod(launch, hello) }),
-      halt,
-      died,
-    ]).catch((error: unknown) => {
-      if (turn.signal.aborted) throw error
-      throw new Error(
-        "Nobody is signed in to Grok. Run `grok login` in a terminal, then try again."
-      )
-    })
-
-    const where = {
-      cwd: turn.cwd,
-      // where the app's own tools answer, for as long as this turn lasts
-      mcpServers: Object.entries(turn.served).map(([name, url]) => ({
-        type: "http",
-        name,
-        url,
-        headers: [],
-      })),
-    }
-    const begin = async () => {
-      const made = await peer.request<{ sessionId: string }>("session/new", {
-        ...where,
-        _meta: {
-          rules: turn.guide,
-          // how much it may do without asking, said again where a session can be told
-          ...(access === "full"
-            ? { yoloMode: true }
-            : access === "auto"
-              ? { autoMode: true }
-              : {}),
-        },
-      })
-      return made.sessionId
-    }
-    /** Take up the session the conversation was last in. Whether it could be. */
-    const resume = async (id: string) => {
-      state.beginReplay()
-      const quiet = new Promise<void>((resolve) => {
-        const timer = setInterval(() => {
-          if (
-            state.replayed > 0 &&
-            Date.now() - state.replayed >= REPLAY_QUIET_MS
-          ) {
-            clearInterval(timer)
-            resolve()
-          }
-        }, 200)
-        timer.unref()
-        void peer.gone.then(() => clearInterval(timer))
-      })
-      try {
-        await Promise.race([
-          peer.request("session/load", { sessionId: id, ...where }),
-          quiet,
-          tooLong(
-            LOADING_TIMEOUT_MS,
-            "Grok took too long to take the conversation up again."
-          ),
-        ])
-        return true
-      } catch (error) {
-        if (turn.signal.aborted) throw error
-        return false
-      } finally {
-        state.endReplay()
-      }
-    }
-
-    let resumed = false
-    if (turn.sessionId) {
-      resumed = await Promise.race([resume(turn.sessionId), halt, died])
-      if (resumed) state.sessionId = turn.sessionId
-      else
-        turn.notice(
-          "info",
-          "Grok could not find its record of this conversation, so it carries on without what was said before."
-        )
-    }
-    if (!resumed) state.sessionId = await Promise.race([begin(), halt, died])
-    turn.session(state.sessionId)
-
-    // which model answers, and how hard it thinks: said only where the user chose
-    const set = (configId: string, value: string) =>
-      Promise.race([
-        peer.request("session/set_config_option", {
-          sessionId: state.sessionId,
-          configId,
-          value,
-        }),
-        halt,
-        died,
-      ]).catch((error: unknown) => {
-        if (turn.signal.aborted) throw error
-        turn.notice(
-          "info",
-          `Grok would not take ${value} for its ${configId.replace("_", " ")}, and answers as it is set.`
-        )
-      })
-    if (manner.model) await set("model", manner.model)
-    if (manner.effort) await set("reasoning_effort", manner.effort)
-
-    // Grok takes no pictures in a message: it is told what it is told in words
-    const text = piecesOf(turn.content).flatMap((piece) =>
-      piece.type === "text" ? [piece.text] : []
-    )
-    const answered = peer
-      .request<{ stopReason?: string | null }>("session/prompt", {
-        sessionId: state.sessionId,
-        prompt: [
-          // a session taken up again keeps the rules it began with
-          ...(resumed && turn.guideChanged ? [guideAgain(turn.guide)] : []),
-          ...text,
-        ].map((words) => ({ type: "text", text: words })),
-      })
-      .then((result) => result?.stopReason ?? null)
-    const stopReason = await Promise.race([
-      answered,
-      state.finished,
-      halt,
-      died,
-    ])
-    state.hush()
-    if (stopReason === "refusal")
-      turn.notice("error", "Grok declined to answer this.")
-    else if (stopReason === "max_tokens" || stopReason === "max_turn_requests")
-      turn.notice(
-        "info",
-        "Grok stopped before it was done: it had reached the most it does in one turn."
-      )
-  } catch (error) {
-    // Stopped part of the way: Grok is told, and given a moment to leave the session as
-    // it should be left, so that the conversation can be carried on from here.
-    if (turn.signal.aborted && state.sessionId) {
-      peer.notify("session/cancel", { sessionId: state.sessionId })
-      await Promise.race([
-        state.finished,
-        peer.gone,
-        new Promise((resolve) => setTimeout(resolve, STOPPING_TIMEOUT_MS)),
-      ])
-    }
-    throw error
-  } finally {
-    // what was in flight did not finish
-    state.abandon()
-    peer.close()
-  }
+  return runTurn(turn, grok)
 }

@@ -2,8 +2,12 @@
 // taking up the line, how long each step is waited for, and what an agent says and does
 // over one turn, kept as it comes. Grok and opencode each say the protocol's parts in
 // their own words; this is the part that is the same for both.
-import type { ThreadItem } from "../shared/api"
-import type { Turn } from "./turn"
+import os from "node:os"
+
+import type { Access, PermissionAnswer, ThreadItem } from "../shared/api"
+import type { Launch, Looked } from "./providers"
+import { NO_SUCH_METHOD, RpcError, startPeer, type Peer } from "./rpc"
+import { inside, piecesOf, stopped, type Turn } from "./turn"
 
 /**
  * What the app says it is and can do, on taking up the line. It reads no files and runs
@@ -236,3 +240,349 @@ export const tooLong = (ms: number, why: string) =>
   new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(why)), ms).unref()
   )
+
+/** What kind of thing a tool call is, in a word, by the kind the agent gives it. */
+export const KINDS: Record<string, string> = {
+  read: "Read",
+  edit: "Edit",
+  delete: "Delete",
+  move: "Move",
+  search: "Search",
+  execute: "Run",
+  fetch: "Fetch",
+}
+
+/** What leave is asked for, by the kind of thing it is for. */
+export const QUESTIONS: Record<string, string> = {
+  read: "Read this file?",
+  edit: "Change this file?",
+  delete: "Delete this file?",
+  move: "Move this file?",
+  execute: "Run this command?",
+  fetch: "Fetch this page?",
+}
+
+/** What an agent says of itself on taking up the line, as much as the app reads of it. */
+export type AcpHello = {
+  _meta?: {
+    agentVersion?: string
+    defaultAuthMethodId?: string
+  } | null
+}
+
+export type AcpPromptBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+
+export type AcpStepContext = {
+  turn: Turn
+  relative: (file: string) => string
+  /** the app's own tool this call is to, if it is to one */
+  own: string | null
+}
+
+export type AcpAllowContext = {
+  turn: Turn
+  /** the app's own tool this call is to, if it is to one */
+  own: string | null
+}
+
+/**
+ * What is one agent's own in the protocol: how it is started, how it signs in, what it
+ * says of its models, and the few places where its words or its idea of a tool call
+ * differ. Everything else is in runTurn and lookAt below.
+ */
+export type AcpAgent<Hello = AcpHello> = {
+  /** the agent's own name for the ids it makes, as turn.id gives them */
+  id: string
+  /** what it is called where the app says so */
+  name: string
+  command(launch: Launch, access?: Access): string[]
+  env?(launch: Launch, access: Access): Record<string, string | undefined>
+  auth(launch: Launch, hello: Hello): { methodId: string; signedOut?: string }
+  look(peer: Peer, launch: Launch, hello: Hello): Promise<Looked>
+  session?: {
+    /** what a session is begun with, beyond its folder and the app's own tools */
+    meta?(turn: Turn, access: Access): Record<string, unknown>
+    /** what the agent is told of the model, where the user chose one */
+    settings?(turn: Turn): { configId: string; value: string }[]
+  }
+  prompt(
+    turn: Turn,
+    resumed: boolean,
+    pieces: AcpPromptBlock[]
+  ): AcpPromptBlock[]
+  tool: {
+    ours(call: AcpToolCall, turn: Turn): string | null
+    step(
+      call: AcpToolCall,
+      ctx: AcpStepContext
+    ): { name: string; detail: string }
+    /** the option kinds to choose without asking, or null to put it to the user */
+    allow(
+      call: AcpToolCall,
+      access: Access,
+      ctx: AcpAllowContext
+    ): string[] | null
+    /** something else the agent asks of the app, and the answer, if it has one */
+    other?(method: string, params: unknown): unknown | undefined
+  }
+  /** how an agent says a turn is over apart from the prompt's answer */
+  done?(
+    method: string,
+    told: AcpTold,
+    sessionId: string
+  ): string | null | undefined
+}
+
+/** What an installed agent says of itself, over a line that is closed afterwards. */
+export async function lookAt<Hello>(
+  launch: Launch,
+  agent: AcpAgent<Hello>
+): Promise<Looked> {
+  const peer = startPeer(launch.path, agent.command(launch), {
+    cwd: os.tmpdir(),
+    // (a look changes nothing, but it is started as a supervised turn would be)
+    env: agent.env ? agent.env(launch, "supervised") : launch.env,
+    versioned: true,
+    onNotification: () => {},
+    onRequest: (method) =>
+      Promise.reject(
+        new RpcError(NO_SUCH_METHOD, `Method not found: ${method}`)
+      ),
+  })
+  const asking = async (): Promise<Looked> => {
+    const hello = await peer.request<Hello>("initialize", HELLO)
+    return agent.look(peer, launch, hello)
+  }
+  try {
+    return await Promise.race([
+      asking(),
+      tooLong(ASKING_TIMEOUT_MS, `${agent.name} did not answer.`),
+    ])
+  } finally {
+    peer.close()
+  }
+}
+
+/** One turn of a conversation, run by an agent over the protocol. */
+export async function runTurn<Hello>(
+  turn: Turn,
+  agent: AcpAgent<Hello>
+): Promise<void> {
+  const { launch, manner } = turn
+  const halt = stopped(turn.signal)
+  const run = turn.id(agent.id)
+  const relative = inside(turn.cwd)
+  const state = new AcpTurn(
+    turn,
+    run,
+    (call) =>
+      agent.tool.step(call, {
+        turn,
+        relative,
+        own: agent.tool.ours(call, turn),
+      }),
+    agent.done
+  )
+  // (a model is looked over with the app's tools: anything else is put to the user)
+  const access = turn.lookOver ? "supervised" : manner.access
+
+  const request = async (method: string, params: unknown) => {
+    if (method === "session/request_permission") {
+      const wanted = (params ?? {}) as {
+        toolCall?: AcpToolCall
+        options?: AcpOption[]
+      }
+      const options = wanted.options ?? []
+      // what it asks leave for it has often said more of already
+      const call: AcpToolCall = {
+        ...state.call(wanted.toolCall?.toolCallId),
+        ...wanted.toolCall,
+      }
+      const choose = (...kinds: string[]) => {
+        for (const kind of kinds) {
+          const option = options.find((one) => one.kind === kind)
+          if (option)
+            return {
+              outcome: { outcome: "selected", optionId: option.optionId },
+            }
+        }
+        return { outcome: { outcome: "cancelled" } }
+      }
+      const own = agent.tool.ours(call, turn)
+      const allowed = agent.tool.allow(call, access, { turn, own })
+      if (allowed) return choose(...allowed)
+      const shown = agent.tool.step(call, { turn, relative, own })
+      const answer: PermissionAnswer = await turn.ask({
+        title:
+          QUESTIONS[call.kind ?? ""] ?? `Let ${agent.name} use ${shown.name}?`,
+        detail: shown.detail,
+        canAlways: options.some((one) => one.kind === "allow_always"),
+      })
+      if (turn.signal.aborted) return { outcome: { outcome: "cancelled" } }
+      return answer === "deny"
+        ? choose("reject_once")
+        : answer === "always"
+          ? choose("allow_always", "allow_once")
+          : choose("allow_once")
+    }
+    const other = agent.tool.other?.(method, params)
+    if (other !== undefined) return other
+    throw new RpcError(NO_SUCH_METHOD, `Method not found: ${method}`)
+  }
+
+  const peer = startPeer(launch.path, agent.command(launch, access), {
+    cwd: turn.cwd,
+    env: agent.env ? agent.env(launch, access) : launch.env,
+    versioned: true,
+    onNotification: state.notification,
+    onRequest: request,
+  })
+  // gone before the turn was over: what it last said to stderr is why, if anything is
+  const died = peer.gone.then(() => {
+    throw new Error(
+      peer.stderr() || `${agent.name} exited before the turn was over.`
+    )
+  })
+  died.catch(() => {})
+
+  try {
+    const hello = await Promise.race([
+      peer.request<Hello>("initialize", HELLO),
+      halt,
+      died,
+    ])
+    const auth = agent.auth(launch, hello)
+    await Promise.race([
+      peer.request("authenticate", { methodId: auth.methodId }),
+      halt,
+      died,
+    ]).catch((error: unknown) => {
+      if (turn.signal.aborted) throw error
+      // some agents answer without an account, and say nothing of it either way
+      if (auth.signedOut) throw new Error(auth.signedOut)
+    })
+
+    const where = {
+      cwd: turn.cwd,
+      // where the app's own tools answer, for as long as this turn lasts
+      mcpServers: Object.entries(turn.served).map(([name, url]) => ({
+        type: "http",
+        name,
+        url,
+        headers: [],
+      })),
+    }
+    const meta = agent.session?.meta?.(turn, access)
+    const begin = async () => {
+      const made = await peer.request<{ sessionId: string }>("session/new", {
+        ...where,
+        ...(meta ? { _meta: meta } : {}),
+      })
+      return made.sessionId
+    }
+    /** Take up the session the conversation was last in. Whether it could be. */
+    const resume = async (id: string) => {
+      state.beginReplay()
+      const quiet = new Promise<void>((resolve) => {
+        const timer = setInterval(() => {
+          if (
+            state.replayed > 0 &&
+            Date.now() - state.replayed >= REPLAY_QUIET_MS
+          ) {
+            clearInterval(timer)
+            resolve()
+          }
+        }, 200)
+        timer.unref()
+        void peer.gone.then(() => clearInterval(timer))
+      })
+      try {
+        await Promise.race([
+          peer.request("session/load", { sessionId: id, ...where }),
+          quiet,
+          tooLong(
+            LOADING_TIMEOUT_MS,
+            `${agent.name} took too long to take the conversation up again.`
+          ),
+        ])
+        return true
+      } catch (error) {
+        if (turn.signal.aborted) throw error
+        return false
+      } finally {
+        state.endReplay()
+      }
+    }
+
+    let resumed = false
+    if (turn.sessionId) {
+      resumed = await Promise.race([resume(turn.sessionId), halt, died])
+      if (resumed) state.sessionId = turn.sessionId
+      else
+        turn.notice(
+          "info",
+          `${agent.name} could not find its record of this conversation, so it carries on without what was said before.`
+        )
+    }
+    if (!resumed) state.sessionId = await Promise.race([begin(), halt, died])
+    turn.session(state.sessionId)
+
+    // which model answers, and how hard it thinks: said only where the user chose
+    for (const setting of agent.session?.settings?.(turn) ?? [])
+      await Promise.race([
+        peer.request("session/set_config_option", {
+          sessionId: state.sessionId,
+          configId: setting.configId,
+          value: setting.value,
+        }),
+        halt,
+        died,
+      ]).catch((error: unknown) => {
+        if (turn.signal.aborted) throw error
+        turn.notice(
+          "info",
+          `${agent.name} would not take ${setting.value} for its ${setting.configId.replace("_", " ")}, and answers as it is set.`
+        )
+      })
+
+    const answered = peer
+      .request<{ stopReason?: string | null }>("session/prompt", {
+        sessionId: state.sessionId,
+        prompt: agent.prompt(turn, resumed, piecesOf(turn.content)),
+      })
+      .then((result) => result?.stopReason ?? null)
+    const stopReason = await Promise.race([
+      answered,
+      state.finished,
+      halt,
+      died,
+    ])
+    state.hush()
+    if (stopReason === "refusal")
+      turn.notice("error", `${agent.name} declined to answer this.`)
+    else if (stopReason === "max_tokens" || stopReason === "max_turn_requests")
+      turn.notice(
+        "info",
+        `${agent.name} stopped before it was done: it had reached the most it does in one turn.`
+      )
+  } catch (error) {
+    // Stopped part of the way: the agent is told, and given a moment to leave the
+    // session as it should be left, so that the conversation can be carried on from
+    // here.
+    if (turn.signal.aborted && state.sessionId) {
+      peer.notify("session/cancel", { sessionId: state.sessionId })
+      await Promise.race([
+        state.finished,
+        peer.gone,
+        new Promise((resolve) => setTimeout(resolve, STOPPING_TIMEOUT_MS)),
+      ])
+    }
+    throw error
+  } finally {
+    // what was in flight did not finish
+    state.abandon()
+    peer.close()
+  }
+}
