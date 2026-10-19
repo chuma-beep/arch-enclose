@@ -12,6 +12,7 @@ import path from "node:path"
 import {
   APP_AUTHOR,
   branchFor,
+  clearStaleLock,
   commitAll,
   inRepository,
   isRepository,
@@ -20,6 +21,7 @@ import {
   noCommandsOfItsOwn,
   setUp,
   slugged,
+  whyOf,
   type Author,
   type Git,
 } from "./backup"
@@ -70,7 +72,16 @@ export type BackupsDeps = {
   /** the app is no longer signed in, and has to be connected again */
   signedOut: () => void
   onProgress: (progress: BackingUp) => void
+  /** a project's history could not be kept or backed up, or could be again (`failures`) */
+  onFailures?: () => void
 }
+
+/** What went wrong in keeping a project's history, as one line to show. */
+const said = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error))
+    .trim()
+    .split("\n")
+    .at(-1) || "Something went wrong."
 
 /** How long a push that failed waits to be tried again, ms. */
 const AGAIN_MS = 3 * 60_000
@@ -94,6 +105,8 @@ export class Backups {
    * be: its folder is not to be put as another conversation has it before that
    */
   private committing = new Map<string, Promise<unknown>>()
+  /** what went wrong the last time something was done in each project, where it did */
+  private failed = new Map<string, { why: string; at: number }>()
   /** the projects with commits GitHub does not have yet */
   private unpushed = new Set<string>()
   private again: ReturnType<typeof setTimeout> | null = null
@@ -108,16 +121,36 @@ export class Backups {
     return this.deps.projects().find((one) => one.id === id) ?? null
   }
 
-  /** Do this in a project once what was asked of it before is done. */
+  /**
+   * Do this in a project once what was asked of it before is done. What went wrong in
+   * it is kept, to be shown, until something done there next goes right.
+   */
   private queue<T>(id: string, work: () => Promise<T>): Promise<T | null> {
     const before = this.queues.get(id) ?? Promise.resolve()
-    const next = before.then(work).catch((error: unknown) => {
-      if (error instanceof SignedOut) this.deps.signedOut()
-      else console.error("[backup]", id, error)
-      return null
-    })
+    const next = before.then(work).then(
+      (result) => {
+        if (this.failed.delete(id)) this.deps.onFailures?.()
+        return result
+      },
+      (error: unknown) => {
+        if (error instanceof SignedOut) this.deps.signedOut()
+        else {
+          console.error("[backup]", id, error)
+          this.failed.set(id, { why: said(error), at: Date.now() })
+          this.deps.onFailures?.()
+        }
+        return null
+      }
+    )
     this.queues.set(id, next)
     return next
+  }
+
+  /** The projects whose history could not be kept or backed up the last time, the latest first. */
+  failures(): { id: string; why: string; at: number }[] {
+    return [...this.failed]
+      .map(([id, failed]) => ({ id, ...failed }))
+      .sort((a, b) => b.at - a.at)
   }
 
   /** Resolves once all that was asked of every project until now is done, or has failed. */
@@ -306,6 +339,8 @@ export class Backups {
         now !== conversationId
       )
         return null
+      // (what git left of a run that was cut short would keep anything being committed)
+      clearStaleLock(project.path)
       const branch = await this.branchOf(project.path, conversationId, what)
       return commitAll(this.deps.git, project.path, {
         branch,
@@ -345,9 +380,7 @@ export class Backups {
       if (fs.existsSync(path.join(dir, ".git", "lfs", "objects"))) {
         const sent = await git(["lfs", "push", "--all", "origin"], dir, env)
         if (sent.code !== 0)
-          throw new Error(
-            sent.stderr.trim().split("\n").at(-1) ?? "Git LFS push failed"
-          )
+          throw new Error(whyOf(sent.stderr) || "Git LFS push failed")
       }
       const pushed = await git(
         ["push", "--all", "--porcelain", "origin"],
@@ -360,9 +393,7 @@ export class Backups {
           await git(["config", "--unset", "enclose.repository"], dir)
           throw new Error(`The repository ${full} is gone from GitHub.`)
         }
-        throw new Error(
-          pushed.stderr.trim().split("\n").at(-1) ?? "push failed"
-        )
+        throw new Error(whyOf(pushed.stderr) || "push failed")
       }
       this.unpushed.delete(project.id)
     } catch (error) {

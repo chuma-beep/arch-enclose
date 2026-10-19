@@ -81,6 +81,21 @@ export function branchFor(what: string, conversationId: string): string {
   return `version/${slugged(what, 40)}-${conversationId.slice(0, 6)}`
 }
 
+/**
+ * Why git says it failed, in a line: the line that says it is fatal, or an error, and
+ * not the hints it puts after that; otherwise the last it wrote.
+ */
+export function whyOf(said: string): string {
+  const lines = said
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+  return (
+    lines.find((line) => /^(fatal|error|! \[)/.test(line)) ?? lines.at(-1) ?? ""
+  )
+}
+
 const run = async (
   git: Git,
   args: string[],
@@ -90,7 +105,7 @@ const run = async (
   const done = await git(args, cwd, env)
   if (done.code !== 0)
     throw new Error(
-      `git ${args[0]} failed: ${(done.stderr || done.stdout).trim().split("\n").at(-1) ?? ""}`
+      `git ${args[0]} failed: ${whyOf(done.stderr || done.stdout)}`
     )
   return done.stdout
 }
@@ -242,6 +257,28 @@ async function bigOnes(git: Git, dir: string): Promise<void> {
   // what they would send on a push it sends itself (backups.ts)
   await run(git, ["lfs", "install", "--local", "--skip-repo"], dir)
   await run(git, ["lfs", "track", "--filename", ...fresh], dir)
+}
+
+/** How old git's lock on a repository's index is before it is taken for one left behind, ms. */
+export const STALE_LOCK_MS = 10 * 60_000
+
+/**
+ * Take away the lock on a repository's index that a git cut short leaves behind (the app
+ * quit, or the machine going off, in the middle of a commit), which would have every
+ * commit after it fail. Only one older than STALE_LOCK_MS, which no git still at work
+ * holds for so long; and only where no git of the app's own is at work in the folder,
+ * which is so wherever this is called from what is done in a project one thing at a
+ * time (backups.ts). Whether there was one to take away.
+ */
+export function clearStaleLock(dir: string, now = Date.now()): boolean {
+  const lock = path.join(dir, ".git", "index.lock")
+  try {
+    if (now - fs.statSync(lock).mtimeMs < STALE_LOCK_MS) return false
+    fs.rmSync(lock)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export type Committed = {

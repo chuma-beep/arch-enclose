@@ -407,6 +407,11 @@ const broadcast = () => send(CHANNEL.projectsChanged, list())
 const githubState = (): GitHubState => ({
   connection: connection.state,
   backingUp,
+  // (only of projects still on the list, by what each is called now)
+  failures: (backups?.failures() ?? []).flatMap(({ id, why, at }) => {
+    const project = projects.listed(id)
+    return project ? [{ projectId: id, name: project.name, why, at }] : []
+  }),
 })
 const sendGitHub = () => send(CHANNEL.githubChanged, githubState())
 
@@ -479,8 +484,7 @@ async function turnTo(id: string, conversationId: string): Promise<boolean> {
   const kept = settings.get().versions
   // What was asked to be committed of the folder as it is goes in first, on the branch
   // of the conversation it is now: it is that one's, and not the one's it is to be.
-  if (kept && versions.on(id) !== conversationId)
-    await backups.committed(id)
+  if (kept && versions.on(id) !== conversationId) await backups.committed(id)
   const project = projects.get(id)
   if (!project) return false
   const turned = await versions.turnTo(id, conversationId, project.path, {
@@ -2128,6 +2132,7 @@ if (!app.requestSingleInstanceLock()) {
         backingUp = progress
         sendGitHub()
       },
+      onFailures: sendGitHub,
     })
     threads = new Threads({
       dir: path.join(data, "threads"),

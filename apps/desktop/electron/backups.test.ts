@@ -232,6 +232,42 @@ describe("Backups", () => {
     expect(await show(project.path, "log", "--format=%s", "-1")).toBe("One")
   })
 
+  it("says when a project's history could not be kept, until it can be again", async () => {
+    let told = 0
+    const kept = backups(false, { onFailures: () => told++ })
+    write("model.py", "a = 1")
+    await kept.prepare("p1", "Started in Enclose")
+    expect(kept.failures()).toEqual([])
+    // what a git cut short a moment ago leaves: every commit fails while it is there
+    const lock = path.join(project.path, ".git", "index.lock")
+    fs.writeFileSync(lock, "")
+    write("model.py", "a = 2")
+    await kept.record("p1", {
+      what: "One",
+      conversation: null,
+      conversationId: null,
+    })
+    expect(kept.failures()).toEqual([
+      {
+        id: "p1",
+        why: expect.stringContaining("index.lock"),
+        at: expect.any(Number),
+      },
+    ])
+    expect(told).toBe(1)
+    // left there long enough, it is taken for one left behind, and the next commit goes in
+    const old = (Date.now() - 11 * 60_000) / 1000
+    fs.utimesSync(lock, old, old)
+    await kept.record("p1", {
+      what: "Two",
+      conversation: null,
+      conversationId: null,
+    })
+    expect(kept.failures()).toEqual([])
+    expect(told).toBe(2)
+    expect(await show(project.path, "log", "--format=%s", "-1")).toBe("Two")
+  })
+
   it("backs up projects made before GitHub was connected, and renames a repository with its project", async () => {
     write("model.py", "a = 1")
     await backups(false).prepare("p1", "Started in Enclose")

@@ -745,10 +745,25 @@ export type GitHubConnection =
   | { state: "install"; login: string; url: string }
   | { state: "on"; login: string; name: string | null }
 
+/**
+ * A project whose history could not be kept, or backed up, the last time it was tried:
+ * what went wrong, as git or GitHub said it, and when. It is tried again, and goes from
+ * here the next time that works.
+ */
+export type BackupFailure = {
+  projectId: string
+  /** what the project is called */
+  name: string
+  why: string
+  at: number
+}
+
 /** GitHub, and how far backing every project up to it has got, while it is under way. */
 export type GitHubState = {
   connection: GitHubConnection
   backingUp: { done: number; total: number } | null
+  /** the projects whose last commit or push failed, the latest first */
+  failures: BackupFailure[]
 }
 
 export type Update =

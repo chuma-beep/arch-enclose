@@ -8,6 +8,7 @@ import {
   APP_AUTHOR,
   BIG,
   branchFor,
+  clearStaleLock,
   commitAll,
   ignoreText,
   inRepository,
@@ -16,8 +17,9 @@ import {
   messageOf,
   setUp,
   slugged,
+  whyOf,
 } from "./backup"
-import { git } from "./git"
+import { git, overNetwork } from "./git"
 
 let dir: string
 const write = (file: string, content: string | Buffer = "") => {
@@ -219,4 +221,46 @@ describe("commitAll", () => {
       /^1\d\d$/
     )
   }, 30_000)
+})
+
+describe("clearStaleLock", () => {
+  it("takes away a lock on the index that a git cut short left behind, and only an old one", () => {
+    write(".git/index.lock", "")
+    const lock = path.join(dir, ".git", "index.lock")
+    const now = fs.statSync(lock).mtimeMs
+    // one a git may still be at work with
+    expect(clearStaleLock(dir, now + 60_000)).toBe(false)
+    expect(fs.existsSync(lock)).toBe(true)
+    expect(clearStaleLock(dir, now + 11 * 60_000)).toBe(true)
+    expect(fs.existsSync(lock)).toBe(false)
+    // and there being none is nothing
+    expect(clearStaleLock(dir)).toBe(false)
+  })
+})
+
+describe("overNetwork", () => {
+  it("knows what git sends or fetches, Git LFS's own as well, from the rest", () => {
+    expect(overNetwork(["push", "--all", "origin"])).toBe(true)
+    expect(overNetwork(["lfs", "push", "--all", "origin"])).toBe(true)
+    expect(overNetwork(["fetch"])).toBe(true)
+    expect(overNetwork(["commit", "--message", "push"])).toBe(false)
+    expect(overNetwork(["lfs", "track", "*.stl"])).toBe(false)
+  })
+})
+
+describe("whyOf", () => {
+  it("says why git failed by the line that says so, not the hints after it", () => {
+    expect(
+      whyOf(
+        "fatal: Unable to create '/x/.git/index.lock': File exists.\n\nAnother git process seems to be running in this repository.\nremove the file manually to continue.\n"
+      )
+    ).toBe("fatal: Unable to create '/x/.git/index.lock': File exists.")
+    expect(
+      whyOf(
+        "To github.com:ada/enclose-lid.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs\nhint: Updates were rejected"
+      )
+    ).toBe("! [rejected]        main -> main (fetch first)")
+    expect(whyOf("something else\nand its last line")).toBe("and its last line")
+    expect(whyOf("")).toBe("")
+  })
 })

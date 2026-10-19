@@ -32,14 +32,39 @@ const OVER = [
   "filter.lfs.required=true",
 ].flatMap((setting) => ["-c", setting])
 
+/**
+ * How long what goes over the network is given, ms: a push to a connection that has
+ * stalled would otherwise hold up every commit after it, for good.
+ */
+export const NETWORK_TIMEOUT_MS = 2 * 60_000
+
+/** Whether a run of git goes over the network: what is given a time to be done in. */
+export const overNetwork = (args: string[]) =>
+  ["push", "fetch", "pull", "clone", "ls-remote"].includes(
+    args[0] === "lfs" ? args[1] : args[0]
+  )
+
 export const git: Git = async (args, cwd, env = {}) => {
-  const done = await exec([...OVER, ...args], cwd, {
-    env: { ...QUIET, ...env },
-    maxBuffer: 64 * 1024 * 1024,
-  })
-  return {
-    code: done.exitCode,
-    stdout: String(done.stdout),
-    stderr: String(done.stderr),
+  const signal = overNetwork(args)
+    ? AbortSignal.timeout(NETWORK_TIMEOUT_MS)
+    : undefined
+  try {
+    const done = await exec([...OVER, ...args], cwd, {
+      env: { ...QUIET, ...env },
+      maxBuffer: 64 * 1024 * 1024,
+      signal,
+    })
+    return {
+      code: done.exitCode,
+      stdout: String(done.stdout),
+      stderr: String(done.stderr),
+    }
+  } catch (error) {
+    if (signal?.aborted)
+      throw new Error(
+        `git ${args.join(" ")} took longer than ${NETWORK_TIMEOUT_MS / 60_000} minutes, and was stopped.`,
+        { cause: error }
+      )
+    throw error
   }
 }

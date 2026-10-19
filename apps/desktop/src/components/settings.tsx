@@ -994,20 +994,31 @@ function Shortcuts() {
  * user's account, after every change, with nothing more asked of them.
  */
 function Connections() {
-  const { connection, backingUp } = useStore((state) => state.github)
+  const { connection, backingUp, failures } = useStore((state) => state.github)
   const { github } = window.cad
+  // a project whose history could not be kept, or pushed, the last time: the latest
+  const [failed] = failures
+  const failing =
+    failed &&
+    `${failures.length > 1 ? `${failures.length} projects failed to back up. ` : ""}${failed.name}: ${failed.why}`
   // what it is at, in one line: what went wrong, where something did
   const said =
     connection.state === "unavailable"
       ? "Not available in this version of Enclose."
       : connection.state === "off"
         ? (connection.trouble ??
+          failing ??
           "Back up your projects to private repositories.")
         : connection.state === "code" || connection.state === "install"
           ? "Connecting…"
           : backingUp
             ? `Backing up to @${connection.login}: ${backingUp.done} of ${backingUp.total}`
-            : `Backed up to @${connection.login}.`
+            : (failing ?? `Backed up to @${connection.login}.`)
+  const troubled =
+    (connection.state === "off" && connection.trouble !== null) ||
+    ((connection.state === "off" || connection.state === "on") &&
+      !backingUp &&
+      Boolean(failing))
   return (
     // laid out as the agents are, each with its mark
     <div className="divide-y divide-border/60 overflow-hidden rounded-2xl bg-card ring-1 ring-foreground/10">
@@ -1017,11 +1028,11 @@ function Connections() {
           <span className="flex min-w-0 flex-col">
             <span className="text-sm font-medium">GitHub</span>
             <span
+              // (the whole of it on the pointer, where it is cut short)
+              title={failing ? said : undefined}
               className={cn(
                 "truncate text-sm text-muted-foreground",
-                connection.state === "off" &&
-                  connection.trouble &&
-                  "text-destructive"
+                troubled && "text-destructive"
               )}
             >
               {said}

@@ -1188,7 +1188,11 @@ export const useStore = create<State>()((set, get) => ({
   settingsOpen: false,
   cleared: null,
   update: { state: "none" },
-  github: { connection: { state: "unavailable" }, backingUp: null },
+  github: {
+    connection: { state: "unavailable" },
+    backingUp: null,
+    failures: [],
+  },
   access: savedAccess(saved(ACCESS_KEY)),
   providers: [],
   provider: PROVIDERS.find((one) => one === saved(PROVIDER_KEY)) ?? "claude",

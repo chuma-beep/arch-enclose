@@ -82,7 +82,12 @@ each to a private repository of its own on your account, `enclose-<project name>
 the first time the project has a model, and pushed to after each commit, every branch of
 it. Nothing is asked. Connecting backs up every project there is at once, with a pill at
 the foot of the view saying how far it has got. A project renamed renames its repository.
-A push that fails, with no connection say, is tried again a few minutes later.
+A push that fails, with no connection say, is tried again a few minutes later; one that
+has not got through in two minutes is stopped, and tried again the same way. Where a
+project's last commit or push failed, the settings say so under GitHub, in red, with
+why, until it next works. A lock git left behind in the middle of a commit (the app
+quit, or the machine going off), which would have every commit after it fail, is taken
+away once it is ten minutes old.
 
 The agent is told that the app does this, and leaves git alone unless you ask it otherwise.
 
