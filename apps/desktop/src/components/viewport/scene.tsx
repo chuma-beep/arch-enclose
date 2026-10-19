@@ -42,6 +42,15 @@ const WHITE = new THREE.Color("#ffffff")
 const NOT_PICKED = () => {}
 const NOT_HINTED: string[] = []
 const NOT_NAMED: Named[] = []
+
+/** Each part's place in a list of them, which is where it first comes in it. */
+function placesOf(ids: string[]): Map<string, number> {
+  const at = new Map<string, number>()
+  ids.forEach((id, index) => {
+    if (!at.has(id)) at.set(id, index)
+  })
+  return at
+}
 // drawn in this order, so what is behind glass is tinted by it and the glass keeps its outline
 const ORDER = {
   solid: 0,
@@ -2058,6 +2067,7 @@ export function Scene({
     [sweep, found, several, selectedWith]
   )
   const under = React.useMemo(() => new Set(hoveredWith), [hoveredWith])
+  const picked = React.useMemo(() => new Set(selectedWith), [selectedWith])
   const named = React.useMemo(
     () => (found ? namesOf(loaded, found.things) : NOT_NAMED),
     [loaded, found]
@@ -2069,6 +2079,14 @@ export function Scene({
       by.set(name.on, [...(by.get(name.on) ?? []), name])
     return by
   }, [named])
+  /** What has been said of each part and is shown on it, by part. */
+  const noted = React.useMemo(() => {
+    const by = new Map<string, Note[]>()
+    for (const note of notes)
+      if (!note.part.board)
+        by.set(note.part.id, [...(by.get(note.part.id) ?? []), note])
+    return by
+  }, [notes])
   const looks = loaded.parts.map((part): ReturnType<typeof appearance> => {
     // looked for by name, a part is looked for in all of the model: what the view was
     // cut down to is on show again meanwhile, and what was put out of sight
@@ -2092,18 +2110,22 @@ export function Scene({
   const hinted = seeking || sweeping ? NOT_HINTED : several
   // And so are the parts Claude is at work on, those of them that are there to be seen.
   const changed = seeking || sweeping ? NOT_HINTED : changing
-  const anyChanged = loaded.parts.some(
-    (part, index) => looks[index].shown && changed.includes(part.part.id)
-  )
   // And the parts it has just made are shown coming, those that are there to be seen.
   const come =
     arriving && !seeking && !sweeping && !finding ? arriving.parts : NOT_HINTED
+  // (each part's place among each of these, looked up and not searched for, part by part)
+  const hintedAt = React.useMemo(() => placesOf(hinted), [hinted])
+  const changedAt = React.useMemo(() => placesOf(changed), [changed])
+  const comeAt = React.useMemo(() => placesOf(come), [come])
+  const anyChanged = loaded.parts.some(
+    (part, index) => looks[index].shown && changedAt.has(part.part.id)
+  )
   const anyCome = loaded.parts.some(
-    (part, index) => looks[index].shown && come.includes(part.part.id)
+    (part, index) => looks[index].shown && comeAt.has(part.part.id)
   )
   /** Picked out, and drawn in the selection's colour for it. */
   const filled = (id: string) =>
-    lit.has(id) && !(plain && !sweeping && selectedWith.includes(id))
+    lit.has(id) && !(plain && !sweeping && picked.has(id))
   const anyGlass = looks.some(({ shown, look }) => shown && look === "glass")
   // The parts a cut leaves a face on: the solid ones, drawn as such. Each has its place
   // among them, which is the order their cut faces are drawn in.
@@ -2112,8 +2134,9 @@ export function Scene({
       ? part.solid
       : false
   )
-  const place = (index: number) =>
-    cuts[index] ? cuts.slice(0, index).filter(Boolean).length : null
+  const places: (number | null)[] = []
+  let counted = 0
+  for (const cut of cuts) places.push(cut ? counted++ : null)
   // a click on nothing puts the section's handle away, as well as what was picked out
   const handle = React.useRef<HandleControls>(null)
   const pick = React.useCallback(
@@ -2238,62 +2261,52 @@ export function Scene({
         {loaded.parts.map((part, index) => {
           const { shown, look } = looks[index]
           if (!shown) return null
+          const id = part.part.id
+          // What goes with the part, given only where there is some: anything given,
+          // even nothing, is new at every drawing, and the part would be drawn again
+          // with all the others at every move of the pointer.
+          const marked = selectedId === id && !sweeping
+          const notesOn = noted.get(id)
+          const names = carried.get(id)
           return (
             <PartModel
-              key={part.part.id}
+              key={id}
               loaded={part}
               look={look}
               cover={anyGlass}
-              cut={place(index)}
+              cut={places[index]}
               // the part that is looked for is the one thing picked out, while it is
-              hovered={!seeking && !sweeping && under.has(part.part.id)}
-              selected={
-                seeking ? hoveredId === part.part.id : lit.has(part.part.id)
-              }
-              hint={
-                hinted.includes(part.part.id)
-                  ? hinted.indexOf(part.part.id)
-                  : null
-              }
-              changing={
-                changed.includes(part.part.id)
-                  ? changed.indexOf(part.part.id)
-                  : null
-              }
-              arriving={
-                come.includes(part.part.id) ? come.indexOf(part.part.id) : null
-              }
-              shades={anyCome && !come.includes(part.part.id)}
-              plain={
-                plain &&
-                !seeking &&
-                !sweeping &&
-                selectedWith.includes(part.part.id)
-              }
+              hovered={!seeking && !sweeping && under.has(id)}
+              selected={seeking ? hoveredId === id : lit.has(id)}
+              hint={hintedAt.get(id) ?? null}
+              changing={changedAt.get(id) ?? null}
+              arriving={comeAt.get(id) ?? null}
+              shades={anyCome && !comeAt.has(id)}
+              plain={plain && !seeking && !sweeping && picked.has(id)}
               explode={explode}
               plane={plane}
               colors={colors}
-              colour={colours[part.part.id] ?? null}
+              colour={colours[id] ?? null}
             >
-              {selectedId === part.part.id && !sweeping && (
-                <PartMarks
-                  loaded={part}
-                  model={loaded.model}
-                  projectId={projectId}
-                  onPick={onPick}
-                  shown={`#${skinColour(part, part.skins[0], colors.dark, colours[part.part.id]).getHexString()}`}
-                />
-              )}
-              {notes.map(
-                (note) =>
-                  note.part.id === part.part.id &&
-                  !note.part.board && (
+              {marked || notesOn || names ? (
+                <>
+                  {marked && (
+                    <PartMarks
+                      loaded={part}
+                      model={loaded.model}
+                      projectId={projectId}
+                      onPick={onPick}
+                      shown={`#${skinColour(part, part.skins[0], colors.dark, colours[id]).getHexString()}`}
+                    />
+                  )}
+                  {notesOn?.map((note) => (
                     <NoteMark key={note.id} loaded={part} note={note} />
-                  )
-              )}
-              {carried.get(part.part.id)?.map(({ key, at }) => (
-                <Place key={key} name={key} at={at} />
-              ))}
+                  ))}
+                  {names?.map(({ key, at }) => (
+                    <Place key={key} name={key} at={at} />
+                  ))}
+                </>
+              ) : undefined}
             </PartModel>
           )
         })}
