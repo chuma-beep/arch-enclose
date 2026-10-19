@@ -189,12 +189,17 @@ describe("Providers", () => {
     // (a PATH with nothing else on it: what is installed on this machine is not found)
     process.env.SHELL = standInShell()
     process.env.PATH = dir
-    const settings = new SettingsStore(path.join(dir, "settings.json"), {
-      projectsFolder: dir,
-      lookOver: true,
-      analytics: true,
-      versions: true,
-    })
+    const settings = new SettingsStore(
+      path.join(dir, "settings.json"),
+      {
+        projectsFolder: dir,
+        lookOver: true,
+        analytics: true,
+        versions: true,
+      },
+      // (a key is kept only where the system can keep it safely)
+      { seal: (text) => text, unseal: (sealed) => sealed }
+    )
     settings.setProvider("grok", {
       enabled: true,
       binary: grok,

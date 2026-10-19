@@ -4,7 +4,12 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { providerDefaults, providerSettings, SettingsStore } from "./settings"
+import {
+  providerDefaults,
+  providerSettings,
+  SettingsStore,
+  Unsealed,
+} from "./settings"
 
 let dir: string
 let file: string
@@ -138,13 +143,47 @@ describe("SettingsStore", () => {
     ])
   })
 
-  it("keeps it in the file itself where the system has nowhere to", () => {
+  it("keeps no key in the open where the system has nowhere to keep it", () => {
     const store = new SettingsStore(file, DEFAULTS)
-    store.setProvider("grok", {
-      env: [{ name: "XAI_API_KEY", value: "xai-1" }],
-    })
-    expect(new SettingsStore(file, DEFAULTS).provider("grok").env).toEqual([
+    expect(() =>
+      store.setProvider("grok", {
+        env: [{ name: "XAI_API_KEY", value: "xai-1" }],
+      })
+    ).toThrow(Unsealed)
+    expect(
+      fs.existsSync(file) ? fs.readFileSync(file, "utf8") : ""
+    ).not.toContain("xai-1")
+    expect(store.provider("grok").env).toEqual([])
+    // a name with nothing set is no secret
+    store.setProvider("grok", { env: [{ name: "XAI_DEBUG", value: "" }] })
+    expect(store.provider("grok").env).toEqual([
+      { name: "XAI_DEBUG", value: "" },
+    ])
+  })
+
+  it("leaves what an earlier version kept in the open as it was, and lets it go", () => {
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        providers: { grok: { env: [{ name: "XAI_API_KEY", value: "xai-1" }] } },
+      })
+    )
+    const store = new SettingsStore(file, DEFAULTS)
+    // still had, and changing something else keeps it so
+    store.setProvider("grok", { args: "--verbose" })
+    expect(store.provider("grok").env).toEqual([
       { name: "XAI_API_KEY", value: "xai-1" },
     ])
+    store.setProvider("grok", { env: [] })
+    expect(fs.readFileSync(file, "utf8")).not.toContain("xai-1")
+  })
+
+  it("is the user's alone to read", () => {
+    fs.writeFileSync(file, "{}", { mode: 0o644 })
+    const store = new SettingsStore(file, DEFAULTS)
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600)
+    fs.rmSync(file)
+    store.set({ analytics: false })
+    expect(fs.statSync(file).mode & 0o777).toBe(0o600)
   })
 })

@@ -82,6 +82,18 @@ export type Vault = {
   unseal(sealed: string): string
 }
 
+/**
+ * What setting a value in an agent's environment comes to on a machine that has nowhere
+ * to keep it safely: it is not kept, rather than kept in the open in the settings file.
+ */
+export class Unsealed extends Error {
+  constructor() {
+    super(
+      "This machine has nowhere to keep keys safely, so the variables were not saved. Set them where the agent is started instead (its own config, or the terminal it runs from)."
+    )
+  }
+}
+
 type Saved = Partial<Settings> & {
   providers?: Partial<Record<ProviderId, unknown>>
   /** the GitHub account projects are backed up to, and its tokens, sealed */
@@ -101,6 +113,8 @@ export class SettingsStore {
     try {
       const read: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
       if (typeof read === "object" && read !== null) this.saved = read
+      // for the user alone to read, however it was written before
+      fs.chmodSync(file, 0o600)
     } catch {
       // first run, or a file that is not JSON: the defaults stand
     }
@@ -157,10 +171,26 @@ export class SettingsStore {
     return providerSettings({ ...kept, env }, providerDefaults(id))
   }
 
-  /** Change what is chosen about one, in as much as `patch` says anything of it. */
+  /**
+   * Change what is chosen about one, in as much as `patch` says anything of it. Throws
+   * Unsealed, and keeps nothing of it, where a value in its environment would have to be
+   * kept in the open: one kept so before, as it was, stays.
+   */
   setProvider(id: ProviderId, patch: unknown): ProviderSettings {
     const next = providerSettings(patch, this.provider(id))
     const { vault } = this
+    if (!vault) {
+      const kept = (this.kept()[id] as { env?: unknown } | undefined)?.env
+      const open = variables(kept)
+      if (
+        next.env.some(
+          ({ name, value }) =>
+            value &&
+            !open.some((one) => one.name === name && one.value === value)
+        )
+      )
+        throw new Unsealed()
+    }
     this.saved = {
       ...this.saved,
       providers: {
@@ -216,6 +246,10 @@ export class SettingsStore {
 
   private write() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    fs.writeFileSync(this.file, JSON.stringify(this.saved, null, 2))
+    // (sealed or not, what is in it is the user's alone to read)
+    fs.writeFileSync(this.file, JSON.stringify(this.saved, null, 2), {
+      mode: 0o600,
+    })
+    fs.chmodSync(this.file, 0o600)
   }
 }

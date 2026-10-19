@@ -1756,7 +1756,8 @@ function wire() {
   ipcMain.handle(CHANNEL.providersChange, (_, id: unknown, patch: unknown) => {
     const which = PROVIDERS.find((one) => one === id)
     // answers at once, with what was chosen: what comes of looking at the agent again,
-    // where that is called for, the window hears of as it is found out
+    // where that is called for, the window hears of as it is found out. (A key this
+    // machine cannot keep safely is not kept, which the window is told: it says why.)
     if (which) void providers.change(which, patch)
     const on = (patch as { enabled?: unknown } | null)?.enabled
     if (which && typeof on === "boolean")
@@ -2003,7 +2004,13 @@ if (!app.requestSingleInstanceLock()) {
     const data = app.getPath("userData")
     // What is set in an agent's environment is often a key: the system keeps those, where
     // it has somewhere to keep them, and the settings file holds only what it gives back.
-    const vault: Vault | null = safeStorage.isEncryptionAvailable()
+    // (on Linux, with no keyring to keep them, Electron "keeps" them in a key anybody has:
+    // that is no keeping at all)
+    const sealing =
+      safeStorage.isEncryptionAvailable() &&
+      (process.platform !== "linux" ||
+        safeStorage.getSelectedStorageBackend() !== "basic_text")
+    const vault: Vault | null = sealing
       ? {
           seal: (text) => safeStorage.encryptString(text).toString("base64"),
           unseal: (sealed) =>

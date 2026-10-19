@@ -257,10 +257,22 @@ function Models({ provider }: { provider: Provider }) {
 function Variables({ provider }: { provider: Provider }) {
   // what is being written: a line counts once it has a name
   const [rows, setRows] = React.useState<EnvVar[]>(provider.settings.env)
+  // why what was written was not kept, where it was not: a machine with nowhere to keep
+  // a key safely keeps none
+  const [refused, setRefused] = React.useState<string | null>(null)
   const keep = (next: EnvVar[]) => {
     const named = next.filter((row) => row.name.trim())
     if (JSON.stringify(named) !== JSON.stringify(provider.settings.env))
-      void changeProvider(provider.id, { env: named })
+      changeProvider(provider.id, { env: named }).then(
+        () => setRefused(null),
+        (error: unknown) =>
+          setRefused(
+            String(error instanceof Error ? error.message : error).replace(
+              /^Error invoking remote method '[^']*': (Error: )?/,
+              ""
+            )
+          )
+      )
   }
   const write = (index: number, patch: Partial<EnvVar>) =>
     setRows((was) =>
@@ -323,6 +335,11 @@ function Variables({ provider }: { provider: Provider }) {
           </Button>
         </div>
       ))}
+      {refused && (
+        <p role="alert" className="py-2.5 text-sm text-destructive">
+          {refused}
+        </p>
+      )}
     </>
   )
 }
