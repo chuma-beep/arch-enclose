@@ -29,20 +29,44 @@ export function weld(lists: ArrayLike<number>[]): {
   /** how many different points there are */
   count: number
 } {
-  const known = new Map<string, number>()
+  // Each point is known by a number made from where it is, to the grain: a number and
+  // not words, which are slow to make and to look up at a hundred thousand points. Two
+  // points may come to the same number, so each number leads to the first point it was
+  // made for, and that to the next with the same number, until the very one is found.
+  const first = new Map<number, number>()
+  const next: number[] = []
+  const at: number[] = []
   const ids = lists.map((position) => {
     const welded = new Uint32Array(position.length / 3)
     for (let i = 0; i < welded.length; i++) {
-      const key = [0, 1, 2]
-        .map((axis) => Math.round(position[i * 3 + axis] / GRAIN))
-        .join()
-      let id = known.get(key)
-      if (id === undefined) known.set(key, (id = known.size))
+      const x = Math.round(position[i * 3] / GRAIN)
+      const y = Math.round(position[i * 3 + 1] / GRAIN)
+      const z = Math.round(position[i * 3 + 2] / GRAIN)
+      const hash =
+        Math.imul(x, 0x9e3779b1) ^
+        Math.imul(y, 0x85ebca77) ^
+        Math.imul(z, 0xc2b2ae3d)
+      let id = first.get(hash)
+      let last = -1
+      while (
+        id !== undefined &&
+        !(at[id * 3] === x && at[id * 3 + 1] === y && at[id * 3 + 2] === z)
+      ) {
+        last = id
+        id = next[id] < 0 ? undefined : next[id]
+      }
+      if (id === undefined) {
+        id = next.length
+        next.push(-1)
+        at.push(x, y, z)
+        if (last < 0) first.set(hash, id)
+        else next[last] = id
+      }
       welded[i] = id
     }
     return welded
   })
-  return { ids, count: known.size }
+  return { ids, count: next.length }
 }
 
 /**

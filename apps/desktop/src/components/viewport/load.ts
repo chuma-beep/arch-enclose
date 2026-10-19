@@ -16,6 +16,7 @@ import type { Group, Model, Part } from "@/lib/model"
 import { piecesOf, waysOut } from "./apart"
 import { contoursOf, type Contours } from "./contours"
 import { ruledOf } from "./ruled"
+import { sharing } from "./shared"
 import { shellOf } from "./shell"
 import { sharpOf, thingsOf } from "./things"
 
@@ -194,22 +195,72 @@ function join(
   return { skins, faces }
 }
 
+/**
+ * What is made of a part's files, whatever model it is in and wherever it is in it: its
+ * meshes, and all that is worked out from them once. It is the same for the same files.
+ */
+type Made = Pick<
+  LoadedPart,
+  "skins" | "edges" | "contours" | "solid" | "box" | "faces"
+>
+
+/**
+ * What has been made of parts' files, by what was in them, for as long as a model on
+ * screen (or on its way) has the part: a rebuild mostly changes a part or two, and the
+ * rest are not read and worked out all over again. Once no model has a part, its meshes
+ * are done with.
+ */
+const made = sharing<Made>(({ skins }) => free(skins))
+/** What each part's meshes are known by among those made, by its skins. */
+const madeAs = new WeakMap<Skin[], string>()
+
+/** What is in a file, as bytes: what a part's files are told apart by. */
+async function bytesOf(url: string): Promise<ArrayBuffer> {
+  const response = await fetch(url)
+  if (!response.ok)
+    throw new Error(
+      `fetch for "${url}" responded with ${response.status}: ${response.statusText}`
+    )
+  return response.arrayBuffer()
+}
+
+/** A word for what is in some bytes, the same only for the same bytes. */
+async function digestOf(bytes: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", bytes))
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(
+    ""
+  )
+}
+
 async function loadPart(
   part: Part,
   url: (file: string) => string
 ): Promise<LoadedPart> {
-  const [gltf, edges] = await Promise.all([
-    new GLTFLoader().loadAsync(url(part.file)),
+  const [file, edges] = await Promise.all([
+    bytesOf(url(part.file)),
     part.edges
       ? fetch(url(part.edges)).then(async (response) =>
-          response.ok ? new Float32Array(await response.arrayBuffer()) : null
+          response.ok ? response.arrayBuffer() : null
         )
       : null,
   ])
-  const { skins, faces } = join(gltf.scene, part)
-  const box = new THREE.Box3()
-  for (const skin of skins)
-    if (skin.geometry.boundingBox) box.union(skin.geometry.boundingBox)
+  // the same files, read the same way, are the same meshes: a part that is as it was is
+  // not read again, nor worked out
+  const key = [
+    await digestOf(file),
+    edges ? await digestOf(edges) : "none",
+    part.paint,
+    part.mesh,
+  ].join(" ")
+  const {
+    skins,
+    faces,
+    edges: lines,
+    contours,
+    solid,
+    box,
+  } = await made.take(key, () => makePart(part, file, edges, url(part.file)))
+  madeAs.set(skins, key)
   const home = new THREE.Matrix4()
   if (part.matrix)
     home.set(...(part.matrix as Parameters<THREE.Matrix4["set"]>))
@@ -217,17 +268,43 @@ async function loadPart(
   return {
     part,
     skins,
-    edges: edges ?? creases(skins),
-    contours: contours(skins, edges !== null),
-    solid: enclose(skins),
+    edges: lines,
+    contours,
+    solid,
     turn: 0,
     boards: false,
-    box,
+    box: box.clone(),
     home,
     piece: 0,
     away,
     alone: away,
     faces,
+  }
+}
+
+/** A part's meshes, read from what is in its file, and what is worked out from them. */
+async function makePart(
+  part: Part,
+  file: ArrayBuffer,
+  edges: ArrayBuffer | null,
+  url: string
+): Promise<Made> {
+  const gltf = await new GLTFLoader().parseAsync(
+    file,
+    THREE.LoaderUtils.extractUrlBase(url)
+  )
+  const { skins, faces } = join(gltf.scene, part)
+  const box = new THREE.Box3()
+  for (const skin of skins)
+    if (skin.geometry.boundingBox) box.union(skin.geometry.boundingBox)
+  const exact = edges ? new Float32Array(edges) : null
+  return {
+    skins,
+    faces,
+    edges: exact ?? creases(skins),
+    contours: contours(skins, exact !== null),
+    solid: enclose(skins),
+    box,
   }
 }
 
@@ -326,15 +403,18 @@ function creases(skins: Skin[]): Float32Array {
  * them, each triangle counting for its size, and how much of them there is.
  */
 function surfaceOf(part: LoadedPart): { centre: THREE.Vector3; area: number } {
-  // gone through once for a part, however often its model is put into pieces
-  const known = surfaces.get(part.skins)
-  if (known) return { centre: known.centre.clone(), area: known.area }
-  const found = measured(part)
-  surfaces.set(part.skins, found)
-  return { centre: found.centre.clone(), area: found.area }
+  // gone through once for a part's meshes, however often its model is put into pieces,
+  // and wherever the part is: the same meshes may be another part's, somewhere else
+  let known = surfaces.get(part.skins)
+  if (!known) surfaces.set(part.skins, (known = measured(part)))
+  return {
+    centre: known.centre.clone().applyMatrix4(part.home),
+    area: known.area,
+  }
 }
 const surfaces = new WeakMap<Skin[], { centre: THREE.Vector3; area: number }>()
 
+/** Where a part's surfaces are, in its own frame, and how much of them there is. */
 function measured(part: LoadedPart): { centre: THREE.Vector3; area: number } {
   const centre = new THREE.Vector3()
   let area = 0
@@ -359,7 +439,7 @@ function measured(part: LoadedPart): { centre: THREE.Vector3; area: number } {
   }
   if (area > 0) centre.divideScalar(area)
   else part.box.getCenter(centre)
-  return { centre: centre.applyMatrix4(part.home), area }
+  return { centre, area }
 }
 
 export async function loadModel(
@@ -371,7 +451,7 @@ export async function loadModel(
   const url = (file: string) => `${baseUrl}${file}?r=${revision}`
   let done = 0
   onProgress(0, model.parts.length)
-  const parts = await Promise.all(
+  const settled = await Promise.allSettled(
     model.parts.map(async (part) => {
       const loaded = await loadPart(part, url).catch((error: unknown) => {
         throw new Error(
@@ -381,6 +461,15 @@ export async function loadModel(
       onProgress(++done, model.parts.length)
       return loaded
     })
+  )
+  // a model that could not all be loaded is not had at all, nor what was of it
+  const failed = settled.find((one) => one.status === "rejected")
+  if (failed) {
+    for (const one of settled) if (one.status === "fulfilled") letGo(one.value)
+    throw failed.reason
+  }
+  const parts = settled.map(
+    (one) => (one as PromiseFulfilledResult<LoadedPart>).value
   )
   const boards = model.parts.some((part) => part.board !== null)
   for (const part of parts) {
@@ -729,11 +818,29 @@ export function standInModel(): LoadedModel {
   }
 }
 
+/** The models done with already: one is let go of once, however often it is told to be. */
+const disposed = new WeakSet<LoadedModel>()
+
+/**
+ * Be done with a model: each of its parts' meshes is freed once no other model on
+ * screen, or on its way, has them too (see made).
+ */
 export function disposeModel(loaded: LoadedModel) {
-  for (const part of loaded.parts) {
-    for (const skin of part.skins) {
-      skin.geometry.boundsTree = undefined
-      skin.geometry.dispose()
-    }
+  if (disposed.has(loaded)) return
+  disposed.add(loaded)
+  for (const part of loaded.parts) letGo(part)
+}
+
+/** Let go of a part's meshes: freed now, if they were made for it alone, as the cube's are. */
+function letGo(part: LoadedPart) {
+  const key = madeAs.get(part.skins)
+  if (key !== undefined) made.give(key)
+  else free(part.skins)
+}
+
+function free(skins: Skin[]) {
+  for (const skin of skins) {
+    skin.geometry.boundsTree = undefined
+    skin.geometry.dispose()
   }
 }

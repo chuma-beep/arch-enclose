@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { contoursOf } from "./contours"
+import { contoursOf, weld } from "./contours"
 
 const always = () => true
 
@@ -73,5 +73,62 @@ describe("contoursOf", () => {
       return true
     })
     expect(asked).toEqual([[1, 0, 0.707]])
+  })
+})
+
+describe("weld", () => {
+  /** Welding as it was done by words: every point by where it is, to the grain. */
+  function byWords(lists: number[][]) {
+    const known = new Map<string, number>()
+    const ids = lists.map((position) =>
+      Array.from({ length: position.length / 3 }, (_, i) => {
+        const key = [0, 1, 2]
+          .map((axis) => Math.round(position[i * 3 + axis] / 1e-4))
+          .join()
+        let id = known.get(key)
+        if (id === undefined) known.set(key, (id = known.size))
+        return id
+      })
+    )
+    return { ids, count: known.size }
+  }
+
+  it("numbers points as welding them by words did", () => {
+    // a few points written many times, a hair apart, across several lists
+    let seed = 7
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    const points = Array.from({ length: 50 }, () =>
+      [0, 1, 2].map(() => (random() - 0.5) * 400)
+    )
+    const lists = Array.from({ length: 4 }, () =>
+      Array.from(
+        { length: 300 },
+        () => points[Math.floor(random() * 50)]
+      ).flatMap((point) =>
+        point.map((value) => value + (random() - 0.5) * 1e-5)
+      )
+    )
+    const { ids, count } = weld(lists)
+    const words = byWords(lists)
+    expect(count).toBe(words.count)
+    expect(ids.map((list) => [...list])).toEqual(words.ids)
+  })
+
+  it("tells apart two points that come to the same number", () => {
+    // (1, 0, 0) and (0, y, 0) in grains, with y picked for the two to come out alike
+    const mod = 2n ** 32n
+    const inverse = (n: bigint) => {
+      let [a, b, x, y] = [n, mod, 1n, 0n]
+      while (b) {
+        const q = a / b
+        ;[a, b, x, y] = [b, a - q * b, y, x - q * y]
+      }
+      return ((x % mod) + mod) % mod
+    }
+    const y = Number((0x9e3779b1n * inverse(0x85ebca77n)) % mod)
+    const grain = 1e-4
+    const { ids, count } = weld([[grain, 0, 0, 0, y * grain, 0, grain, 0, 0]])
+    expect(count).toBe(2)
+    expect([...ids[0]]).toEqual([0, 1, 0])
   })
 })
