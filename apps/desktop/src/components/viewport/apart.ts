@@ -253,6 +253,47 @@ function settle(needs: Need[], at: number[], middle: number): number[] {
 export type Piece = { box: THREE.Box3; centre: THREE.Vector3 }
 
 /**
+ * Every two of some boxes that are not clear of one another along more than one axis,
+ * the lower numbered first, in order (a b, a b, ...): the only two that can be in one
+ * another, or have one gone right past the other (see waysOut). Two that are clear along
+ * two axes, or three, are nothing to each other. Found without going through every two:
+ * the boxes are taken in order along an axis, and each is only set beside those that
+ * begin before it ends.
+ */
+export function nearPairs(boxes: THREE.Box3[]): number[] {
+  const found = new Set<number>()
+  const n = boxes.length
+  // along x, with y or z as well; and then along y, with z as well
+  const along = (
+    axis: Axis,
+    also: (a: THREE.Box3, b: THREE.Box3) => boolean
+  ) => {
+    const order = boxes
+      .map((_, index) => index)
+      // (a box round nothing begins nowhere, and goes last)
+      .sort((a, b) => boxes[a].min[axis] - boxes[b].min[axis] || 0)
+    for (let i = 0; i < n; i++) {
+      const a = boxes[order[i]]
+      for (let j = i + 1; j < n; j++) {
+        const b = boxes[order[j]]
+        if (b.min[axis] > a.max[axis]) break
+        if (!also(a, b)) continue
+        const [low, high] =
+          order[i] < order[j] ? [order[i], order[j]] : [order[j], order[i]]
+        found.add(low * n + high)
+      }
+    }
+  }
+  const meet = (a: THREE.Box3, b: THREE.Box3, axis: Axis) =>
+    !(a.max[axis] < b.min[axis] || b.max[axis] < a.min[axis])
+  along("x", (a, b) => meet(a, b, "y") || meet(a, b, "z"))
+  along("y", (a, b) => meet(a, b, "z"))
+  return [...found]
+    .sort((a, b) => a - b)
+    .flatMap((pair) => [Math.floor(pair / n), pair % n])
+}
+
+/**
  * Where each piece goes when the model is pulled apart to its own distances: out from
  * the `middle` by where it is itself, and then clear of any other piece it is still in.
  * `across` is how far the model is from corner to corner. Pulled further apart than
@@ -286,52 +327,54 @@ export function waysOut(
     )
     const needs: Record<Axis, Need[]> = { x: [], y: [], z: [] }
     let any = false
-    for (let a = 0; a < moved.length; a++)
-      for (let b = a + 1; b < moved.length; b++) {
-        if (!moved[a].intersectsBox(moved[b])) {
-          // Clear of one another: but one that was moved along the only way there is
-          // between them may have gone right past the other. If they were plainly one
-          // after the other, it is on the wrong side now, as much as if it had stopped
-          // inside it.
-          const between = AXES.filter(
-            (axis) =>
-              moved[a].max[axis] < moved[b].min[axis] ||
-              moved[b].max[axis] < moved[a].min[axis]
-          )
-          if (between.length !== 1) continue
-          const [axis] = between
-          const [low, high] = before(a, b, axis)
-            ? [a, b]
-            : before(b, a, axis)
-              ? [b, a]
-              : [null, null]
-          if (low === null || moved[low].min[axis] < moved[high].max[axis])
-            continue
-          const by = moved[low].max[axis] - moved[high].min[axis] + clear
-          needs[axis].push({ low, high, by })
-          any = true
+    // (every two that could need anything, in the order every two would be gone through)
+    const pairs = nearPairs(moved)
+    for (let p = 0; p < pairs.length; p += 2) {
+      const [a, b] = [pairs[p], pairs[p + 1]]
+      if (!moved[a].intersectsBox(moved[b])) {
+        // Clear of one another: but one that was moved along the only way there is
+        // between them may have gone right past the other. If they were plainly one
+        // after the other, it is on the wrong side now, as much as if it had stopped
+        // inside it.
+        const between = AXES.filter(
+          (axis) =>
+            moved[a].max[axis] < moved[b].min[axis] ||
+            moved[b].max[axis] < moved[a].min[axis]
+        )
+        if (between.length !== 1) continue
+        const [axis] = between
+        const [low, high] = before(a, b, axis)
+          ? [a, b]
+          : before(b, a, axis)
+            ? [b, a]
+            : [null, null]
+        if (low === null || moved[low].min[axis] < moved[high].max[axis])
           continue
-        }
-        // the way that parts these two with the least moving, each staying on the side
-        // of the other that it is on: the side it was built on, where that is plain,
-        // and otherwise the side it is on by now
-        let least: (Need & { axis: Axis; cost: number }) | null = null
-        for (const axis of AXES) {
-          const [low, high] = before(a, b, axis)
-            ? [a, b]
-            : before(b, a, axis)
-              ? [b, a]
-              : centres[a][axis] <= centres[b][axis]
-                ? [a, b]
-                : [b, a]
-          const by = moved[low].max[axis] - moved[high].min[axis] + clear
-          const cost = by * (axis === "z" ? UPRIGHT : 1)
-          if (!least || cost < least.cost) least = { axis, low, high, by, cost }
-        }
-        if (!least) continue
-        needs[least.axis].push(least)
+        const by = moved[low].max[axis] - moved[high].min[axis] + clear
+        needs[axis].push({ low, high, by })
         any = true
+        continue
       }
+      // the way that parts these two with the least moving, each staying on the side
+      // of the other that it is on: the side it was built on, where that is plain,
+      // and otherwise the side it is on by now
+      let least: (Need & { axis: Axis; cost: number }) | null = null
+      for (const axis of AXES) {
+        const [low, high] = before(a, b, axis)
+          ? [a, b]
+          : before(b, a, axis)
+            ? [b, a]
+            : centres[a][axis] <= centres[b][axis]
+              ? [a, b]
+              : [b, a]
+        const by = moved[low].max[axis] - moved[high].min[axis] + clear
+        const cost = by * (axis === "z" ? UPRIGHT : 1)
+        if (!least || cost < least.cost) least = { axis, low, high, by, cost }
+      }
+      if (!least) continue
+      needs[least.axis].push(least)
+      any = true
+    }
     if (!any) break
     for (const axis of AXES) {
       if (needs[axis].length === 0) continue

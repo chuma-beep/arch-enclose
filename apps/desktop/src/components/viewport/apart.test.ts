@@ -1,7 +1,14 @@
 import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
-import { objectsOf, piecesOf, pieceWith, waysOut, wholeOf } from "./apart"
+import {
+  nearPairs,
+  objectsOf,
+  piecesOf,
+  pieceWith,
+  waysOut,
+  wholeOf,
+} from "./apart"
 
 /** A part in a group, in a box from one corner to the other. */
 const part = (
@@ -452,5 +459,50 @@ describe("waysOut", () => {
     const ways = waysOut(pieces, MIDDLE, 120)
     for (const far of [1, 1.5, 2.5, 4])
       expect(anyInAnother(pulled(pieces, ways, far))).toBe(false)
+  })
+})
+
+describe("nearPairs", () => {
+  /** Every two boxes clear of one another along no more than one axis, gone through one by one. */
+  const everyTwo = (boxes: THREE.Box3[]) => {
+    const pairs: number[] = []
+    for (let a = 0; a < boxes.length; a++)
+      for (let b = a + 1; b < boxes.length; b++) {
+        const clear = (["x", "y", "z"] as const).filter(
+          (axis) =>
+            boxes[a].max[axis] < boxes[b].min[axis] ||
+            boxes[b].max[axis] < boxes[a].min[axis]
+        )
+        if (clear.length <= 1) pairs.push(a, b)
+      }
+    return pairs
+  }
+
+  it("finds the same two boxes as going through every two, in the same order", () => {
+    let seed = 11
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    // (on a coarse grid, so that many only touch, and some are one inside another)
+    const at = () => Math.round(random() * 40)
+    for (let round = 0; round < 40; round++) {
+      const boxes = Array.from({ length: 5 + round * 3 }, () => {
+        const low = new THREE.Vector3(at(), at(), at())
+        const size = new THREE.Vector3(at(), at(), at()).multiplyScalar(0.3)
+        return new THREE.Box3(low, low.clone().add(size))
+      })
+      // and a box round nothing, which is clear of everything
+      boxes.splice(round % boxes.length, 0, new THREE.Box3())
+      expect(nearPairs(boxes)).toEqual(everyTwo(boxes))
+    }
+  })
+
+  it("leaves out boxes far apart", () => {
+    const boxes = [0, 100, 200].map(
+      (x) =>
+        new THREE.Box3(
+          new THREE.Vector3(x, x, 0),
+          new THREE.Vector3(x + 1, x + 1, 1)
+        )
+    )
+    expect(nearPairs(boxes)).toEqual([])
   })
 })
