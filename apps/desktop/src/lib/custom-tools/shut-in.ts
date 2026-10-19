@@ -47,8 +47,12 @@ export const WAYS_OUT_BESIDES = [
   "bluetooth",
 ]
 
-/** Take something away from wherever along a thing's line it is kept, for good. */
-function takeAway(from: object, name: string) {
+/**
+ * Take something away from wherever along a thing's line it is kept, for good. False if
+ * it is kept somewhere it could not be taken from, where going up the line finds it.
+ */
+function takeAway(from: object, name: string): boolean {
+  let gone = true
   for (
     let at: object | null = from;
     at !== null;
@@ -62,18 +66,23 @@ function takeAway(from: object, name: string) {
         configurable: false,
       })
     } catch {
-      // not to be taken away: nothing a tool is told of
+      // not to be taken away: and so the tool is not to be run (runner.ts)
+      gone = false
     }
   }
+  return gone
 }
 
 /**
  * Shut a tool in: take the ways out away from a worker (`scope`), and from what it has
- * as its `navigator`.
+ * as its `navigator`. What could not be taken away is said, by name (`navigator.` before
+ * those of its navigator): a worker it is not all gone from is not shut in.
  */
-export function shutIn(scope: object) {
-  for (const name of WAYS_OUT) takeAway(scope, name)
+export function shutIn(scope: object): string[] {
+  const left = WAYS_OUT.filter((name) => !takeAway(scope, name))
   const { navigator } = scope as { navigator?: unknown }
   if (typeof navigator === "object" && navigator !== null)
-    for (const name of WAYS_OUT_BESIDES) takeAway(navigator, name)
+    for (const name of WAYS_OUT_BESIDES)
+      if (!takeAway(navigator, name)) left.push(`navigator.${name}`)
+  return left
 }

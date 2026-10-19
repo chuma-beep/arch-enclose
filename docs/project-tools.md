@@ -53,7 +53,8 @@ did: ask the agent to have it glide.
 A tool is run shut away from the rest of the app, in a worker of its own: it is told the
 parts' names and sizes, and has no way to the window, to files or to the network. It
 cannot bring code in from anywhere else, nor make any up to run. Nor can it keep
-anything on your machine, or show you a notice from the system. So a project that came
+anything on your machine, or show you a notice from the system: and a tool its worker
+could not shut in so is not run at all, and says so in its tab. So a project that came
 from someone else can be opened with its tools. (Version 0.0.1 did not stop a tool that
 imports a module from somewhere else: with that version, read a stranger's tools first.
 Versions up to 0.0.5 kept a tool from the network, but left it the means to show a

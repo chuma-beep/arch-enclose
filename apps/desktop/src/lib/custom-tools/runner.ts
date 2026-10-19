@@ -33,7 +33,12 @@ let running: Running | null = null
 let count = 0
 
 async function start(message: Extract<ToRunner, { type: "start" }>) {
-  shutIn(self)
+  // a tool is run shut in, or not at all
+  const left = shutIn(self)
+  if (left.length > 0)
+    throw new Error(
+      `It was not run: its way out by ${left.join(", ")} could not be taken away.`
+    )
   const url = URL.createObjectURL(
     new Blob([message.source], { type: "text/javascript" })
   )
