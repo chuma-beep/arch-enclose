@@ -1,0 +1,49 @@
+name: Checks
+
+# The checks docs/development.md asks of a change (typecheck, lint and the tests), on each
+# pull request and each push to main. They run on Linux, where they pass as they do on a
+# Mac (the Linux installers run the same tests before they build), and for less.
+#
+# The tests need none of Electron itself, so its download is skipped. dugite's is not: the
+# tests keep projects' histories with the git it fetches, as the app does.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  # a pull request pushed to again needs only its latest checked; main has each push checked
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    defaults:
+      run:
+        working-directory: apps/desktop
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test

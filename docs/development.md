@@ -26,6 +26,9 @@ npm test
 npm run format      # .ts and .tsx only
 ```
 
+The first three run on each pull request and each push to main, on Linux
+([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
+
 One check is of the app itself, and not of its code, so it is no part of `npm test`:
 
 ```
