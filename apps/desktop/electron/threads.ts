@@ -1328,6 +1328,10 @@ export class Threads {
    * id: each has said so once, and says so again only after it has been written
    */
   private unwritten = new Set<string>()
+  /** the turns and boards under way, each until what comes at the end of it is done */
+  private underway = new Set<Promise<void>>()
+  /** the app is being quit: nothing more is begun */
+  private closing = false
 
   constructor(deps: ThreadsDeps) {
     this.deps = deps
@@ -1855,7 +1859,7 @@ export class Threads {
   ): string | null {
     const project = this.deps.projects.get(projectId)
     const book = this.book(projectId)
-    if (!project || book.run) return null
+    if (!project || book.run || this.closing) return null
     // While a board is made in the background the folder is its conversation's: what is
     // said in another waits there until the board is done, or stopped.
     const elsewhere =
@@ -1957,10 +1961,12 @@ export class Threads {
     }
     book.run = run
     this.deps.onSummary()
-    void this.turn(projectId, project, book, run, finished, manner, {
-      content,
-      arrange: asked.arrange,
-    })
+    this.track(
+      this.turn(projectId, project, book, run, finished, manner, {
+        content,
+        arrange: asked.arrange,
+      })
+    )
     return conversation.id
   }
 
@@ -2222,12 +2228,14 @@ export class Threads {
       this.write(projectId, conversation)
       // a board it asked to have made in detail is begun now, in the background
       if (run.boardJob && !abort.signal.aborted && !book.job)
-        void this.startJob(
-          projectId,
-          conversation,
-          run.boardJob.board,
-          run.boardJob.brief,
-          run.manner
+        this.track(
+          this.startJob(
+            projectId,
+            conversation,
+            run.boardJob.board,
+            run.boardJob.brief,
+            run.manner
+          )
         )
       // What was said here meanwhile is said now, if the turn got through, or was stopped
       // to make way for it. After one that was stopped, or went wrong, it waits to be
@@ -2275,7 +2283,7 @@ export class Threads {
   ) {
     const book = this.book(projectId)
     const project = this.deps.projects.get(projectId)
-    if (!project || book.job) return
+    if (!project || book.job || this.closing) return
     const boardFile = path.join(project.path, BOARD_FOLDER, boardFileOf(board))
     let name = calledFrom(board)
     try {
@@ -2934,6 +2942,29 @@ export class Threads {
       for (const item of live.values()) turn.put({ ...item, streaming: false })
       for (const item of tools.values()) turn.put({ ...item, state: "failed" })
     }
+  }
+
+  /** Keep a turn or a board in hand until all that comes at the end of it is done. */
+  private track(work: Promise<void>) {
+    this.underway.add(work)
+    void work
+      .catch((error: unknown) => console.error("[threads]", error))
+      .finally(() => this.underway.delete(work))
+  }
+
+  /**
+   * Stop every turn and every board, as the app is about to be quit, and begin nothing
+   * more: resolves once what comes at the end of each is done, what it did kept as a
+   * change that can be taken back, and its commit asked for. (What was waiting to be
+   * said is not said.)
+   */
+  async stopAll(): Promise<void> {
+    this.closing = true
+    for (const book of this.books.values()) {
+      book.run?.abort.abort()
+      book.job?.abort.abort()
+    }
+    await Promise.allSettled([...this.underway])
   }
 
   close() {

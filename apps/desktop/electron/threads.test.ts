@@ -1002,6 +1002,32 @@ describe("a conversation that cannot be written down", () => {
   })
 })
 
+describe("the app being quit in the middle of a turn", () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "enclose-threads-"))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it("stops it, waits for what comes at its end, and begins nothing more", async () => {
+    const turned: string[] = []
+    const { threads, say, said, served } = talking(dir, {
+      deps: { onTurned: (_, __, what) => turned.push(what) },
+    })
+    const into = say("Make a box", null) as string
+    say("And a lid", into)
+    await until(() => served() === 1)
+    await threads.stopAll()
+    // its commit was asked for, and what waited was not said
+    expect(turned).toEqual(["Make a box"])
+    expect(said(into)).toEqual(["Make a box"])
+    expect(threads.working(ID)).toBe(false)
+    expect(say("Make a tray", null)).toBeNull()
+  })
+})
+
 describe("what is said while a conversation is being answered", () => {
   let dir: string
   beforeEach(() => {

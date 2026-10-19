@@ -604,6 +604,14 @@ function createWindow(openProject: string | null) {
   window.on("closed", () => {
     if (win === window) win = null
   })
+  // Elsewhere than on a Mac, closing the window quits the app: what that would stop is
+  // asked about first, with the window still there to go back to.
+  window.on("close", (event) => {
+    if (process.platform === "darwin" || leaving === "now") return
+    if (busyCount() === 0) return
+    event.preventDefault()
+    app.quit()
+  })
   window.on("focus", () => {
     // branches get switched and models rebuilt while the app is in the background
     projects.refreshAll()
@@ -1994,23 +2002,11 @@ function wire() {
   })
   ipcMain.handle(CHANNEL.updateRestart, async () => {
     // Starting again stops whatever is under way, an agent in the middle of a turn
-    // with it: that is asked about first.
-    const busy = projects
-      .list(() => [])
-      .filter(({ id }) => threads.working(id) || builds.has(id)).length
-    if (busy > 0 && win) {
-      const { response } = await dialog.showMessageBox(win, {
-        type: "warning",
-        message: "Restart Enclose now?",
-        detail: `${
-          busy === 1 ? "A project is" : `${busy} projects are`
-        } still being worked on, and that will be stopped.`,
-        buttons: ["Restart", "Cancel"],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      if (response !== 0) return
-    }
+    // with it: that is asked about first, and what it did is kept before it goes.
+    if (leaving !== null || !(await mayLeave("Restart"))) return
+    leaving = "asked"
+    await settle()
+    leaving = "now"
     updates?.restart()
   })
 
@@ -2357,15 +2353,89 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit()
   })
-  app.on("before-quit", () => {
-    for (const stop of builds.values()) stop()
-    threads?.close()
-    toolServer.close()
-    guideServer.close()
-    projects?.close()
-    previews.close()
-    drafts?.close()
-    updates?.close()
-    analytics?.close()
+  // Quitting stops whatever is under way: that is asked about first, and each turn is
+  // then stopped and seen to its end, what it did kept as a change that can be taken
+  // back and committed, before the app goes. (Not for long: a turn that has not seen
+  // to that in QUIT_WAIT_MS is left as it is.)
+  app.on("before-quit", (event) => {
+    if (leaving === "now") return letGo()
+    event.preventDefault()
+    if (leaving === "asked") return
+    leaving = "asked"
+    void mayLeave("Quit").then(async (yes) => {
+      if (!yes) {
+        leaving = null
+        return
+      }
+      await settle()
+      leaving = "now"
+      app.quit()
+    })
   })
+}
+
+/** How long quitting waits for what turns that were stopped for it leave to be kept, ms. */
+const QUIT_WAIT_MS = 10_000
+/**
+ * How far the app is from being quit: asked, while the user is asked whether to, or the
+ * turns stopped for it are seen to their end; now, once nothing is in the way of it.
+ */
+let leaving: "asked" | "now" | null = null
+
+/** How many projects an agent is at work in, or a model is being made of. */
+const busyCount = () =>
+  projects
+    ? projects
+        .list(() => [])
+        .filter(({ id }) => threads.working(id) || builds.has(id)).length
+    : 0
+
+/**
+ * Whether the app may be quit, or started again (`as`): yes, where nothing is under
+ * way; and where something is, as the user says, asked first.
+ */
+async function mayLeave(as: "Quit" | "Restart"): Promise<boolean> {
+  const busy = busyCount()
+  if (busy === 0 || CAPTURE) return true
+  const asking = {
+    type: "warning" as const,
+    message: `${as} Enclose now?`,
+    detail: `${
+      busy === 1 ? "A project is" : `${busy} projects are`
+    } still being worked on, and that will be stopped. What was done so far can still be undone.`,
+    buttons: [as, "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  }
+  const { response } =
+    win && !win.isDestroyed()
+      ? await dialog.showMessageBox(win, asking)
+      : await dialog.showMessageBox(asking)
+  return response === 0
+}
+
+/**
+ * Stop what is under way, for the app to be quit: models being made, and turns and
+ * boards, each seen to its end and its commit, for QUIT_WAIT_MS at most.
+ */
+async function settle() {
+  for (const stop of builds.values()) stop()
+  if (!threads) return
+  await Promise.race([
+    threads.stopAll().then(() => backups?.settled()),
+    new Promise((resolve) => setTimeout(resolve, QUIT_WAIT_MS)),
+  ])
+}
+
+/** Let go of everything, as the app goes. */
+function letGo() {
+  for (const stop of builds.values()) stop()
+  threads?.close()
+  toolServer.close()
+  guideServer.close()
+  projects?.close()
+  previews.close()
+  drafts?.close()
+  updates?.close()
+  analytics?.close()
 }

@@ -105,6 +105,11 @@ export class Backups {
     return next
   }
 
+  /** Resolves once all that was asked of every project until now is done, or has failed. */
+  async settled(): Promise<void> {
+    await Promise.all([...this.queues.values()])
+  }
+
   private author(): Author {
     const github = this.deps.github()
     if (!github) return APP_AUTHOR

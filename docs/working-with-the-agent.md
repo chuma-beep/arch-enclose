@@ -412,7 +412,10 @@ click, and the next Cmd+Z asks again. What you did yourself goes at the first pr
 What the agent did is taken back whole and at once, without asking it for anything and
 without building anything: before each turn the app puts the project's files aside, and
 keeps of them whatever the turn then wrote to, made or took away, the built model with
-the rest. A turn you stopped part of the way is taken back like any other. The
+the rest. A turn you stopped part of the way is taken back like any other. So is one the
+app was quit in the middle of: quitting while the agent is at work asks first, then
+stops it and keeps what it did, and its commit, before the app goes (waiting ten seconds
+at most). The
 conversation says that it was done, and how to put it back, and the agent is told with
 your next message, so that it does not go on as though its change were still there.
 
