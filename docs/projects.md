@@ -45,8 +45,13 @@ nothing, which the app made and nothing was put in.
 ## History and backup
 
 Every project the app makes keeps its history in git, and so does a folder you open
-that was not a git repository already. A folder that was one is yours, kept your own way,
-and the app commits nothing in it.
+that was not a git repository already, nor inside one. A folder that was one, or is in
+one, is yours, kept your own way, and the app commits nothing in it. The app remembers
+which repositories it set up itself, and goes by that alone: a folder that comes with a
+repository the app made somewhere else (sent by somebody, say) is theirs, and is not
+committed to or pushed. Nor does the app's git run anything a repository names of its
+own, its hooks or a filter of its own: a repository whose config names a filter, other
+than Git LFS's, has nothing committed in it.
 
 After each turn of the agent's, and each Cmd+Z, the app commits what the folder holds. A
 turn's commit says what it changed, as a change log written by Claude Code's quickest

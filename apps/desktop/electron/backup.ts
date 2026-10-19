@@ -4,9 +4,10 @@
 // conversation's own, where each conversation has its own version of the project (see
 // versions.ts), and on main where there is only the one.
 //
-// A folder that was a repository already is somebody's own, kept their own way: the app
-// commits nothing in it. What it set up itself it marks so (enclose.managed, in the
-// repository's own config), and goes by that.
+// A folder that was a repository already, or is inside one, is somebody's own, kept
+// their own way: the app commits nothing in it. What it set up itself it remembers in its
+// own list of projects (projects.ts), and goes by that alone: a repository's own config
+// is anybody's to write, whoever sent the folder or the agent working in it.
 //
 // Nothing here goes to GitHub: github.ts does that, with what is committed here.
 import fs from "node:fs"
@@ -98,15 +99,22 @@ const run = async (
 export const isRepository = (dir: string) =>
   fs.existsSync(path.join(dir, ".git"))
 
-/** Whether the app keeps a folder's history: a repository it set up itself. */
-export async function managed(git: Git, dir: string): Promise<boolean> {
-  if (!isRepository(dir)) return false
-  const said = await git(["config", "--get", "enclose.managed"], dir)
-  return said.stdout.trim() === "true"
+/** Whether a folder is a repository, or in one: its own, or one a folder above it is. */
+export function inRepository(dir: string): boolean {
+  for (let at = path.resolve(dir); ; ) {
+    if (isRepository(at)) return true
+    const up = path.dirname(at)
+    if (up === at) return false
+    at = up
+  }
 }
 
-/** The same, read straight from the repository's config: for where there is no waiting. */
-export function managedNow(dir: string): boolean {
+/**
+ * Whether a repository says of itself that the app set it up (enclose.managed, in its own
+ * config, as the app wrote it until it kept that itself). Anything in the folder can say
+ * so, and so it counts only for the projects the app knew already then (see projects.ts).
+ */
+export function markedManaged(dir: string): boolean {
   try {
     const config = fs.readFileSync(path.join(dir, ".git", "config"), "utf8")
     return /\[enclose\][^[]*\bmanaged\s*=\s*true\b/.test(config)
@@ -116,18 +124,50 @@ export function managedNow(dir: string): boolean {
 }
 
 /**
- * Make a folder a repository the app keeps, unless it is one already: with a
- * .gitignore, and nothing committed yet. Whether it is the app's to keep, after: a
- * repository that was somebody's own before stays theirs.
+ * Throw where a repository's own config names commands of its own for git to run on
+ * what is added or pushed: a filter other than Git LFS's, or a way of its own for Git LFS
+ * to send files. Whatever the folder holds can write that config, the agent included;
+ * the app commits and pushes nothing in such a one.
+ */
+export async function noCommandsOfItsOwn(git: Git, dir: string): Promise<void> {
+  const listed = await run(git, ["config", "--list", "--show-scope", "-z"], dir)
+  const named = listed
+    .split("\0")
+    .reduce<string[]>((keys, field, i, fields) => {
+      // scope, then key and value on one line: local or worktree is the repository's own
+      if (i % 2 === 0 && (field === "local" || field === "worktree"))
+        keys.push((fields[i + 1] ?? "").split("\n")[0].toLowerCase())
+      return keys
+    }, [])
+    .filter(
+      (key) =>
+        (/^filter\..+\.(clean|smudge|process)$/.test(key) &&
+          !key.startsWith("filter.lfs.")) ||
+        key.startsWith("lfs.customtransfer.") ||
+        key === "lfs.standalonetransferagent"
+    )
+  if (named.length > 0)
+    throw new Error(
+      `The repository in ${dir} names commands of its own (${named.join(", ")}): nothing is committed or pushed in it.`
+    )
+}
+
+/**
+ * Make a folder a repository the app keeps: with a .gitignore, and nothing committed
+ * yet. Not one that is a repository already, or is inside one, which is somebody's own
+ * (unless `nested`, for a folder the app made itself, wherever it put it). Whether it
+ * made it one.
  */
 export async function setUp(
   git: Git,
   dir: string,
   /** the folder the build writes, within the project; null where nothing is built */
-  built: string | null
+  built: string | null,
+  nested = false
 ): Promise<boolean> {
-  if (isRepository(dir)) return managed(git, dir)
+  if (isRepository(dir) || (!nested && inRepository(dir))) return false
   await run(git, ["init", "--quiet", "--initial-branch=main"], dir)
+  // (what an earlier version of the app goes by, should it be opened again)
   await run(git, ["config", "enclose.managed", "true"], dir)
   // the repository's own: and so nothing the user has elsewhere moves a file in it
   await run(git, ["config", "core.autocrlf", "false"], dir)
@@ -197,7 +237,9 @@ async function bigOnes(git: Git, dir: string): Promise<void> {
     if (fields[i + 2] === "lfs") kept.add(fields[i])
   const fresh = big.filter((file) => !kept.has(file))
   if (fresh.length === 0) return
-  await run(git, ["lfs", "install", "--local"], dir)
+  // its filters, in the repository's config; no hooks, which the app never runs (git.ts):
+  // what they would send on a push it sends itself (backups.ts)
+  await run(git, ["lfs", "install", "--local", "--skip-repo"], dir)
   await run(git, ["lfs", "track", "--filename", ...fresh], dir)
 }
 
@@ -210,7 +252,7 @@ export type Committed = {
 /**
  * Commit what the folder holds, all of it, on `branch`: what changed since that branch
  * was last committed to, by whatever changed it. Nothing is committed where nothing
- * changed. Throws where git does.
+ * changed. Throws where git does, and where the repository names commands of its own.
  */
 export async function commitAll(
   git: Git,
@@ -229,6 +271,7 @@ export async function commitAll(
     author: Author
   }
 ): Promise<Committed> {
+  await noCommandsOfItsOwn(git, dir)
   await moveTo(git, dir, branch)
   await bigOnes(git, dir)
   await run(git, ["add", "--all"], dir)

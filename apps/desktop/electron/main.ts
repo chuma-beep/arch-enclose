@@ -75,7 +75,7 @@ import { changeLog } from "./gist"
 import { Changes, tookOf } from "./changes"
 import { Versions } from "./versions"
 import { zipOf } from "./zip"
-import { managedNow } from "./backup"
+import { isRepository } from "./backup"
 import { Backups, type BackingUp } from "./backups"
 import { Connection } from "./connection"
 import { git } from "./git"
@@ -410,6 +410,9 @@ function backed() {
               name,
               manifest: project.manifest,
               build: project.build,
+              // (projects made before `made` was kept are known by a name of their own)
+              made: project.made ?? project.name !== undefined,
+              kept: project.kept === true,
             },
           ]
         : []
@@ -2028,6 +2031,7 @@ if (!app.requestSingleInstanceLock()) {
     backups = new Backups({
       git,
       projects: backed,
+      keep: (id) => projects.keep(id),
       fits: (dir) => versions.fits(dir),
       versioned: () => settings.get().versions,
       github: () => connection.connected(),
@@ -2097,7 +2101,7 @@ if (!app.requestSingleInstanceLock()) {
         }),
       history: (projectId) => {
         const project = projects.get(projectId)
-        if (!project || !managedNow(project.path)) return "off"
+        if (!project?.kept || !isRepository(project.path)) return "off"
         return connection.connected() ? "github" : "local"
       },
       viewport: askViewport,

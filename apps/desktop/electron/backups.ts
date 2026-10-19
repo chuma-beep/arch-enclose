@@ -6,16 +6,18 @@
 // What is done in one project is done one thing at a time, in the order it was asked;
 // projects do not wait on each other. A push that fails is tried again a while later,
 // and the next time anything is committed.
+import fs from "node:fs"
 import path from "node:path"
 
 import {
   APP_AUTHOR,
   branchFor,
   commitAll,
+  inRepository,
   isRepository,
   loggedAs,
-  managed,
   messageOf,
+  noCommandsOfItsOwn,
   setUp,
   slugged,
   type Author,
@@ -32,7 +34,14 @@ export type Backed = {
   manifest: string | null
   /** the command that builds the model; null where there is none */
   build: string | null
+  /** the app made the folder itself, rather than being pointed at one that was there */
+  made: boolean
+  /** the app set the folder's repository up itself, and keeps its history */
+  kept: boolean
 }
+
+/** Whether the app keeps a project's history: a repository it set up itself, still there. */
+const ours = (project: Backed) => project.kept && isRepository(project.path)
 
 /** How far backing up all the projects has got, while it is under way. */
 export type BackingUp = { done: number; total: number } | null
@@ -40,6 +49,8 @@ export type BackingUp = { done: number; total: number } | null
 export type BackupsDeps = {
   git: Git
   projects: () => Backed[]
+  /** the app has set a project's repository up: it keeps its history from now on */
+  keep: (id: string) => void
   /** whether a folder is not too big to keep the history of (as versions.ts has it) */
   fits: (dir: string) => Promise<boolean>
   /** whether each conversation has the project its own way (versions.ts) */
@@ -145,12 +156,22 @@ export class Backups {
 
   /**
    * Set a project up to have its history kept, where it is the app's to keep: not a
-   * repository of somebody's own, and not a folder too big to be a model's.
+   * repository of somebody's own, or a folder in one, and not one too big to be a
+   * model's. A repository is the app's only where it remembers setting it up.
    */
   private async keeps(project: Backed): Promise<boolean> {
-    if (!isRepository(project.path) && !(await this.deps.fits(project.path)))
+    if (ours(project)) return true
+    if (
+      isRepository(project.path) ||
+      (!project.made && inRepository(project.path))
+    )
       return false
-    return setUp(this.deps.git, project.path, builtOf(project))
+    if (!(await this.deps.fits(project.path))) return false
+    const { git } = this.deps
+    if (!(await setUp(git, project.path, builtOf(project), project.made)))
+      return false
+    this.deps.keep(project.id)
+    return true
   }
 
   /** Commit what a turn left, or what taking one back did: in the conversation it was in. */
@@ -175,7 +196,7 @@ export class Backups {
   ): Promise<unknown> {
     return this.queue(id, async () => {
       const project = this.project(id)
-      if (!project || !(await managed(this.deps.git, project.path))) return
+      if (!project || !ours(project)) return
       const plain = messageOf(what, conversation)
       await this.commit(
         project,
@@ -226,8 +247,17 @@ export class Backups {
     const { git } = this.deps
     const dir = project.path
     try {
+      await noCommandsOfItsOwn(git, dir)
       const full = await this.repositoryOf(project, github.client)
       const env = await github.client.pushing()
+      // what Git LFS keeps, sent first: its hook would, were the app to run hooks
+      if (fs.existsSync(path.join(dir, ".git", "lfs", "objects"))) {
+        const sent = await git(["lfs", "push", "--all", "origin"], dir, env)
+        if (sent.code !== 0)
+          throw new Error(
+            sent.stderr.trim().split("\n").at(-1) ?? "Git LFS push failed"
+          )
+      }
       const pushed = await git(
         ["push", "--all", "--porcelain", "origin"],
         dir,
@@ -294,8 +324,7 @@ export class Backups {
     return this.queue(id, async () => {
       const project = this.project(id)
       const github = this.deps.github()
-      if (!project || !github || !(await managed(this.deps.git, project.path)))
-        return
+      if (!project || !github || !ours(project)) return
       const { git } = this.deps
       const full = (
         await git(["config", "--get", "enclose.repository"], project.path)

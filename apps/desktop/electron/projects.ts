@@ -10,6 +10,7 @@ import { findTools } from "./custom-tools"
 import { findGuides } from "./assembly"
 import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
+import { markedManaged } from "./backup"
 import {
   BOARD_FOLDER,
   BOARD_SOURCE,
@@ -30,6 +31,11 @@ type Saved = {
   name?: string
   /** the app made this folder itself, rather than being pointed at one that was there */
   made?: boolean
+  /**
+   * The app set this folder's repository up itself, and keeps its history (backups.ts).
+   * Only this says so: never what the repository says of itself.
+   */
+  kept?: boolean
   /** `name` is a stand-in, until what is being made gives the project a name of its own */
   standIn?: boolean
   /**
@@ -328,10 +334,18 @@ export class Projects {
     try {
       const state = JSON.parse(fs.readFileSync(file, "utf8")) as {
         projects?: Saved[]
+        kept?: boolean
       }
       this.saved = (state.projects ?? []).filter(
         (p) => !p.closed && fs.existsSync(p.path)
       )
+      // From before the app kept which repositories it set up: those it knew then that say
+      // so of themselves are taken at their word, once. A folder opened after never is.
+      if (!state.kept) {
+        for (const project of this.saved)
+          if (markedManaged(project.path)) project.kept = true
+        this.save()
+      }
     } catch {
       // first run
     }
@@ -340,9 +354,10 @@ export class Projects {
 
   private save() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
+    // (`kept`: each project says for itself whether its history is the app's to keep)
     fs.writeFileSync(
       this.file,
-      JSON.stringify({ projects: this.saved }, null, 2)
+      JSON.stringify({ projects: this.saved, kept: true }, null, 2)
     )
   }
 
@@ -797,6 +812,14 @@ export class Projects {
     this.save()
     this.onChange()
     return project.id
+  }
+
+  /** The app has set a project's repository up: it keeps its history from now on. */
+  keep(id: string) {
+    const project = this.saved.find((p) => p.id === id)
+    if (!project || project.kept) return
+    project.kept = true
+    this.save()
   }
 
   /**

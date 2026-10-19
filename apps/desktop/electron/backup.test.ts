@@ -10,8 +10,9 @@ import {
   branchFor,
   commitAll,
   ignoreText,
-  managed,
+  inRepository,
   loggedAs,
+  markedManaged,
   messageOf,
   setUp,
   slugged,
@@ -93,19 +94,57 @@ describe("setUp", () => {
   it("makes a folder a repository the app keeps", async () => {
     write("model.py", "print('hi')")
     expect(await setUp(git, dir, "build")).toBe(true)
-    expect(await managed(git, dir)).toBe(true)
+    expect(markedManaged(dir)).toBe(true)
     expect(fs.readFileSync(path.join(dir, ".gitignore"), "utf8")).toContain(
       "build/"
     )
-    // and a second time, changes nothing
-    expect(await setUp(git, dir, "build")).toBe(true)
+    // and a second time, makes nothing
+    expect(await setUp(git, dir, "build")).toBe(false)
   })
 
   it("leaves a repository that was somebody's own as theirs", async () => {
     await git(["init", "--quiet"], dir)
     expect(await setUp(git, dir, "build")).toBe(false)
-    expect(await managed(git, dir)).toBe(false)
+    expect(markedManaged(dir)).toBe(false)
     expect(fs.existsSync(path.join(dir, ".gitignore"))).toBe(false)
+  })
+
+  it("makes no repository in a folder of somebody's own, unless the app made it", async () => {
+    await git(["init", "--quiet"], dir)
+    write("case/model.py", "a = 1")
+    const inner = path.join(dir, "case")
+    expect(inRepository(inner)).toBe(true)
+    expect(await setUp(git, inner, "build")).toBe(false)
+    expect(fs.existsSync(path.join(inner, ".git"))).toBe(false)
+    expect(await setUp(git, inner, "build", true)).toBe(true)
+  })
+})
+
+describe("commands of the repository's own", () => {
+  const by = { message: "Begin", author: APP_AUTHOR, branch: "main" }
+
+  it("runs no hook and no file watcher the repository names", async () => {
+    write("model.py", "a = 1")
+    await setUp(git, dir, "build")
+    const marker = path.join(dir, "..", `${path.basename(dir)}-ran`)
+    for (const hook of ["post-commit", "reference-transaction", "pre-commit"]) {
+      write(`.git/hooks/${hook}`, `#!/bin/sh\ntouch "${marker}"\n`)
+      fs.chmodSync(path.join(dir, ".git", "hooks", hook), 0o755)
+    }
+    write(".git/watch", `#!/bin/sh\ntouch "${marker}"\n`)
+    fs.chmodSync(path.join(dir, ".git", "watch"), 0o755)
+    await out("config", "core.fsmonitor", path.join(dir, ".git", "watch"))
+    expect((await commitAll(git, dir, by)).commit).not.toBeNull()
+    expect(fs.existsSync(marker)).toBe(false)
+  })
+
+  it("commits nothing where the repository has a filter of its own", async () => {
+    write("model.py", "a = 1")
+    write(".gitattributes", "* filter=mine\n")
+    await setUp(git, dir, "build")
+    await out("config", "filter.mine.clean", "cat")
+    await expect(commitAll(git, dir, by)).rejects.toThrow(/filter\.mine\.clean/)
+    expect((await git(["rev-parse", "HEAD"], dir)).code).not.toBe(0)
   })
 })
 

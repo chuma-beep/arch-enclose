@@ -220,6 +220,33 @@ describe("Projects", () => {
     projects.close()
   })
 
+  it("keeps the history of the repositories it set up before it kept that itself, once", () => {
+    const file = path.join(root, "state/projects.json")
+    const marked = "[core]\n\tbare = false\n[enclose]\n\tmanaged = true\n"
+    write("old/.git/config", marked)
+    write("theirs/.git/config", "[core]\n\tbare = false\n")
+    write("state/projects.json", {
+      projects: ["old", "theirs"].map((id) => ({
+        id,
+        path: path.join(root, id),
+        addedAt: 1,
+      })),
+    })
+    const projects = new Projects(file, () => {})
+    expect(projects.get("old")?.kept).toBe(true)
+    expect(projects.get("theirs")?.kept).toBeUndefined()
+    // a folder opened after that says the same of itself is not taken at its word
+    write("received/.git/config", marked)
+    const received = projects.add(path.join(root, "received"))
+    projects.close()
+    const again = new Projects(file, () => {})
+    expect(again.get(received)?.kept).toBeUndefined()
+    expect(again.get("old")?.kept).toBe(true)
+    again.keep(received)
+    expect(new Projects(file, () => {}).get(received)?.kept).toBe(true)
+    again.close()
+  })
+
   it("hands over the session of the one conversation a project used to have, once", () => {
     write("thing/model.json", MANIFEST)
     const file = path.join(root, "state/projects.json")

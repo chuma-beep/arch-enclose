@@ -11,9 +11,29 @@ const QUIET = {
   GCM_INTERACTIVE: "never",
 }
 
-export const git: Git = async (args, cwd, env = {}) => {
+/**
+ * What every run of it is told, over whatever a repository's own config says: anything
+ * in the folder can write that, the agent included. So no hook it has is run, nor a file
+ * watcher, nor anything to sign with; Git LFS's filters are Git LFS's; and nothing is
+ * pushed or fetched by a command of the repository's choosing.
+ */
+const OVER = [
   // a password asked for is never kept by whatever keeps the user's own
-  const done = await exec(["-c", "credential.helper=", ...args], cwd, {
+  "credential.helper=",
+  "core.hooksPath=/dev/null",
+  "core.fsmonitor=false",
+  "core.askPass=",
+  "commit.gpgSign=false",
+  "protocol.ext.allow=never",
+  "protocol.ssh.allow=never",
+  "filter.lfs.clean=git-lfs clean -- %f",
+  "filter.lfs.smudge=git-lfs smudge -- %f",
+  "filter.lfs.process=git-lfs filter-process",
+  "filter.lfs.required=true",
+].flatMap((setting) => ["-c", setting])
+
+export const git: Git = async (args, cwd, env = {}) => {
+  const done = await exec([...OVER, ...args], cwd, {
     env: { ...QUIET, ...env },
     maxBuffer: 64 * 1024 * 1024,
   })

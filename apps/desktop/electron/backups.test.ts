@@ -4,6 +4,7 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
+import { BIG } from "./backup"
 import { Backups, type Backed } from "./backups"
 import { git } from "./git"
 import type { GitHub } from "./github"
@@ -42,6 +43,9 @@ const backups = (connected: boolean) =>
   new Backups({
     git,
     projects: () => [project],
+    keep: () => {
+      project = { ...project, kept: true }
+    },
     fits: async () => true,
     versioned: () => versioned,
     github: () =>
@@ -64,6 +68,8 @@ beforeEach(() => {
     name: "Lid",
     manifest: path.join(root, "Lid", "build", "enclose.model.json"),
     build: "python3 model.py",
+    made: true,
+    kept: false,
   }
   fs.mkdirSync(project.path)
   versioned = true
@@ -163,6 +169,7 @@ describe("Backups", () => {
   })
 
   it("leaves a repository that was somebody's own alone", async () => {
+    project = { ...project, made: false }
     await git(["init", "--quiet"], project.path)
     write("model.py", "a = 1")
     const kept = backups(true)
@@ -170,5 +177,43 @@ describe("Backups", () => {
     await kept.all(false)
     expect(made).toEqual([])
     expect((await git(["rev-parse", "HEAD"], project.path)).code).not.toBe(0)
+  })
+
+  it("sends what Git LFS keeps itself, with no hook to send it", async () => {
+    write("model.py", "a = 1")
+    write("scan.stl", "x".repeat(BIG))
+    await backups(true).prepare("p1", "Started in Enclose")
+    const bare = path.join(remote, "enclose-lid.git")
+    expect(await show(bare, "log", "--format=%s", "main")).toBe(
+      "Started in Enclose"
+    )
+    expect(fs.existsSync(path.join(bare, "lfs", "objects"))).toBe(true)
+  }, 30_000)
+
+  it("takes no repository's word that the app set it up", async () => {
+    // a folder from somebody else's Enclose, opened here: its config says it is managed
+    project = { ...project, made: false }
+    await git(["init", "--quiet"], project.path)
+    await git(["config", "enclose.managed", "true"], project.path)
+    write("model.py", "a = 1")
+    const kept = backups(true)
+    await kept.prepare("p1", "Opened in Enclose")
+    await kept.record("p1", {
+      what: "Thicker",
+      conversation: null,
+      conversationId: null,
+    })
+    await kept.all(false)
+    expect(made).toEqual([])
+    expect((await git(["rev-parse", "HEAD"], project.path)).code).not.toBe(0)
+  })
+
+  it("makes no repository in a folder of a repository of somebody's own", async () => {
+    await git(["init", "--quiet"], root)
+    project = { ...project, made: false }
+    write("model.py", "a = 1")
+    await backups(false).prepare("p1", "Opened in Enclose")
+    expect(fs.existsSync(path.join(project.path, ".git"))).toBe(false)
+    expect(project.kept).toBe(false)
   })
 })
