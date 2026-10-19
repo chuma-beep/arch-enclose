@@ -52,6 +52,7 @@ import {
   shadedOf,
   type Shaded,
 } from "./colours"
+import { cleanDrawing } from "./clean-drawing"
 import { BoardPartsPanel } from "./parts-panel"
 import { TurningBoard } from "./turning-board"
 
@@ -61,10 +62,13 @@ const FIT = 0.86
 const NEAREST = 60
 const FURTHEST = 0.5
 
+/** How many drawings have been read: each one's style is kept to it by its number. */
+let drawings = 0
+
 /**
- * A drawing, as the page can have it: read as SVG, with nothing in it that runs (the
- * board's files are the project's, and anything could have been written into them),
- * made to fill what it is put in. With how big it was drawn, in its own pixels.
+ * A drawing, as the page can have it: read as SVG, with nothing in it that runs or
+ * reaches past it (see clean-drawing.ts), made to fill what it is put in. With how big
+ * it was drawn, in its own pixels.
  */
 export function readDrawing(
   markup: string
@@ -72,20 +76,13 @@ export function readDrawing(
   const read = new DOMParser().parseFromString(markup, "image/svg+xml")
   const svg = read.documentElement
   if (!(svg instanceof SVGSVGElement)) return null
-  for (const thing of svg.querySelectorAll(
-    "script, foreignObject, iframe, object, embed, a"
-  ))
-    thing.remove()
+  // its style, kept to itself: each drawing goes by a mark of its own
+  const mark = String(++drawings)
+  svg.setAttribute("data-drawing", mark)
+  cleanDrawing(svg, `svg[data-drawing="${mark}"]`)
   // and no frame round the room the board is drawn in: the ground is all there is
   for (const frame of svg.querySelectorAll('[data-type="pcb_boundary"]'))
     frame.remove()
-  for (const thing of [svg, ...svg.querySelectorAll("*")])
-    for (const { name, value } of [...thing.attributes])
-      if (
-        name.toLowerCase().startsWith("on") ||
-        (/href$/i.test(name) && !value.startsWith("#"))
-      )
-        thing.removeAttribute(name)
   const width = Number(svg.getAttribute("width")) || DRAWN.width
   const height = Number(svg.getAttribute("height")) || DRAWN.height
   svg.setAttribute("width", "100%")
