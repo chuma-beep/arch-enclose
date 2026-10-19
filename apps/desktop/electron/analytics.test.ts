@@ -4,7 +4,37 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { againAfter, Analytics } from "./analytics"
+import { againAfter, Analytics, modelSaid } from "./analytics"
+
+describe("modelSaid", () => {
+  it("names a model only where it is one of its makers'", () => {
+    expect(modelSaid("claude", null, [])).toBe("default")
+    expect(modelSaid("claude", "opus", [])).toBe("opus")
+    expect(modelSaid("claude", "claude-sonnet-5-5[1m]", [])).toBe(
+      "claude-sonnet-5-5[1m]"
+    )
+    expect(modelSaid("codex", "gpt-5.1-codex-max", [])).toBe(
+      "gpt-5.1-codex-max"
+    )
+    expect(modelSaid("grok", "grok-4.7", [])).toBe("grok-4.7")
+    expect(modelSaid("opencode", "opencode/big-pickle", [])).toBe(
+      "opencode/big-pickle"
+    )
+    expect(modelSaid("opencode", "deepseek/deepseek-chat", [])).toBe(
+      "deepseek/deepseek-chat"
+    )
+  })
+
+  it("counts any other as custom: written in, or of the user's own config", () => {
+    expect(modelSaid("claude", "opus", ["opus"])).toBe("custom")
+    expect(modelSaid("claude", "acme-internal-llm", [])).toBe("custom")
+    expect(modelSaid("codex", "my-proxy/secret-model", [])).toBe("custom")
+    expect(modelSaid("grok", "grok-4.7", [])).toBe("grok-4.7")
+    expect(modelSaid("grok", "gpt-5", [])).toBe("custom")
+    expect(modelSaid("opencode", "acme-lab/llama-finetune", [])).toBe("custom")
+    expect(modelSaid("opencode", "big-pickle", [])).toBe("custom")
+  })
+})
 
 type Sent = {
   api_key: string

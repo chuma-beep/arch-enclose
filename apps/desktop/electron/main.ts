@@ -65,7 +65,7 @@ import {
   type Defaults,
   type Theme,
 } from "../shared/theme-format"
-import { Analytics, POSTHOG } from "./analytics"
+import { Analytics, modelSaid, POSTHOG } from "./analytics"
 import { unpack, type Filed } from "./archive"
 import { fileGuide, guideOf, guidesIn, removeGuide } from "./assembly"
 import { boardsIn } from "./boards"
@@ -991,17 +991,12 @@ const mannerFrom = (manner: Partial<Manner> | null): Manner => ({
 
 /**
  * How a message is to be answered, as the app's count of its use has it. A model the
- * user wrote in themselves is called whatever they called it, which is theirs: it is
- * counted as one of those, and not by name.
+ * user wrote in themselves, or has from their own config, is called whatever they called
+ * it, which is theirs: it is counted as one of those, and not by name (see modelSaid).
  */
 const mannerSaid = ({ provider, model, effort, access }: Manner) => ({
   provider,
-  model:
-    model === null
-      ? "default"
-      : settings.provider(provider).custom.includes(model)
-        ? "custom"
-        : model,
+  model: modelSaid(provider, model, settings.provider(provider).custom),
   effort: effort ?? "default",
   access,
 })

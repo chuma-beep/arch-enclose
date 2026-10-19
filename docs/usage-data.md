@@ -45,7 +45,9 @@ a city.
 
 Nothing of a project: not its name, its files, or where it is kept. Nothing said in a
 message or in an answer to one. Nothing of what a part, a group or a conversation is
-called. A model you wrote in yourself is counted as `custom`, and not by its name.
+called. A model is counted by its name only where it is one of its makers' (Claude's,
+OpenAI's for Codex, xAI's for Grok, and for opencode its own and the big providers'):
+one you wrote in yourself, or one from a config of your own, is counted as `custom`.
 
 ## Switching it off
 

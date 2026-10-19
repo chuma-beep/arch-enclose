@@ -9,6 +9,8 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
+import type { ProviderId } from "../shared/api"
+
 /**
  * The PostHog project the events go to, and where PostHog takes them in. The key is in
  * the app for anyone to read, and all it lets them do is send events. With none, nothing
@@ -17,6 +19,35 @@ import path from "node:path"
 export const POSTHOG = {
   key: "phc_BL8KrjiVwtgF38mwRJAuzaYFfyDoXEU5wwKxvJWurHWj",
   host: "https://us.i.posthog.com",
+}
+
+/**
+ * The models each agent's makers name, as the agent knows them: what a model is counted
+ * as by its name. opencode goes by a provider and a model, and only its own and the
+ * makers' own providers are known; a provider of the user's own making is not.
+ */
+const KNOWN_MODELS: Record<ProviderId, RegExp> = {
+  claude: /^(?:opus|sonnet|haiku|best|opusplan|claude-[a-z0-9.-]+)(?:\[1m\])?$/,
+  codex: /^(?:gpt-[a-z0-9.-]+|o[0-9]+(?:-[a-z0-9-]+)?|codex-[a-z0-9.-]+)$/,
+  grok: /^grok-[a-z0-9.-]+$/,
+  opencode:
+    /^(?:opencode|anthropic|openai|google|xai|deepseek|mistral|groq|openrouter|github-copilot|moonshotai|zai|cerebras)\/[a-z0-9][a-z0-9./:-]*$/,
+}
+
+/**
+ * What a model is counted as: "default" where it was left to the agent, and its name
+ * only where it is one of its makers' (KNOWN_MODELS). Any other is "custom": written in
+ * by the user (`custom`), or of their own config, whose names can say what they would
+ * rather not have sent.
+ */
+export function modelSaid(
+  provider: ProviderId,
+  model: string | null,
+  custom: string[]
+): string {
+  if (model === null) return "default"
+  if (custom.includes(model)) return "custom"
+  return KNOWN_MODELS[provider].test(model) ? model : "custom"
 }
 
 /** What an event says besides its name. */
