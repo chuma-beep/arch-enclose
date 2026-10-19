@@ -25,6 +25,7 @@ import { useThemeColors } from "@/lib/css-color"
 import { usePreferences } from "@/lib/preferences"
 import { scrollSource } from "@/lib/scroll"
 import { useStore, type BoardAs } from "@/lib/store"
+import { rateWhen, useWatched } from "@/lib/watched"
 import {
   boardUrl,
   sizeSaid,
@@ -98,6 +99,12 @@ export function readDrawing(
 const SWEEP_S = 2.2
 /** How wide it is, against the board as it is seen. */
 const SWEEP_WIDE = 0.14
+/**
+ * How many times a second a board in 3D is drawn for the light going across it, when
+ * nothing else has it drawn: it goes about a fifth of its own width from one drawing to
+ * the next at its quickest, and not every frame the screen has.
+ */
+const SWEEP_RATE = 30
 /**
  * While the board is being checked, the light is a line that scans across it, slower:
  * how wide that is, against the board, and how long it takes to go across, s.
@@ -800,9 +807,15 @@ function Sweeping({
       dark ? SWEPT_3D.dark : SWEPT_3D.light,
       view
     )
-    invalidate()
   })
   React.useEffect(() => invalidate(), [lit, invalidate])
+  // (less often with the window behind another, and never while it cannot be seen)
+  const rate = rateWhen(useWatched(), lit ? SWEEP_RATE : 0)
+  React.useEffect(() => {
+    if (rate === 0) return
+    const drawn = setInterval(() => invalidate(), 1000 / rate)
+    return () => clearInterval(drawn)
+  }, [rate, invalidate])
   return null
 }
 

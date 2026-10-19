@@ -1736,6 +1736,7 @@ function Model({ project }: { project: Project }) {
         >
           <Scene
             loaded={loaded}
+            covered={!!(blueprint || assembly || board)}
             reference={reference}
             projectId={project.id}
             notes={notes}

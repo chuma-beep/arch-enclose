@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as THREE from "three"
-import { Canvas, useFrame, useThree } from "@react-three/fiber"
+import { advance, Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Edges } from "@react-three/drei"
 import { LineMaterial } from "three/addons/lines/LineMaterial.js"
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js"
@@ -17,6 +17,7 @@ import type { Keepout } from "@/lib/model"
 import type { Turn } from "@/lib/orient"
 import { MAC } from "@/lib/platform"
 import type { Note, Section, Selection, View } from "@/lib/store"
+import { rateWhen, useWatched } from "@/lib/watched"
 import { ARRIVAL, lightAt, wayAcross, type Arriving } from "./arriving"
 import { bridge } from "./bridge"
 import { FoundTags, namesOf, Place, type Named } from "./found-tags"
@@ -26,6 +27,7 @@ import { rule, type LoadedModel, type LoadedPart } from "./load"
 import { DRAG_FROM, Marquee } from "./marquee"
 import { EDGE, finish, skinColour } from "./paint"
 import { NoteMark, PartMarks } from "./part-marks"
+import { passSize } from "./passes"
 import { groundOf, Reference, setIn, type LoadedReference } from "./reference"
 import { FOV, MODEL_TO_WORLD, REACH, Rig, toWorld } from "./rig"
 import { SectionHandle, type HandleControls } from "./section-handle"
@@ -158,9 +160,12 @@ const LINE_LIT = { away: 0.28, in: 1.25 }
  * The light that goes across the parts Claude is at work on, the way one goes across the
  * words that say so in the conversation: how often it comes by, in seconds, how far it
  * leans, in degrees, and how far one is from the next, in pixels. And how many times a
- * second the view is drawn for it, when nothing else has it drawn.
+ * second the view is drawn for it, when nothing else has it drawn: the light is broad,
+ * and goes no more than a tenth of its own width from one drawing to the next at this.
+ * (Less often with the window behind another, and never while it cannot be seen: see
+ * rateWhen.)
  */
-const GLINT = { every: 2, lean: 20, apart: 640, rate: 30 }
+const GLINT = { every: 2, lean: 20, apart: 640, rate: 20 }
 /**
  * How the parts that have just come are shown coming (see arriving.ts). How much of
  * what they are the light hides, where it has yet to go across them. How wide the front
@@ -968,16 +973,7 @@ const SCREEN = new THREE.BufferGeometry()
  * colour, and how much it counts for. That picture is then laid over the view once, as
  * the colour the layers come to between them, as strongly as they block what is behind.
  */
-function Glass() {
-  const layers = React.useMemo(
-    () =>
-      // wide enough numbers to add many layers up in, and as smooth at its edges as the view
-      new THREE.WebGLRenderTarget(1, 1, {
-        type: THREE.HalfFloatType,
-        samples: 4,
-      }),
-    []
-  )
+function Glass({ layers }: { layers: THREE.WebGLRenderTarget }) {
   const material = React.useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -1012,13 +1008,19 @@ function Glass() {
       }),
     [layers]
   )
-  React.useEffect(
-    () => () => {
-      layers.dispose()
-      material.dispose()
-    },
-    [layers, material]
-  )
+  React.useEffect(() => () => material.dispose(), [material])
+  // The picture is kept a while after the glass goes, as it does whenever parts are
+  // looked for or a box is drawn across the view: made again, it would be made again at
+  // full size. Freed after that, since there is a great deal of it.
+  React.useEffect(() => {
+    clearTimeout(freeing.get(layers))
+    return () => {
+      freeing.set(
+        layers,
+        setTimeout(() => layers.dispose(), GLASS_KEPT_MS)
+      )
+    }
+  }, [layers])
 
   // whenever the view is drawn, by whoever draws it, the layers are added up first
   const addUp = React.useMemo(() => {
@@ -1067,6 +1069,32 @@ function Glass() {
       onBeforeRender={addUp}
     />
   )
+}
+
+/** How long the glass's picture is kept once there is no glass to draw, ms. */
+const GLASS_KEPT_MS = 10_000
+/** When each picture of the glass is to be freed, while it is not drawn. */
+const freeing = new WeakMap<THREE.WebGLRenderTarget, number>()
+
+/** The picture the glass is added up in, made once for as long as the view is up. */
+function useGlassLayers() {
+  const layers = React.useMemo(
+    () =>
+      // wide enough numbers to add many layers up in, and as smooth at its edges as the view
+      new THREE.WebGLRenderTarget(1, 1, {
+        type: THREE.HalfFloatType,
+        samples: 4,
+      }),
+    []
+  )
+  React.useEffect(
+    () => () => {
+      clearTimeout(freeing.get(layers))
+      layers.dispose()
+    },
+    [layers]
+  )
+  return layers
 }
 
 const cleared = new THREE.Color()
@@ -1139,14 +1167,16 @@ function Hint({
       !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     [how]
   )
+  const rate = rateWhen(useWatched(), moving ? GLINT.rate : 0)
   React.useEffect(() => {
-    if (!moving) return
-    const drawn = setInterval(() => invalidate(), 1000 / GLINT.rate)
+    if (rate === 0) return
+    const drawn = setInterval(() => invalidate(), 1000 / rate)
     return () => clearInterval(drawn)
-  }, [moving, invalidate])
+  }, [rate, invalidate])
 
   const picture = React.useMemo(
-    // as smooth at its edges as the view, which is what keeps the line smooth
+    // as smooth at its edges as the view, which is what keeps the line smooth (and
+    // drawn at no more than PASS_RATIO, which keeps it cheap: see passSize)
     () => new THREE.WebGLRenderTarget(1, 1, { samples: 4 }),
     []
   )
@@ -1247,9 +1277,10 @@ function Hint({
       camera: THREE.Camera
     ) => {
       renderer.getDrawingBufferSize(size)
-      if (picture.width !== size.x || picture.height !== size.y)
-        picture.setSize(size.x, size.y)
-      // half the line's width either side of an edge, in the picture's own measure
+      const [wide, high] = passSize(size.x, size.y, renderer.getPixelRatio())
+      if (picture.width !== wide || picture.height !== high)
+        picture.setSize(wide, high)
+      // half the line's width either side of an edge, as a share of the view's
       const half = (how.width * renderer.getPixelRatio()) / 2
       material.uniforms.reach.value.set(half / size.x, half / size.y)
       if (moving) {
@@ -1320,7 +1351,8 @@ function Arrival({
     )
   }, [arriving.box])
   const picture = React.useMemo(
-    // as smooth at its edges as the view, which is what keeps the line smooth
+    // as smooth at its edges as the view, which is what keeps the line smooth (and
+    // drawn at no more than PASS_RATIO, which keeps it cheap: see passSize)
     () => new THREE.WebGLRenderTarget(1, 1, { samples: 4 }),
     []
   )
@@ -1425,10 +1457,11 @@ function Arrival({
       camera: THREE.Camera
     ) => {
       renderer.getDrawingBufferSize(size)
-      if (picture.width !== size.x || picture.height !== size.y)
-        picture.setSize(size.x, size.y)
       const ratio = renderer.getPixelRatio()
-      // half the line's width either side of an edge, in the picture's own measure
+      const [wide, high] = passSize(size.x, size.y, ratio)
+      if (picture.width !== wide || picture.height !== high)
+        picture.setSize(wide, high)
+      // half the line's width either side of an edge, as a share of the view's
       const half = (ARRIVED.width * ratio) / 2
       material.uniforms.reach.value.set(half / size.x, half / size.y)
       began.current ??= performance.now()
@@ -1879,14 +1912,30 @@ function Posing() {
   return null
 }
 
-/** Lets the rest of the window take a picture of the view. */
-function Camera() {
+/**
+ * How many frames the view is brought on by, at a twentieth of a second each, before a
+ * picture is taken of it while it is out of sight: enough for what eases into its place
+ * as it is drawn to be all but there (see PartModel).
+ */
+const CATCHING_UP = 12
+
+/**
+ * Lets the rest of the window take a picture of the view: even while it is out of sight
+ * (`covered`), when it is not drawn, and is brought up to date first.
+ */
+function Camera({ covered }: { covered: boolean }) {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
   const invalidate = useThree((state) => state.invalidate)
+  const get = useThree((state) => state.get)
   React.useEffect(() => {
     bridge.screenshot = () => {
+      // what has changed since it was last drawn has not yet been put where it goes:
+      // parts that have come, and where those that moved are to be
+      if (covered)
+        for (let frame = 0; frame < CATCHING_UP; frame++)
+          advance(get().clock.elapsedTime + 0.05, false, get())
       // The picture is of the model, as it is: not of what only goes across it while
       // Claude is at work, which is who the picture is for.
       const passing: THREE.Object3D[] = []
@@ -1922,7 +1971,7 @@ function Camera() {
     return () => {
       bridge.screenshot = null
     }
-  }, [gl, scene, camera, invalidate])
+  }, [gl, scene, camera, invalidate, get, covered])
   return null
 }
 
@@ -1937,6 +1986,7 @@ export function Scene({
   changing,
   arriving = null,
   reading = false,
+  covered = false,
   sweep,
   hoveredId,
   hoveredWith,
@@ -1988,6 +2038,11 @@ export function Scene({
    * to pick from until it is through.
    */
   reading?: boolean
+  /**
+   * It is out of sight, under something else that has the view's place: it is not drawn
+   * meanwhile, whatever in it moves by itself, and is drawn as it is once it is back.
+   */
+  covered?: boolean
   /** what a box being drawn across the view takes in so far; null while none is drawn */
   sweep: string[] | null
   hoveredId: string | null
@@ -2024,6 +2079,7 @@ export function Scene({
   onSection: (moved: { position: Vec3; turn: Turn }) => void
 }) {
   const colors = useThemeColors()
+  const glassLayers = useGlassLayers()
   const root = React.useRef<THREE.Group>(null)
   const plane = React.useMemo(
     () => new THREE.Plane(NO_CLIP.normal.clone(), NO_CLIP.constant),
@@ -2152,7 +2208,7 @@ export function Scene({
       className={hoveredId && !sweeping ? "cursor-pointer" : undefined}
       // (the view says of itself that the pointer is its own: that has to be unsaid)
       style={reading ? { pointerEvents: "none" } : undefined}
-      frameloop="demand"
+      frameloop={covered ? "never" : "demand"}
       // Keep to the view's size as it changes, not once it has stopped changing. Left
       // alone, the canvas waits for a pause whenever it is not the window that is
       // resized, and so would lag behind the conversation's edge as that is dragged.
@@ -2183,7 +2239,7 @@ export function Scene({
         position={[-240, 160, -180]}
         intensity={0.55}
       />
-      {anyGlass && <Glass />}
+      {anyGlass && <Glass layers={glassLayers} />}
       {hinted.length > 0 && (
         <Hint colors={colors} occasion={HINT} order={ORDER.hint} how={HINTED} />
       )}
@@ -2232,13 +2288,14 @@ export function Scene({
         onSweep={onSweep}
         onTake={onTake}
       />
-      <Camera />
+      <Camera covered={covered} />
       <Posing />
       <Redraw on={view} />
       <Redraw on={changed} />
       <Redraw on={arriving} />
       <Redraw on={found} />
       <Redraw on={reference} />
+      <Redraw on={covered} />
       <group ref={root} rotation={MODEL_TO_WORLD}>
         {/* set in a scene, the ground is the one the scene stands on: the floor a
             table is on, and not the table's top */}

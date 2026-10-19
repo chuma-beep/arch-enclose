@@ -22,6 +22,7 @@ import type { Project } from "@shared/api"
 import { useThemeColors, type ThemeColors } from "@/lib/css-color"
 import { placed, readReference, type ReferenceScene } from "@/lib/reference"
 import { loadSurfaces, type LoadedPart } from "./load"
+import { passSize } from "./passes"
 import { HOME_DIRECTION, MODEL_TO_WORLD, toWorld } from "./rig"
 import { frame } from "./thumbnails"
 
@@ -159,7 +160,8 @@ function outlined(
   occasion: THREE.Layers
 ): { lines: THREE.Mesh; dispose: () => void } {
   const picture = new THREE.WebGLRenderTarget(1, 1, {
-    // as smooth at its edges as the view, which is what keeps the line smooth
+    // as smooth at its edges as the view, which is what keeps the line smooth (and drawn
+    // at no more than PASS_RATIO, which keeps it cheap: see passSize)
     samples: 4,
     depthTexture: new THREE.DepthTexture(1, 1),
   })
@@ -239,9 +241,10 @@ function outlined(
   const cleared = new THREE.Color()
   lines.onBeforeRender = (renderer, scene, camera) => {
     renderer.getDrawingBufferSize(size)
-    if (picture.width !== size.x || picture.height !== size.y)
-      picture.setSize(size.x, size.y)
-    // half the line's width either side of an edge, in the picture's own measure
+    const [wide, high] = passSize(size.x, size.y, renderer.getPixelRatio())
+    if (picture.width !== wide || picture.height !== high)
+      picture.setSize(wide, high)
+    // half the line's width either side of an edge, as a share of the view's
     const half = (LINE * renderer.getPixelRatio()) / 2
     material.uniforms.reach.value.set(half / size.x, half / size.y)
     const seen = camera.projectionMatrix.elements
