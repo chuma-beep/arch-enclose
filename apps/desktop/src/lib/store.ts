@@ -15,6 +15,7 @@ import { mannerOf, savedAccess } from "@/lib/manner"
 import { answering, offeredModels, updatedSaid, usable } from "@/lib/providers"
 import { callingOn, notCalledOn } from "@/lib/mentions"
 import { fitted } from "@/lib/pictures"
+import { keptAsWas } from "@/lib/same"
 import { usePreferences } from "@/lib/preferences"
 import {
   askedAgain,
@@ -560,7 +561,10 @@ type State = {
    * been fetched so far. One that is not being made into anything is not in here.
    */
   starting: Record<string, number>
-  /** what has been said in the conversations that have been looked at, by conversation */
+  /**
+   * what has been said in the conversations that have been looked at lately, and in any
+   * being answered, by conversation
+   */
   items: Record<string, ThreadItem[]>
   /**
    * The conversation turned to in each project, by project: one of its conversations, or
@@ -766,7 +770,10 @@ type State = {
    * opened, and the conversation panel with it.
    */
   openConversation(projectId: string, conversationId: string | null): void
-  /** Fetch what has been said in a conversation, the first time it is looked at. */
+  /**
+   * Fetch what has been said in a conversation, the first time it is looked at, or the
+   * first since it was let go of (see forget).
+   */
   load(projectId: string, conversationId: string): void
   /**
    * Pick CAD files or a folder to open (or the one kind, where the picker cannot offer
@@ -1102,6 +1109,54 @@ export const calledAs = (object: ObjectRef): Called => ({
 
 /** The conversations whose items have been asked for, so that none is asked for twice. */
 const fetched = new Set<string>()
+/** The conversations whose items were last asked for, the latest first. */
+const lately: string[] = []
+/**
+ * How many conversations' items are kept, of those looked at lately: more than these
+ * (beside the one in front of the user, and any being answered) are let go of, and asked
+ * for again if they are turned to again.
+ */
+const ITEMS_KEPT = 4
+
+/**
+ * Let go of the items of conversations not looked at lately: not the one in front of the
+ * user, nor one being answered, nor any of the last few asked for.
+ */
+function forget() {
+  const { items, projects } = useStore.getState()
+  const kept = new Set(lately.slice(0, ITEMS_KEPT))
+  const open = inView()
+  if (open) kept.add(open)
+  for (const project of projects)
+    for (const conversation of project.conversations)
+      if (conversation.status !== "idle") kept.add(conversation.id)
+  for (const id of fetched) if (!kept.has(id)) fetched.delete(id)
+  const gone = Object.keys(items).filter((id) => !kept.has(id))
+  if (gone.length === 0) return
+  const left = { ...items }
+  for (const id of gone) delete left[id]
+  useStore.setState({ items: left })
+}
+
+/** How long a cut is left to settle before it is kept, ms: dragged, it changes at every move. */
+const CUTS_SETTLE_MS = 400
+/** The cuts to be kept, once they have settled; null once they have been. */
+let cutsDue: Record<string, Section> | null = null
+let cutsTimer: ReturnType<typeof setTimeout> | undefined
+
+/** Keep the cuts, for the next time each project is cut open, once they have settled. */
+function keepCuts(cuts: Record<string, Section>) {
+  cutsDue = cuts
+  clearTimeout(cutsTimer)
+  cutsTimer = setTimeout(cutsSettled, CUTS_SETTLE_MS)
+}
+
+/** Keep the cuts waiting to be, now. */
+function cutsSettled() {
+  clearTimeout(cutsTimer)
+  if (cutsDue) localStorage.setItem(CUTS_KEY, JSON.stringify(cutsDue))
+  cutsDue = null
+}
 
 export const useStore = create<State>()((set, get) => ({
   ready: false,
@@ -1198,9 +1253,17 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   load(projectId, conversationId) {
+    // asked for again, it is among the latest to have been
+    const at = lately.indexOf(conversationId)
+    if (at >= 0) lately.splice(at, 1)
+    lately.unshift(conversationId)
+    lately.length = Math.min(lately.length, ITEMS_KEPT)
+    forget()
     if (fetched.has(conversationId)) return
     fetched.add(conversationId)
     void window.cad.thread.items(projectId, conversationId).then((items) => {
+      // (let go of again while they were on their way)
+      if (!fetched.has(conversationId)) return
       set((state) => ({ items: { ...state.items, [conversationId]: items } }))
     })
   },
@@ -1249,7 +1312,7 @@ export const useStore = create<State>()((set, get) => ({
     const { activeId, cuts } = get()
     const kept =
       patch.section && activeId ? { ...cuts, [activeId]: patch.section } : cuts
-    if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
+    if (kept !== cuts) keepCuts(kept)
     const before = get().entered
     set((state) => {
       const view = { ...state.view, ...patch }
@@ -2270,7 +2333,7 @@ function coloursOf(
   return next
 }
 
-function reconcile(projects: Project[]) {
+function reconcile(incoming: Project[]) {
   const {
     activeId,
     activate,
@@ -2278,8 +2341,11 @@ function reconcile(projects: Project[]) {
     colours,
     projects: before,
   } = useStore.getState()
+  // (the very projects there were, as far as they are the same: what is drawn of one
+  // that has not changed is not drawn again)
+  const projects = keptAsWas(before, incoming)
   const kept = cutsOf(cuts, projects)
-  if (kept !== cuts) localStorage.setItem(CUTS_KEY, JSON.stringify(kept))
+  if (kept !== cuts) keepCuts(kept)
   useStore.setState({
     projects,
     cuts: kept,
@@ -2439,6 +2505,8 @@ function tally(before?: Project[]) {
 export function connect() {
   const { cad } = window
   cad.projects.onChange(reconcile)
+  // a cut left a moment before the window goes is kept all the same
+  window.addEventListener("pagehide", cutsSettled)
   adoptColours()
   // what is waiting to be sent is kept as it changes, so that the window can be loaded
   // again without losing it

@@ -12,6 +12,7 @@ import { frame, stage } from "@/components/viewport/thumbnails"
 import { useThemeColors } from "@/lib/css-color"
 import { boardUrl } from "./boards"
 import { boardPaint, inOurColours, inShade, shadedOf } from "./colours"
+import { keptPictures } from "./kept"
 
 /** Pixels a side: twice the size they are shown at, for sharp screens. */
 const PICTURE = 400
@@ -75,11 +76,12 @@ export function inBoardColours(board: THREE.Object3D, colours: PcbColours) {
 /**
  * The pictures drawn, by board, by when it was built and by the colours it was drawn in
  * (as JSON): drawn again only when it is built again, or the window is put in a theme
- * that colours a board otherwise.
+ * that colours a board otherwise. Those of a build before the latest are let go of, and
+ * so are the least looked at past a few dozen.
  */
-const pictured = new Map<string, string>()
+const pictured = keptPictures(48)
 const pictureOf = (projectId: string, board: BoardSummary, colours: string) =>
-  `${projectId}:${board.id}:${board.built}:${colours}`
+  [`${projectId}:${board.id}`, board.built, colours] as const
 
 /** A picture of each of some boards, handed over as a data URL as each is drawn. */
 async function draw(
@@ -141,7 +143,7 @@ export function useBoardPictures(
       (board) =>
         board.model &&
         board.built !== null &&
-        !pictured.has(pictureOf(projectId, board, colours))
+        !pictured.has(...pictureOf(projectId, board, colours))
     )
     if (wanted.length === 0) return
     let stopped = false
@@ -150,7 +152,7 @@ export function useBoardPictures(
       wanted,
       JSON.parse(colours) as PcbColours,
       (board, url) => {
-        pictured.set(pictureOf(projectId, board, colours), url)
+        pictured.set(...pictureOf(projectId, board, colours), url)
         if (!stopped) setDrawn((count) => count + 1)
       },
       () => stopped
@@ -161,7 +163,7 @@ export function useBoardPictures(
   }, [projectId, boards, colours])
   return Object.fromEntries(
     boards.flatMap((board) => {
-      const url = pictured.get(pictureOf(projectId, board, colours))
+      const url = pictured.get(...pictureOf(projectId, board, colours))
       return url ? [[board.id, url]] : []
     })
   )

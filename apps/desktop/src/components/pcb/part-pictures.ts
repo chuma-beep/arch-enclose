@@ -10,6 +10,7 @@ import { frame, stage } from "@/components/viewport/thumbnails"
 import { useThemeColors } from "@/lib/css-color"
 import { boardUrl } from "./boards"
 import type { BoardPart } from "./parts"
+import { keptPictures } from "./kept"
 import { BOARD_FROM, disposeBoard, inBoardColours, loadBoard } from "./pictures"
 
 /** Pixels a side: twice the size they are shown at, for sharp screens. */
@@ -21,15 +22,17 @@ const BLOCK = 1
 
 /**
  * The pictures drawn, by board, by when it was built, by kind of part, and by the
- * colours it was drawn in (as JSON).
+ * colours it was drawn in (as JSON). Those of a build before the latest are let go of,
+ * and so are the least looked at past a few boards' worth.
  */
-const pictured = new Map<string, string>()
+const pictured = keptPictures(400)
 const pictureOf = (
   projectId: string,
   board: BoardSummary,
   part: BoardPart,
   colours: string
-) => `${projectId}:${board.id}:${board.built}:${part.key}:${colours}`
+) =>
+  [`${projectId}:${board.id}`, board.built, `${part.key}:${colours}`] as const
 
 /**
  * A picture of each of some kinds of part, handed over as a data URL as each is drawn:
@@ -122,7 +125,7 @@ export function usePartPictures(
   React.useEffect(() => {
     if (!board.model || board.built === null) return
     const wanted = parts.filter(
-      (part) => !pictured.has(pictureOf(projectId, board, part, colours))
+      (part) => !pictured.has(...pictureOf(projectId, board, part, colours))
     )
     if (wanted.length === 0) return
     let stopped = false
@@ -132,7 +135,7 @@ export function usePartPictures(
       wanted,
       JSON.parse(colours) as PcbColours,
       (part, url) => {
-        pictured.set(pictureOf(projectId, board, part, colours), url)
+        pictured.set(...pictureOf(projectId, board, part, colours), url)
         if (!stopped) setDrawn((count) => count + 1)
       },
       () => stopped
@@ -143,7 +146,7 @@ export function usePartPictures(
   }, [projectId, board, parts, colours])
   return Object.fromEntries(
     parts.flatMap((part) => {
-      const url = pictured.get(pictureOf(projectId, board, part, colours))
+      const url = pictured.get(...pictureOf(projectId, board, part, colours))
       return url ? [[part.key, url]] : []
     })
   )
