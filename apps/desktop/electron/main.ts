@@ -100,6 +100,7 @@ import { fetched, startFrom } from "./examples"
 import { archived, archiveName, GuideServer } from "./guide-page"
 import { standInName } from "./names"
 import { groupNameOf } from "./naming"
+import { Pace } from "./pace"
 import { Pictures } from "./pictures"
 import { SaveFolder } from "./saving"
 import {
@@ -417,8 +418,14 @@ async function turnBack(id: string, way: "undo" | "redo"): Promise<Undone> {
   return { ok: true, what: change.what }
 }
 const send = (channel: string, ...args: unknown[]) => {
+  // what is held back of a conversation's items is told before anything else is
+  if (channel !== CHANNEL.threadItem) pace.flush()
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args)
 }
+/** The items of the conversations, as they come: a message being written at a steady pace. */
+const pace = new Pace((projectId, conversationId, item) =>
+  send(CHANNEL.threadItem, projectId, conversationId, item)
+)
 const broadcast = () => send(CHANNEL.projectsChanged, list())
 const githubState = (): GitHubState => ({
   connection: connection.state,
@@ -593,7 +600,7 @@ function askViewport(
     }, 15_000)
     waiting.set(id, { resolve, reject, timer })
     const request: ViewportRequest = { id, projectId, ...asked }
-    win.webContents.send(CHANNEL.viewportRequest, request)
+    send(CHANNEL.viewportRequest, request)
   })
 }
 
@@ -1732,8 +1739,13 @@ function wire() {
     }
   )
 
-  ipcMain.handle(CHANNEL.threadItems, (_, id: string, conversationId: string) =>
-    threads.items(String(id), String(conversationId))
+  ipcMain.handle(
+    CHANNEL.threadItems,
+    (_, id: string, conversationId: string) => {
+      // (nothing held back is told after the items as they are now, to undo them)
+      pace.flush()
+      return threads.items(String(id), String(conversationId))
+    }
   )
   ipcMain.handle(
     CHANNEL.threadSend,
@@ -2217,7 +2229,7 @@ if (!app.requestSingleInstanceLock()) {
       },
       viewport: askViewport,
       onItem: (projectId, conversationId, item) =>
-        send(CHANNEL.threadItem, projectId, conversationId, item),
+        pace.put(projectId, conversationId, item),
       onVersion: (projectId, from, to, manner) => {
         // the window turns to it, where it was showing the one it was asked for in
         send(CHANNEL.versionsBegun, projectId, from, to)
