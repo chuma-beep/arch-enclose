@@ -9,6 +9,7 @@ import {
   type ProviderSettings,
   type Settings,
 } from "../shared/api"
+import { missing, setAside, writeWhole } from "./atomic"
 import type { Account, Tokens } from "./github"
 
 /** A list of names, from what may be anything: the strings in it, each once. */
@@ -105,19 +106,43 @@ export class SettingsStore {
   private readonly defaults: Settings
   private readonly vault: Vault | null
   private saved: Saved = {}
+  /**
+   * Where a settings file that could not be read was moved to, as the app was opened:
+   * null where there was none such. The defaults stand in its place.
+   */
+  readonly aside: string | null = null
 
   constructor(file: string, defaults: Settings, vault: Vault | null = null) {
     this.file = file
     this.defaults = defaults
     this.vault = vault
+    let text: string
     try {
-      const read: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
-      if (typeof read === "object" && read !== null) this.saved = read
-      // for the user alone to read, however it was written before
-      fs.chmodSync(file, 0o600)
-    } catch {
-      // first run, or a file that is not JSON: the defaults stand
+      text = fs.readFileSync(file, "utf8")
+    } catch (error) {
+      // first run: the defaults stand
+      if (missing(error)) return
+      text = ""
     }
+    let read: unknown = null
+    try {
+      read = JSON.parse(text)
+    } catch {
+      // cut short, or something else: read as nothing
+    }
+    if (typeof read === "object" && read !== null && !Array.isArray(read)) {
+      this.saved = read
+      // for the user alone to read, however it was written before
+      try {
+        fs.chmodSync(file, 0o600)
+      } catch {
+        // (it is written so the next time anything is set)
+      }
+      return
+    }
+    // What cannot be read is kept, out of the way, rather than written over the first
+    // time anything is set: the keys and the GitHub sign-in in it with the rest.
+    this.aside = setAside(file)
   }
 
   get(): Settings {
@@ -246,10 +271,8 @@ export class SettingsStore {
 
   private write() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
-    // (sealed or not, what is in it is the user's alone to read)
-    fs.writeFileSync(this.file, JSON.stringify(this.saved, null, 2), {
-      mode: 0o600,
-    })
-    fs.chmodSync(this.file, 0o600)
+    // (sealed or not, what is in it is the user's alone to read; and it is written whole,
+    // or the keys and the sign-in in it could be lost with the rest)
+    writeWhole(this.file, JSON.stringify(this.saved, null, 2), 0o600)
   }
 }

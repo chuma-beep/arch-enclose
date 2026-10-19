@@ -108,5 +108,10 @@ projects (the list of them, the conversations and the settings) is in
 `~/Library/Application Support/Enclose`. The projects themselves are folders of yours,
 and are left where they are.
 
+What is kept there is written whole or not at all, so quitting or losing power while it
+is written leaves it as it was. A file of it that cannot be read all the same (the
+settings, a conversation) is not written over: it is moved aside as it was, beside where
+it was, as `<name>.corrupt-<time>`; for the settings the app says so when it opens.
+
 On Linux, remove the package (`sudo pacman -R enclose`, or the like for yours), or throw
 away the AppImage. What it kept is in `~/.config/Enclose`.

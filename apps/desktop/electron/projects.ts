@@ -10,6 +10,7 @@ import { findTools } from "./custom-tools"
 import { findGuides } from "./assembly"
 import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
+import { writeWhole } from "./atomic"
 import { markedManaged } from "./backup"
 import { isInside } from "./turn"
 import {
@@ -384,7 +385,7 @@ export class Projects {
   private save() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true })
     // (`kept`: each project says for itself whether its history is the app's to keep)
-    fs.writeFileSync(
+    writeWhole(
       this.file,
       JSON.stringify({ projects: this.saved, kept: true }, null, 2)
     )

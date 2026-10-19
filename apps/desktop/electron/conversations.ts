@@ -6,6 +6,7 @@ import fs from "node:fs"
 import path from "node:path"
 
 import { PROVIDERS, type ProviderId, type ThreadItem } from "../shared/api"
+import { setAside, writeWhole } from "./atomic"
 
 export type Conversation = {
   id: string
@@ -66,7 +67,8 @@ export function writeConversation(
   { id, provider, sessionId, guided, name, items, gist }: Conversation
 ) {
   fs.mkdirSync(folder(dir, projectId), { recursive: true })
-  fs.writeFileSync(
+  // (written whole or not at all: it is written again and again while a turn goes on)
+  writeWhole(
     path.join(folder(dir, projectId), `${id}.json`),
     JSON.stringify({ provider, sessionId, guided, name, items, gist })
   )
@@ -114,6 +116,16 @@ export function readConversations(
   const found: Conversation[] = []
   for (const name of names) {
     if (!name.endsWith(".json")) continue
+    const file = path.join(folder(dir, projectId), name)
+    let read: unknown
+    try {
+      read = JSON.parse(fs.readFileSync(file, "utf8"))
+    } catch {
+      // cut short, or written over by something else: moved aside, where it can still be
+      // looked into, and not taken for a conversation that never was
+      setAside(file)
+      continue
+    }
     try {
       const {
         provider,
@@ -122,9 +134,7 @@ export function readConversations(
         name: called,
         items,
         gist,
-      } = JSON.parse(
-        fs.readFileSync(path.join(folder(dir, projectId), name), "utf8")
-      ) as {
+      } = read as {
         provider?: unknown
         sessionId?: unknown
         guided?: unknown
@@ -148,7 +158,7 @@ export function readConversations(
             : null,
       })
     } catch {
-      // not one of ours, or cut short while being written: passed over, and left alone
+      // not one of ours: passed over, and left alone
     }
   }
   return found

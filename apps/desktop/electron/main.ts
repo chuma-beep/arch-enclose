@@ -603,6 +603,25 @@ function createWindow(openProject: string | null) {
   if (CAPTURE) void capture(window, CAPTURE)
 }
 
+/**
+ * Say, once the window is up, what of what the app keeps could not be read as it was
+ * opened, and was moved aside rather than written over: one line for each such file.
+ */
+function unreadable(...said: (string | null | false)[]) {
+  const lines = said.filter((line): line is string => Boolean(line))
+  const window = win
+  if (lines.length === 0 || !window || CAPTURE) return
+  window.once("ready-to-show", () => {
+    if (window.isDestroyed()) return
+    void dialog.showMessageBox(window, {
+      type: "warning",
+      message: "Some of what Enclose keeps could not be read",
+      detail: lines.join("\n\n"),
+      buttons: ["OK"],
+    })
+  })
+}
+
 async function capture(window: BrowserWindow, file: string) {
   const wait = Number(flag("wait") ?? 2000)
   const settle = () => new Promise((resolve) => setTimeout(resolve, wait))
@@ -2282,6 +2301,10 @@ if (!app.requestSingleInstanceLock()) {
       console.error("[open]", error)
     }
     createWindow(first)
+    unreadable(
+      settings.aside &&
+        `Your settings could not be read, so the defaults are in use. The file was moved aside as it was, to ${settings.aside}.`
+    )
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(null)

@@ -21,6 +21,8 @@ import { createHash, randomBytes } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 
+import { missing, writeWhole } from "./atomic"
+
 /** One file a turn touched: what was in it before and after, as a hash; null where there was none. */
 type Touched = { path: string; before: string | null; after: string | null }
 
@@ -171,10 +173,21 @@ export class Changes {
     let index = this.indexes.get(projectId)
     if (index) return index
     index = { done: [], undone: [] }
+    let text: string | null = null
     try {
-      const kept = JSON.parse(
-        fs.readFileSync(path.join(this.root(projectId), "index.json"), "utf8")
-      ) as Partial<Index> | null
+      text = fs.readFileSync(
+        path.join(this.root(projectId), "index.json"),
+        "utf8"
+      )
+    } catch (error) {
+      // (nothing kept yet is nothing to go by; one there that cannot be read is not)
+      if (!missing(error)) text = ""
+    }
+    try {
+      if (text === null) throw new Error("nothing kept")
+      const kept = JSON.parse(text) as Partial<Index> | null
+      if (typeof kept !== "object" || kept === null)
+        throw new Error("not an index")
       const read = (changes: unknown): Change[] =>
         (Array.isArray(changes) ? changes : []).filter(
           (change: Partial<Change> | null): change is Change =>
@@ -185,9 +198,23 @@ export class Changes {
             Array.isArray(change.files) &&
             change.files.every((file) => within(file?.path))
         )
-      index = { done: read(kept?.done), undone: read(kept?.undone) }
+      index = { done: read(kept.done), undone: read(kept.undone) }
     } catch {
-      // nothing kept, or nothing that reads as it
+      // An index that was there but does not read, cut short say, says nothing of which
+      // copies are what: they are all moved aside with it, as they are, and none of them
+      // taken for one left behind and let go. What is done from here on starts afresh.
+      if (text !== null) {
+        try {
+          fs.renameSync(
+            this.root(projectId),
+            `${this.root(projectId)}.corrupt-${Date.now()}`
+          )
+        } catch {
+          // where it cannot be moved, it is not looked through for copies to let go
+          this.indexes.set(projectId, index)
+          return index
+        }
+      }
     }
     this.indexes.set(projectId, index)
     // A copy put aside for a turn that the app was quit in the middle of belongs to
@@ -213,7 +240,7 @@ export class Changes {
     const index = this.index(projectId)
     try {
       fs.mkdirSync(this.root(projectId), { recursive: true })
-      fs.writeFileSync(
+      writeWhole(
         path.join(this.root(projectId), "index.json"),
         JSON.stringify(index)
       )
@@ -245,6 +272,9 @@ export class Changes {
    */
   before(projectId: string, folder: string): Promise<Pending | null> {
     return this.queued(projectId, async () => {
+      // (what is kept of the project is read first, and seen to if it has to be, before
+      // there is a copy of this turn's among it)
+      this.index(projectId)
       const standing = await filesOf(folder)
       if (!standing) return null
       const since = Date.now()

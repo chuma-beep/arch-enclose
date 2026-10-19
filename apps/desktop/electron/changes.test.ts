@@ -288,6 +288,39 @@ describe("Changes", () => {
     expect((await again.undo("p1", folder)).ok).toBe(true)
   })
 
+  it("lets go of none of the copies where what says which is which cannot be read", async () => {
+    const first = new Changes(kept)
+    await turn(first, "Taller", () => write("model.py", "box(20)"))
+    const [id] = fs
+      .readdirSync(path.join(kept, "p1"))
+      .filter((name) => name !== "index.json")
+    // cut short, as by the machine going off while it was written
+    fs.writeFileSync(path.join(kept, "p1", "index.json"), '{"done":[{"id"')
+    const again = new Changes(kept)
+    expect(again.last("p1").undo).toBeNull()
+    // the copy is kept, with what said what it was, out of the way
+    const [aside] = fs
+      .readdirSync(kept)
+      .filter((name) => name.startsWith("p1.corrupt-"))
+    expect(fs.existsSync(path.join(kept, aside, id))).toBe(true)
+    expect(fs.readFileSync(path.join(kept, aside, "index.json"), "utf8")).toBe(
+      '{"done":[{"id"'
+    )
+    // and what is done from here on is kept as before
+    await turn(again, "Wider", () => write("model.py", "box(30)"))
+    expect(new Changes(kept).last("p1").undo?.what).toBe("Wider")
+  })
+
+  it("writes what it keeps whole, leaving nothing beside it", async () => {
+    const changes = new Changes(kept)
+    await turn(changes, "Taller", () => write("model.py", "box(20)"))
+    expect(
+      fs
+        .readdirSync(path.join(kept, "p1"))
+        .filter((name) => name.includes(".tmp-"))
+    ).toEqual([])
+  })
+
   it("does not take the copy for a turn under way for one left behind", async () => {
     const changes = new Changes(kept)
     const pending = await changes.before("p1", folder)

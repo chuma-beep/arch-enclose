@@ -19,6 +19,7 @@
 import fs from "node:fs"
 import path from "node:path"
 
+import { writeWhole } from "./atomic"
 import { copy, filesOf, hashOf } from "./changes"
 
 /** Which conversation a project's folder is, and which it was being put as, if it was. */
@@ -88,7 +89,7 @@ export class Versions {
   private save(projectId: string) {
     try {
       fs.mkdirSync(this.root(projectId), { recursive: true })
-      fs.writeFileSync(
+      writeWhole(
         path.join(this.root(projectId), "index.json"),
         JSON.stringify(this.index(projectId))
       )

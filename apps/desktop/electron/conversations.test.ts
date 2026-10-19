@@ -136,17 +136,44 @@ describe("conversations on disk", () => {
     expect(fs.existsSync(path.join(dir, "p1.json"))).toBe(false)
   })
 
-  it("leaves alone what it cannot read", () => {
+  it("leaves alone what is not its own, and moves a conversation it cannot read aside", () => {
     fs.writeFileSync(path.join(dir, "p1.json"), "{ cut short")
     fs.mkdirSync(path.join(dir, "p1"))
     fs.writeFileSync(path.join(dir, "p1", "broken.json"), "{ cut short")
     fs.writeFileSync(path.join(dir, "p1", "notes.txt"), "not ours")
-    expect(readConversations(dir, "p1", none)).toEqual([])
-    expect(fs.readdirSync(path.join(dir, "p1")).sort()).toEqual([
-      "broken.json",
-      "notes.txt",
+    writeConversation(dir, "p1", {
+      ...newConversation(),
+      id: "good",
+      items: [said("u1", "a lid")],
+    })
+    expect(readConversations(dir, "p1", none).map((c) => c.id)).toEqual([
+      "good",
     ])
+    const left = fs.readdirSync(path.join(dir, "p1")).sort()
+    expect(left).toHaveLength(3)
+    expect(left[0]).toMatch(/^broken\.json\.corrupt-\d+$/)
+    expect(left.slice(1)).toEqual(["good.json", "notes.txt"])
+    // with what was in it, as it was
+    expect(fs.readFileSync(path.join(dir, "p1", left[0]), "utf8")).toBe(
+      "{ cut short"
+    )
     expect(fs.existsSync(path.join(dir, "p1.json"))).toBe(true)
+  })
+
+  it("writes a conversation whole, leaving nothing beside it", () => {
+    const conversation = {
+      ...newConversation(),
+      items: [said("u1", "a lid")],
+    }
+    writeConversation(dir, "p1", conversation)
+    writeConversation(dir, "p1", {
+      ...conversation,
+      items: [said("u1", "a lid"), said("u2", "a box")],
+    })
+    expect(fs.readdirSync(path.join(dir, "p1"))).toEqual([
+      `${conversation.id}.json`,
+    ])
+    expect(readConversations(dir, "p1", none)[0].items).toHaveLength(2)
   })
 
   it("brings back what was in flight when the app closed as over", () => {

@@ -178,6 +178,22 @@ describe("SettingsStore", () => {
     expect(fs.readFileSync(file, "utf8")).not.toContain("xai-1")
   })
 
+  it("moves a file it cannot read aside, and writes nothing over it", () => {
+    const kept = '{ "github": { "sealed": "abc" }, "projectsFolder": "/mi'
+    fs.writeFileSync(file, kept)
+    const store = new SettingsStore(file, DEFAULTS)
+    expect(store.get().projectsFolder).toBe(DEFAULTS.projectsFolder)
+    expect(store.aside).toMatch(/settings\.json\.corrupt-\d+$/)
+    store.set({ analytics: false })
+    expect(fs.readFileSync(store.aside!, "utf8")).toBe(kept)
+    expect(JSON.parse(fs.readFileSync(file, "utf8"))).toEqual({
+      analytics: false,
+    })
+    // and a first run has nothing to move
+    fs.rmSync(file)
+    expect(new SettingsStore(file, DEFAULTS).aside).toBeNull()
+  })
+
   it("is the user's alone to read", () => {
     fs.writeFileSync(file, "{}", { mode: 0o644 })
     const store = new SettingsStore(file, DEFAULTS)

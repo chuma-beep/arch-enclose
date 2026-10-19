@@ -5,6 +5,8 @@
 import fs from "node:fs"
 import path from "node:path"
 
+import { writeWhole } from "./atomic"
+
 const isFolder = (at: string) => {
   try {
     return fs.statSync(at).isDirectory()
@@ -45,7 +47,7 @@ export class SaveFolder {
     this.last = folder
     try {
       fs.mkdirSync(path.dirname(this.kept), { recursive: true })
-      fs.writeFileSync(this.kept, `${folder}\n`)
+      writeWhole(this.kept, `${folder}\n`)
     } catch {
       // not kept for the next time the app is opened: it is still kept until then
     }
