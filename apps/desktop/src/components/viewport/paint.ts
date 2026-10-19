@@ -48,3 +48,27 @@ export const finish = ({ part }: Pick<LoadedPart, "part">) => ({
   metalness: part.metal ? 0.55 : 0.1,
   roughness: part.metal ? 0.45 : 0.62,
 })
+
+/**
+ * What a picture of a part by itself comes out as, in a word, beyond its meshes: which
+ * way it is turned where it stands (and not where that is, since the picture is closed
+ * in on the part wherever it is), what colour each of its skins is drawn in and how its
+ * surface takes the light, and the theme it is drawn for (see thumbnails.ts).
+ */
+export function drawingOf(
+  part: Pick<LoadedPart, "part" | "skins" | "turn" | "boards" | "home">,
+  dark: boolean,
+  /** the colour the user has given it, if they have */
+  chosen: string | undefined
+): string {
+  const { metalness, roughness } = finish(part)
+  return [
+    part.home.elements.slice(0, 11).join(),
+    part.skins
+      .map((skin) => skinColour(part, skin, dark, chosen).getHexString())
+      .join(),
+    metalness,
+    roughness,
+    dark,
+  ].join(" ")
+}

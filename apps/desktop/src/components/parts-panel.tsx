@@ -3,12 +3,13 @@ import { cn } from "cn"
 import { DownloadIcon, EyeOffIcon, SquareDashedIcon } from "lucide-react"
 
 import { LOOSE } from "@/lib/arrange"
-import { sizeOf } from "@/lib/model"
-import { usePreferences } from "@/lib/preferences"
+import { sizeOf, type Download, type Part } from "@/lib/model"
+import { usePreferences, type Format } from "@/lib/preferences"
 import { NO_SWEEP, sweptTo, toggled, toggledAll } from "@/lib/several"
 import { savingParts } from "@/lib/saved"
 import { useStore, type Only } from "@/lib/store"
 import type { LoadedModel } from "./viewport/load"
+import { usePartPicture } from "./viewport/thumbnails"
 
 /** What the list can pick out: one thing, by its id. */
 type Listed = Extract<Only, { id: string }>
@@ -141,6 +142,99 @@ function Title({
 }
 
 /**
+ * A part in its group's row: its picture, with its name and how big its file is under
+ * it, and the arrow that saves the file beside them. Drawn again only when something
+ * of its own changes: the part pointed at, here or in the view, is news to it and to
+ * the one pointed at before, and to none of the others.
+ */
+const PartCard = React.memo(function PartCard({
+  part,
+  projectId,
+  downloads,
+  format,
+  lit,
+  out,
+  onPress,
+}: {
+  part: Part
+  projectId: string
+  downloads: Download[]
+  format: Format
+  /** it is picked, and its whole group is not */
+  lit: boolean
+  /** it was put out of sight */
+  out: boolean
+  onPress: (partId: string, event: React.MouseEvent) => void
+}) {
+  const hovered = useStore((state) => state.hoveredId === part.id)
+  const hover = useStore((state) => state.hover)
+  const url = usePartPicture(part.id)
+  const file = React.useMemo(
+    () => savingParts(projectId, downloads, format, [part], part.label),
+    [projectId, downloads, format, part]
+  )
+  return (
+    <div className="group/part relative w-37.5 shrink-0">
+      <button
+        type="button"
+        aria-pressed={lit}
+        data-part={part.id}
+        title={out ? "Hidden: click to show it again" : undefined}
+        className="group/pick flex w-full cursor-pointer flex-col gap-2 text-left outline-none"
+        onPointerEnter={() => hover(part.id)}
+        onClick={(event) => onPress(part.id, event)}
+      >
+        {/* its picture, on a square a little lighter than the card: an empty one until
+            it has been drawn */}
+        <span
+          className={cn(
+            "relative block aspect-square w-full overflow-hidden rounded-xl border bg-foreground/9 group-focus-visible/pick:ring-[3px] group-focus-visible/pick:ring-ring/50",
+            lit
+              ? // one line, two pixels wide, drawn inside the square: nothing of it
+                // is cut off by the row, and it has no seam in it
+                "border-transparent outline-2 -outline-offset-2 outline-foreground"
+              : // pointed at, here or in the view
+                hovered
+                ? "border-foreground/40"
+                : "group-hover/pick:border-foreground/40"
+          )}
+        >
+          {url && (
+            <img
+              src={url}
+              alt=""
+              draggable={false}
+              className={cn("size-full", out && "opacity-35")}
+            />
+          )}
+          {out && (
+            <EyeOffIcon className={cn(HIDDEN, "absolute top-2.5 right-2.5")} />
+          )}
+        </span>
+        {/* its name and, under it in the same letters, how big its file is; the arrow
+            that saves the file has the room beside them */}
+        <span className="flex min-w-0 flex-col pr-7 text-xs leading-4">
+          <span className={cn("truncate font-medium", out && "opacity-45")}>
+            {part.label}
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {(file?.bytes && sizeOf(file.bytes)) || " "}
+          </span>
+        </span>
+      </button>
+      {file && (
+        <Save
+          label={`Download ${part.label}`}
+          // there when the part is pointed at, or the keys are on it
+          className="absolute right-0 bottom-0.5 -mr-1.5 opacity-0 group-hover/part:opacity-100 focus-visible:opacity-100"
+          onClick={() => void file.save()}
+        />
+      )}
+    </div>
+  )
+})
+
+/**
  * What the model is made of: a card for each group its parts are in, and in it a row of
  * the group's parts, each a picture with its name and how big its file is. A row with
  * more parts than fit is scrolled sideways. The groups are as the user has them: those
@@ -164,18 +258,18 @@ function Title({
  *
  * A part that was put out of sight in the view (H) is dim here, and so is a group all
  * of whose parts were. Picking one of those brings it back, and does no more than that.
+ *
+ * It is not drawn again as the pointer goes over the view, nor as the pictures come in:
+ * those are news to the parts' own cards (see PartCard).
  */
-export function PartsPanel({
+export const PartsPanel = React.memo(function PartsPanel({
   loaded,
   projectId,
-  thumbs,
   onRename,
   className,
 }: {
   loaded: LoadedModel
   projectId: string
-  /** the pictures of the parts, by part id, as far as they have been drawn */
-  thumbs: Record<string, string>
   /** call a group something else: or, with nothing written, what it went by before */
   onRename: (groupId: string, label: string) => void
   className?: string
@@ -184,7 +278,6 @@ export function PartsPanel({
   const hidden = useStore((state) => state.view.hidden)
   const setView = useStore((state) => state.setView)
   const setHidden = useStore((state) => state.setHidden)
-  const hoveredId = useStore((state) => state.hoveredId)
   const hover = useStore((state) => state.hover)
   const setPartsOpen = useStore((state) => state.setPartsOpen)
   const naming = useStore((state) => state.naming)
@@ -199,6 +292,16 @@ export function PartsPanel({
     setView({ only: same(only, what) ? null : { ...what, near: true } })
   // several picked out together in the view, and shown on their own, are each lit here
   const among = only?.kind === "parts" ? only.ids : NONE
+  // (looked up, part by part, and not searched for)
+  const amongSet = React.useMemo(() => new Set(among), [among])
+  const hiddenSet = React.useMemo(() => new Set(hidden), [hidden])
+  /** Each group's parts, in the order the model has them. */
+  const grouped = React.useMemo(() => {
+    const by = new Map<string, Part[]>()
+    for (const part of model.parts)
+      by.set(part.group, [...(by.get(part.group) ?? []), part])
+    return by
+  }, [model])
 
   // Several are picked the way a list has it (see lib/several): the parts shown on
   // their own are the ones picked out here. The list's order is the groups' and, in
@@ -206,11 +309,9 @@ export function PartsPanel({
   const order = React.useMemo(
     () =>
       model.groups.flatMap((group) =>
-        model.parts
-          .filter((part) => part.group === group.id)
-          .map((part) => part.id)
+        (grouped.get(group.id) ?? []).map((part) => part.id)
       ),
-    [model]
+    [model, grouped]
   )
   const sweep = React.useRef(NO_SWEEP)
   /** The parts shown on their own, by id: none, if all of the model is shown. */
@@ -251,6 +352,24 @@ export function PartsPanel({
   /** Bring back parts that were put out of sight: as Cmd+Z can take back. */
   const show = (ids: string[]) =>
     setHidden(hidden.filter((id) => !ids.includes(id)))
+  /** A part was pressed: brought back, if it was out of sight, or else picked. */
+  const press = (id: string, event: React.MouseEvent) => {
+    if (hiddenSet.has(id)) return show([id])
+    // Cmd is the one of the two that counts, with both held
+    if (event.metaKey || event.ctrlKey) return pickToo(id)
+    if (event.shiftKey) return pickTo(id)
+    pickOne(id)
+  }
+  // (the same for every drawing, so that a part's card is left alone: it goes by
+  // what is picked and out of sight as they are when it is pressed)
+  const pressing = React.useRef(press)
+  React.useLayoutEffect(() => {
+    pressing.current = press
+  })
+  const onPress = React.useCallback(
+    (id: string, event: React.MouseEvent) => pressing.current(id, event),
+    []
+  )
 
   React.useEffect(() => {
     const away = (event: PointerEvent) => {
@@ -300,13 +419,13 @@ export function PartsPanel({
         onPointerLeave={() => hover(null)}
       >
         {model.groups.map((group) => {
-          const parts = model.parts.filter((part) => part.group === group.id)
-          if (parts.length === 0) return null
+          const parts = grouped.get(group.id)
+          if (!parts) return null
           const whole: Listed = { kind: "group", id: group.id }
           // picked by itself, or with others: every part of it is among those shown
           const picked =
-            same(only, whole) || parts.every((part) => among.includes(part.id))
-          const gone = parts.every((part) => hidden.includes(part.id))
+            same(only, whole) || parts.every((part) => amongSet.has(part.id))
+          const gone = parts.every((part) => hiddenSet.has(part.id))
           // parts in no group are listed as one, but are not one to pick or to name
           const loose = group.id === LOOSE
           const awaited = naming.includes(group.id)
@@ -387,103 +506,23 @@ export function PartsPanel({
               </header>
               {/* the row runs to the card's sides, where what does not fit is cut off */}
               <div className="-mx-5.25 flex [scrollbar-width:none] gap-5 overflow-x-auto px-5.25">
-                {parts.map((part) => {
-                  const one: Listed = { kind: "part", id: part.id }
-                  // not where its whole group is picked: the card says so for them all
-                  const lit =
-                    !picked && (same(only, one) || among.includes(part.id))
-                  const out = hidden.includes(part.id)
-                  const file = savingParts(
-                    projectId,
-                    model.downloads,
-                    format,
-                    [part],
-                    part.label
-                  )
-                  const url = thumbs[part.id]
-                  return (
-                    <div
-                      key={part.id}
-                      className="group/part relative w-37.5 shrink-0"
-                    >
-                      <button
-                        type="button"
-                        aria-pressed={lit}
-                        data-part={part.id}
-                        title={
-                          out ? "Hidden: click to show it again" : undefined
-                        }
-                        className="group/pick flex w-full cursor-pointer flex-col gap-2 text-left outline-none"
-                        onPointerEnter={() => hover(part.id)}
-                        onClick={(event) => {
-                          if (out) return show([part.id])
-                          // Cmd is the one of the two that counts, with both held
-                          if (event.metaKey || event.ctrlKey)
-                            return pickToo(part.id)
-                          if (event.shiftKey) return pickTo(part.id)
-                          pickOne(part.id)
-                        }}
-                      >
-                        {/* its picture, on a square a little lighter than the card: an
-                            empty one until it has been drawn */}
-                        <span
-                          className={cn(
-                            "relative block aspect-square w-full overflow-hidden rounded-xl border bg-foreground/9 group-focus-visible/pick:ring-[3px] group-focus-visible/pick:ring-ring/50",
-                            lit
-                              ? // one line, two pixels wide, drawn inside the square:
-                                // nothing of it is cut off by the row, and it has no
-                                // seam in it
-                                "border-transparent outline-2 -outline-offset-2 outline-foreground"
-                              : // pointed at, here or in the view
-                                hoveredId === part.id
-                                ? "border-foreground/40"
-                                : "group-hover/pick:border-foreground/40"
-                          )}
-                        >
-                          {url && (
-                            <img
-                              src={url}
-                              alt=""
-                              draggable={false}
-                              className={cn("size-full", out && "opacity-35")}
-                            />
-                          )}
-                          {out && (
-                            <EyeOffIcon
-                              className={cn(
-                                HIDDEN,
-                                "absolute top-2.5 right-2.5"
-                              )}
-                            />
-                          )}
-                        </span>
-                        {/* its name and, under it in the same letters, how big its file
-                            is; the arrow that saves the file has the room beside them */}
-                        <span className="flex min-w-0 flex-col pr-7 text-xs leading-4">
-                          <span
-                            className={cn(
-                              "truncate font-medium",
-                              out && "opacity-45"
-                            )}
-                          >
-                            {part.label}
-                          </span>
-                          <span className="text-muted-foreground tabular-nums">
-                            {(file?.bytes && sizeOf(file.bytes)) || " "}
-                          </span>
-                        </span>
-                      </button>
-                      {file && (
-                        <Save
-                          label={`Download ${part.label}`}
-                          // there when the part is pointed at, or the keys are on it
-                          className="absolute right-0 bottom-0.5 -mr-1.5 opacity-0 group-hover/part:opacity-100 focus-visible:opacity-100"
-                          onClick={() => void file.save()}
-                        />
-                      )}
-                    </div>
-                  )
-                })}
+                {parts.map((part) => (
+                  <PartCard
+                    key={part.id}
+                    part={part}
+                    projectId={projectId}
+                    downloads={model.downloads}
+                    format={format}
+                    // not where its whole group is picked: the card says so for them all
+                    lit={
+                      !picked &&
+                      (same(only, { kind: "part", id: part.id }) ||
+                        amongSet.has(part.id))
+                    }
+                    out={hiddenSet.has(part.id)}
+                    onPress={onPress}
+                  />
+                ))}
               </div>
             </section>
           )
@@ -514,4 +553,4 @@ export function PartsPanel({
       </div>
     </div>
   )
-}
+})

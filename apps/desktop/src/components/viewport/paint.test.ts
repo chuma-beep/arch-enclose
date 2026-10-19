@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest"
 import type { Part } from "@/lib/model"
 import { drawnIn } from "@/lib/palette"
 import { PALETTE } from "@shared/palette"
-import { finish, skinColour } from "./paint"
+import { standInModel } from "./load"
+import { drawingOf, finish, skinColour } from "./paint"
 
 /**
  * A part of the second group, as plain as one comes, with what is said of it here; in a
@@ -128,5 +129,48 @@ describe("finish", () => {
     const plastic = finish(part())
     expect(metal.metalness).toBeGreaterThan(plastic.metalness)
     expect(metal.roughness).toBeLessThan(plastic.roughness)
+  })
+})
+
+describe("drawingOf", () => {
+  const [part] = standInModel().parts
+
+  it("is the same for a part drawn just as it was", () => {
+    expect(drawingOf({ ...part }, false, undefined)).toBe(
+      drawingOf(part, false, undefined)
+    )
+  })
+
+  it("changes with the colour the part is given, and the theme", () => {
+    const plain = drawingOf(part, false, undefined)
+    expect(drawingOf(part, false, "#d94f3d")).not.toBe(plain)
+    expect(drawingOf(part, true, undefined)).not.toBe(plain)
+  })
+
+  it("is the same wherever the part stands, turned the same way", () => {
+    const moved = {
+      ...part,
+      home: new THREE.Matrix4().makeTranslation(120, -40, 8),
+    }
+    expect(drawingOf(moved, false, undefined)).toBe(
+      drawingOf(part, false, undefined)
+    )
+  })
+
+  it("changes with which way the part is turned, which it is drawn from", () => {
+    const turned = {
+      ...part,
+      home: new THREE.Matrix4().makeRotationZ(Math.PI / 2),
+    }
+    expect(drawingOf(turned, false, undefined)).not.toBe(
+      drawingOf(part, false, undefined)
+    )
+  })
+
+  it("changes with what the part is made of", () => {
+    const metal = { ...part, part: { ...part.part, metal: true } }
+    expect(drawingOf(metal, false, undefined)).not.toBe(
+      drawingOf(part, false, undefined)
+    )
   })
 })

@@ -711,7 +711,7 @@ function Model({ project }: { project: Project }) {
   const changing = useChanging(project)
   const lookOver = useStore((s) => s.lookOver)
   // (the pictures are of the parts, whatever groups they are in)
-  const thumbs = useThumbnails(base, partsOpen, colours)
+  useThumbnails(base, partsOpen, colours)
   const goHome = useStore((s) => s.goHome)
   const setThreadOpen = useStore((s) => s.setThreadOpen)
 
@@ -1843,7 +1843,6 @@ function Model({ project }: { project: Project }) {
         <PartsPanel
           loaded={loaded}
           projectId={project.id}
-          thumbs={thumbs}
           onRename={renameGroup}
           // further in while the section's other buttons stand where it would be, and
           // no wider than leaves it room in the view

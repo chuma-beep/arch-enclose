@@ -1,13 +1,15 @@
 // A small picture of each part, for the parts list. They are drawn once per model, off
 // screen, by a renderer of their own that is thrown away when it is done: each part by
-// itself, from the side the model opens on, filling the picture whatever its size.
+// itself, from the side the model opens on, filling the picture whatever its size. A
+// part drawn before, just as it is now, is not drawn again.
 import * as React from "react"
 import * as THREE from "three"
+import { create } from "zustand"
 
 import { useThemeColors } from "@/lib/css-color"
 import { UNDER_FROM, underlit } from "./light"
-import type { LoadedModel, LoadedPart } from "./load"
-import { EDGE, finish, skinColour } from "./paint"
+import type { LoadedModel, LoadedPart, Skin } from "./load"
+import { drawingOf, EDGE, finish, skinColour } from "./paint"
 import { HOME_DIRECTION, MODEL_TO_WORLD, toWorld } from "./rig"
 
 /** Pixels a side: twice the size they are shown at, for sharp screens. */
@@ -180,12 +182,36 @@ export function frame(
   return half
 }
 
+/**
+ * The pictures drawn of parts, by their meshes and then by how each was drawn (see
+ * drawingOf): a part that is just as it was, in a model built again, has its picture
+ * already. A few of each, for the same meshes turned other ways in a model, or a theme
+ * gone back to; and gone with the meshes.
+ */
+const pictured = new WeakMap<Skin[], Map<string, string>>()
+const PICTURES_KEPT = 6
+
+function picturedAs(part: LoadedPart, drawing: string): string | undefined {
+  return pictured.get(part.skins)?.get(drawing)
+}
+
+function keepPicture(part: LoadedPart, drawing: string, url: string) {
+  let kept = pictured.get(part.skins)
+  if (!kept) pictured.set(part.skins, (kept = new Map()))
+  kept.delete(drawing)
+  kept.set(drawing, url)
+  for (const old of kept.keys()) {
+    if (kept.size <= PICTURES_KEPT) break
+    kept.delete(old)
+  }
+}
+
 /** Draw every part of a model, handing each picture over as a data URL as it is made. */
 async function draw(
-  loaded: LoadedModel,
+  parts: LoadedPart[],
   dark: boolean,
   colours: Record<string, string>,
-  each: (partId: string, url: string) => void,
+  each: (part: LoadedPart, url: string) => void,
   stopped: () => boolean
 ) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
@@ -198,7 +224,7 @@ async function draw(
   const from = toWorld(HOME_DIRECTION)
 
   try {
-    for (const part of loaded.parts) {
+    for (const part of parts) {
       if (stopped()) break
       const { holder, dispose } = standing(part, dark, colours[part.part.id])
       root.add(holder)
@@ -226,7 +252,7 @@ async function draw(
         camera.updateProjectionMatrix()
         renderer.render(scene, camera)
       }
-      each(part.part.id, renderer.domElement.toDataURL("image/png"))
+      each(part, renderer.domElement.toDataURL("image/png"))
 
       root.remove(holder)
       dispose()
@@ -240,59 +266,92 @@ async function draw(
 }
 
 /**
- * The pictures of a model's parts, by part id, filling in as they are drawn. Nothing is
- * drawn until they are first wanted.
+ * The pictures of the parts of the model on screen, by part id, as far as they have been
+ * drawn. Kept here, out of the view: each picture that comes in is news to its own card
+ * in the parts list (see usePartPicture), and to nothing else.
+ */
+const usePictures = create<{ urls: Record<string, string> }>(() => ({
+  urls: {},
+}))
+
+/** The picture of one part of the model on screen, once it has been drawn. */
+export const usePartPicture = (partId: string): string | undefined =>
+  usePictures((state) => state.urls[partId])
+
+/**
+ * Draws the pictures of a model's parts, filling them in as they are drawn (see
+ * usePartPicture). Nothing is drawn until they are first wanted.
  */
 export function useThumbnails(
   loaded: LoadedModel | null,
   wanted: boolean,
   /** the colours the user has given parts, by part: the pictures are in them too */
   colours: Record<string, string>
-): Record<string, string> {
+) {
   const { dark, palette } = useThemeColors()
-  const [drawn, setDrawn] = React.useState<{
-    of: LoadedModel
-    dark: boolean
-    palette: Record<string, string>
-    colours: Record<string, string>
-    urls: Record<string, string>
-  } | null>(null)
   // once started for a model they are finished, wanted or not
   const [started, setStarted] = React.useState<LoadedModel | null>(null)
   if (wanted && loaded && started !== loaded) setStarted(loaded)
   const go = loaded !== null && started === loaded
+  /** The model and theme the pictures up were drawn for. */
+  const drawnFor = React.useRef<{
+    of: LoadedModel
+    dark: boolean
+    palette: Record<string, string>
+  } | null>(null)
+  // (nothing of this model's is left up for the next to be shown with)
+  React.useEffect(() => () => usePictures.setState({ urls: {} }), [])
 
-  React.useEffect(() => {
+  // (before the list is shown again, so that it is never shown with what was put away)
+  React.useLayoutEffect(() => {
     if (!go || !loaded) return
     let stopped = false
-    void draw(
-      loaded,
-      dark,
-      colours,
-      (partId, url) => {
-        if (stopped) return
-        setDrawn((before) => ({
-          of: loaded,
-          dark,
-          palette,
-          colours,
-          urls:
-            before?.of === loaded &&
-            before.dark === dark &&
-            before.palette === palette &&
-            before.colours === colours
-              ? { ...before.urls, [partId]: url }
-              : { [partId]: url },
-        }))
-      },
-      () => stopped
-    )
+    // While they are drawn again in a colour newly given, the ones there are stay up;
+    // of another model, or in another theme, they are put away. Those drawn before
+    // just as they are now are put up at once, and the rest are drawn.
+    const was = drawnFor.current
+    const keep =
+      was?.of === loaded && was.dark === dark && was.palette === palette
+    drawnFor.current = { of: loaded, dark, palette }
+    const known: Record<string, string> = {}
+    const left: LoadedPart[] = []
+    const drawings = new Map<LoadedPart, string>()
+    for (const part of loaded.parts) {
+      const drawing = drawingOf(part, dark, colours[part.part.id])
+      drawings.set(part, drawing)
+      const url = picturedAs(part, drawing)
+      if (url) known[part.part.id] = url
+      else left.push(part)
+    }
+    usePictures.setState((state) => ({
+      urls: keep ? { ...state.urls, ...known } : known,
+    }))
+    // and what comes in is put up at most once a frame, all that came in it together
+    let coming: Record<string, string> = {}
+    let frame = 0
+    const putUp = () => {
+      frame = 0
+      const urls = coming
+      coming = {}
+      usePictures.setState((state) => ({ urls: { ...state.urls, ...urls } }))
+    }
+    if (left.length > 0)
+      void draw(
+        left,
+        dark,
+        colours,
+        (part, url) => {
+          keepPicture(part, drawings.get(part)!, url)
+          if (stopped) return
+          coming[part.part.id] = url
+          frame ||= requestAnimationFrame(putUp)
+        },
+        () => stopped
+      )
     return () => {
       stopped = true
+      cancelAnimationFrame(frame)
     }
     // (palette: drawn again in a theme's colours, the palette is read as they are drawn)
   }, [go, loaded, dark, palette, colours])
-
-  // while they are drawn again in a colour newly given, the ones there are stay up
-  return drawn?.of === loaded && drawn.dark === dark ? drawn.urls : {}
 }
