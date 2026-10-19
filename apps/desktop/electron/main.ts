@@ -1315,8 +1315,9 @@ function wire() {
         defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
-      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.copyFile(source, picked.filePath)
+      // (where the next dialog opens, now that something is there)
+      saving.savedIn(path.dirname(picked.filePath))
       analytics?.record("model saved", { as: "files", files: 1 })
       return true
     }
@@ -1383,8 +1384,8 @@ function wire() {
         defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
-      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.copyFile(source, picked.filePath)
+      saving.savedIn(path.dirname(picked.filePath))
       analytics?.record("board saved", { as: what })
       return true
     }
@@ -1450,7 +1451,6 @@ function wire() {
         filters: [{ name: "Zip archive", extensions: ["zip"] }],
       })
       if (picked.canceled || !picked.filePath) return false
-      saving.savedIn(path.dirname(picked.filePath))
       // The parts are read from where the model's build left them, and go nowhere but
       // into the archive: nothing of a guide is copied until it is taken away.
       const files = await archived(
@@ -1461,6 +1461,7 @@ function wire() {
         path.join(HERE, "guide")
       )
       await fs.promises.writeFile(picked.filePath, zipOf(files))
+      saving.savedIn(path.dirname(picked.filePath))
       // shown where it is: it is something to send on, or to open
       shell.showItemInFolder(picked.filePath)
       analytics?.record("assembly guide saved", { steps: guide.steps.length })
@@ -1512,11 +1513,11 @@ function wire() {
         properties: ["openDirectory", "createDirectory"],
       })
       if (picked.canceled || !picked.filePaths[0]) return false
-      saving.savedIn(picked.filePaths[0])
       // a folder of its own, numbered where the name is taken: nothing is written over
       const into = makeFolder(picked.filePaths[0], called)
       for (const { source, name } of wanted)
         await fs.promises.copyFile(source, path.join(into, name))
+      saving.savedIn(picked.filePaths[0])
       analytics?.record("model saved", { as: "files", files: wanted.length })
       return true
     }
@@ -1540,7 +1541,6 @@ function wire() {
         defaultPath: saving.offer(path.basename(String(name))),
       })
       if (picked.canceled || !picked.filePath) return false
-      saving.savedIn(path.dirname(picked.filePath))
       const archive = zipOf(
         await Promise.all(
           wanted.map(async ({ source, name }) => ({
@@ -1550,6 +1550,7 @@ function wire() {
         )
       )
       await fs.promises.writeFile(picked.filePath, archive)
+      saving.savedIn(path.dirname(picked.filePath))
       analytics?.record("model saved", { as: "files", files: wanted.length })
       return true
     }
@@ -1598,14 +1599,12 @@ function wire() {
           properties: ["openDirectory", "createDirectory"],
         })
         if (picked.canceled || !picked.filePaths[0]) return false
-        saving.savedIn(picked.filePaths[0])
         into = picked.filePaths[0]
       } else {
         const picked = await dialog.showSaveDialog(win, {
           defaultPath: saving.offer(name),
         })
         if (picked.canceled || !picked.filePath) return false
-        saving.savedIn(path.dirname(picked.filePath))
         into = picked.filePath
       }
       // each part read once, however many of the files have it
@@ -1646,6 +1645,7 @@ function wire() {
         for (const file of files)
           await fs.promises.writeFile(path.join(folder, file.name), file.data)
       }
+      saving.savedIn(how === "folder" ? into : path.dirname(into))
       analytics?.record("model saved", {
         as: "files",
         format: String(format),
@@ -1663,8 +1663,8 @@ function wire() {
         filters: [{ name: "SVG", extensions: ["svg"] }],
       })
       if (picked.canceled || !picked.filePath) return false
-      saving.savedIn(path.dirname(picked.filePath))
       await fs.promises.writeFile(picked.filePath, svg, "utf8")
+      saving.savedIn(path.dirname(picked.filePath))
       analytics?.record("model saved", { as: "drawings", files: 1 })
       return true
     }
@@ -1693,11 +1693,11 @@ function wire() {
         properties: ["openDirectory", "createDirectory"],
       })
       if (picked.canceled || !picked.filePaths[0]) return false
-      saving.savedIn(picked.filePaths[0])
       // a folder of its own, numbered where the name is taken: nothing is written over
       const into = makeFolder(picked.filePaths[0], called)
       for (const { name, svg } of wanted)
         await fs.promises.writeFile(path.join(into, name), svg, "utf8")
+      saving.savedIn(picked.filePaths[0])
       // the folder is opened, to show what was saved and where: it was made inside the
       // one that was picked, which is not where anyone goes looking for it
       void shell.openPath(into)
