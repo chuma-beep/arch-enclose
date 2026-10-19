@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 // The store is the window's: it keeps things in the window's storage, and tells the
 // app's own process what of the view is used. Both are stood in for here, before the
 // store is read, since it reads what was kept as it is made.
-const { kept, used, sent, turned } = vi.hoisted(() => {
+const { kept, used, sent, turned, sending } = vi.hoisted(() => {
   const kept = new Map<string, string>()
   const used: string[] = []
   vi.stubGlobal("localStorage", {
@@ -13,6 +13,8 @@ const { kept, used, sent, turned } = vi.hoisted(() => {
   })
   vi.stubGlobal("location", { hash: "" })
   const sent: unknown[][] = []
+  // what the app's process answers a message with: null, where it turns it away
+  const sending = { into: "conversation" as string | null }
   // what of an agent's turns the app's process was asked to take back, or put back
   const turned: string[][] = []
   const turn = (way: string) => async (projectId: string) => {
@@ -26,12 +28,12 @@ const { kept, used, sent, turned } = vi.hoisted(() => {
       thread: {
         send: async (...given: unknown[]) => {
           sent.push(given)
-          return "conversation"
+          return sending.into
         },
       },
     },
   })
-  return { kept, used, sent, turned }
+  return { kept, used, sent, turned, sending }
 })
 
 import type { CadApi, Project, Vec3 } from "@shared/api"
@@ -424,6 +426,50 @@ describe("words picked out of the conversation", () => {
     // nothing waiting is nothing to send
     state().send()
     expect(sent).toHaveLength(1)
+  })
+})
+
+describe("a message that is turned away", () => {
+  afterEach(() => {
+    sending.into = "conversation"
+  })
+
+  it("comes back to the box with what went with it, and says why", async () => {
+    sending.into = null
+    useStore.setState({
+      projects: [
+        {
+          id: "clock",
+          conversations: [{ id: "other", status: "working", updatedAt: 0 }],
+        },
+      ] as never,
+      // (a new conversation, begun while the agent is at work in the other)
+      picked: { clock: null },
+      drafts: { clock: "Make it taller" },
+    })
+    state().quote({ quote: "Which screws?" })
+    state().keepQuote("M3")
+    state().send()
+    expect(sent).toHaveLength(1)
+    expect(state().drafts.clock).toBe("")
+    await vi.waitFor(() => expect(state().drafts.clock).toBe("Make it taller"))
+    expect(state().quotes.clock).toEqual([
+      expect.objectContaining({ quote: "Which screws?", text: "M3" }),
+    ])
+    expect(state().saying?.text).toMatch(/another conversation/)
+  })
+
+  it("goes before what was written since in the box", async () => {
+    sending.into = null
+    useStore.setState({
+      projects: [{ id: "clock", conversations: [] }] as never,
+      drafts: { clock: "Make it taller" },
+    })
+    state().send()
+    useStore.setState({ drafts: { clock: "Or wider" } })
+    await vi.waitFor(() => expect(state().saying).not.toBeNull())
+    expect(state().drafts.clock).toBe("Make it taller\nOr wider")
+    expect(state().saying?.text).toBe("The message could not be sent just now")
   })
 })
 

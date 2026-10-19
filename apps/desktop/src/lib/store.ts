@@ -2109,6 +2109,43 @@ export const useStore = create<State>()((set, get) => ({
       usePreferences.getState().settleDays,
       Date.now()
     )
+    // What was written, and what went with it, comes back to the box where the message
+    // is turned away (the agent is at work in another of the project's conversations,
+    // say), with whatever has been put there since: nothing written is lost to it.
+    const written = get().drafts[project.id] ?? ""
+    const refused = () => {
+      set((state) => ({
+        drafts: {
+          ...state.drafts,
+          [project.id]: state.drafts[project.id]?.trim()
+            ? `${written}\n${state.drafts[project.id]}`
+            : written,
+        },
+        notes: {
+          ...state.notes,
+          [project.id]: [...notes, ...(state.notes[project.id] ?? [])],
+        },
+        quotes: {
+          ...state.quotes,
+          [project.id]: [...quotes, ...(state.quotes[project.id] ?? [])],
+        },
+        called: {
+          ...state.called,
+          [project.id]: [...called, ...(state.called[project.id] ?? [])],
+        },
+        pictures: {
+          ...state.pictures,
+          [project.id]: [...pictures, ...(state.pictures[project.id] ?? [])],
+        },
+      }))
+      get().say(
+        project.conversations.some(
+          (one) => one.id !== open?.id && one.status !== "idle"
+        )
+          ? "Not sent: the agent is at work in another conversation. Send it once that is done"
+          : "The message could not be sent just now"
+      )
+    }
     set((state) => ({
       threadOpen: true,
       writing: null,
@@ -2134,12 +2171,16 @@ export const useStore = create<State>()((set, get) => ({
         quotes.map(({ quote, text }) => ({ quote, text })),
         board
       )
-      .then((id) => {
-        // stay with it: a conversation that has just begun is not yet the one on the
-        // card, and one that had settled is turned back to by being carried on
-        if (id)
-          set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
-      })
+      .then(
+        (id) => {
+          // stay with it: a conversation that has just begun is not yet the one on the
+          // card, and one that had settled is turned back to by being carried on
+          if (id)
+            set((state) => ({ picked: { ...state.picked, [project.id]: id } }))
+          else refused()
+        },
+        () => refused()
+      )
   },
 
   setMeshes(projectId, any) {

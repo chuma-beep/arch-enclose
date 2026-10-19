@@ -73,3 +73,8 @@ Queued, and is sent when the turn is over. A message that waits can be sent at o
 (Send now), which stops the turn for it, or taken back. After a turn that was stopped or
 that failed, what waits is not sent by itself: it is left for you to send, or goes after
 the next turn that gets through. What waits is kept only while the app is open.
+
+A message sent in another of the project's conversations while the agent is at work in
+one is not sent: the agent works in one at a time. It comes back to the message box as
+it was, with the parts, quotes and pictures that went with it, and the foot of the view
+says why; send it once the turn is over.
