@@ -42,6 +42,13 @@ it, but what was said about it is forgotten, which the app asks about first: ope
 folder again and it is a new project. The one folder it clears away is one that came to
 nothing, which the app made and nothing was put in.
 
+A project whose folder is not where it was, on a drive that is not plugged in say, or
+moved or deleted, stays on the list, dimmed, after the others, and says **Folder not
+found**; where it was is on the pointer. Nothing can be done in it but removing it,
+with its ×. Its conversations and all else the app kept of it are kept as they were:
+put the folder back where it was, or open it again from there, and it is the same
+project, with them. The app looks again each time its window is turned to.
+
 ## History and backup
 
 Every project the app makes keeps its history in git, and so does a folder you open

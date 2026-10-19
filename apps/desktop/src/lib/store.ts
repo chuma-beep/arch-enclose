@@ -555,6 +555,11 @@ function enteredNow(view: View, before: Entered[]): Entered[] {
 type State = {
   ready: boolean
   projects: Project[]
+  /**
+   * The projects whose folders are not where they were (see Project["missing"]): on the
+   * list, and in nothing else the window does, until their folders are back.
+   */
+  missing: Project[]
   activeId: string | null
   /**
    * The examples a project is being made of, by example: how many bytes of each have
@@ -1161,6 +1166,7 @@ function cutsSettled() {
 export const useStore = create<State>()((set, get) => ({
   ready: false,
   projects: [],
+  missing: [],
   activeId: null,
   starting: {},
   items: {},
@@ -2333,7 +2339,7 @@ function coloursOf(
   return next
 }
 
-function reconcile(incoming: Project[]) {
+function reconcile(listed: Project[]) {
   const {
     activeId,
     activate,
@@ -2341,13 +2347,18 @@ function reconcile(incoming: Project[]) {
     colours,
     projects: before,
   } = useStore.getState()
+  // (one whose folder is not there keeps what was kept of it, for when it is back)
+  const kept = cutsOf(cuts, listed)
+  if (kept !== cuts) keepCuts(kept)
   // (the very projects there were, as far as they are the same: what is drawn of one
   // that has not changed is not drawn again)
-  const projects = keptAsWas(before, incoming)
-  const kept = cutsOf(cuts, projects)
-  if (kept !== cuts) keepCuts(kept)
+  const projects = keptAsWas(
+    before,
+    listed.filter((p) => !p.missing)
+  )
   useStore.setState({
     projects,
+    missing: listed.filter((p) => p.missing),
     cuts: kept,
     colours: coloursOf(colours, projects),
   })

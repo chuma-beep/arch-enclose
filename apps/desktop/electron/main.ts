@@ -326,14 +326,18 @@ const list = (): Project[] =>
   projects
     .list((id) => threads.summaries(id))
     .map((project): Project =>
-      threads.lookingOver(project.id)
-        ? { ...project, lookOver: "underway" }
-        : // with no agent to ask, a model waits to be looked over unseen
-          project.lookOver && !providers.any()
-          ? { ...project, lookOver: null }
-          : project
+      // (one whose folder is not there has nothing going on in it)
+      project.missing
+        ? project
+        : threads.lookingOver(project.id)
+          ? { ...project, lookOver: "underway" }
+          : // with no agent to ask, a model waits to be looked over unseen
+            project.lookOver && !providers.any()
+            ? { ...project, lookOver: null }
+            : project
     )
     .map((project): Project => {
+      if (project.missing) return project
       // what Claude last did to its files, and what of that was last taken back
       const { undo, redo } = changes.last(project.id, whose(project.id))
       return {
@@ -1195,13 +1199,14 @@ function wire() {
     return list().find((p) => p.id === id) ?? null
   })
   ipcMain.handle(CHANNEL.projectsRemove, async (_, id: string) => {
-    const project = projects.get(String(id))
+    // (one whose folder is not there can be taken off the list as well)
+    const project = projects.listed(String(id))
     if (!project) return
     // What has been said about it goes with it, and cannot be had back: that is asked
     // about first. (A run with nobody at it has nobody to ask.)
     const said = threads.count(project.id)
     if (said > 0 && win && !CAPTURE) {
-      const name = project.name ?? path.basename(project.path)
+      const { name } = project
       const { response } = await dialog.showMessageBox(win, {
         type: "warning",
         message: `Remove “${name}” from Enclose?`,
@@ -2329,6 +2334,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     createWindow(first)
     unreadable(
+      projects.aside &&
+        `The list of your projects could not be read, so it starts empty: add their folders again. The file was moved aside as it was, to ${projects.aside}.`,
       settings.aside &&
         `Your settings could not be read, so the defaults are in use. The file was moved aside as it was, to ${settings.aside}.`
     )

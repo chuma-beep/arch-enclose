@@ -463,6 +463,39 @@ function ProjectCard({ project, now }: { project: Project; now: number }) {
 }
 
 /**
+ * A project whose folder is not where it was: dimmed, saying so, with where it was to be
+ * seen on the pointer, and nothing to open. It can be taken off the list; and it is a
+ * project again, with its conversations, once its folder is back (the app looks again
+ * each time its window is turned to).
+ */
+function MissingCard({ project }: { project: Project }) {
+  const removeProject = useStore((state) => state.removeProject)
+  return (
+    <div className="relative w-49">
+      <div
+        title={project.path}
+        className={cn(CARD, UNLIT, "opacity-60 hover:bg-sidebar-accent/45")}
+      >
+        <span className={cn(NAME, "pr-5")}>{project.name}</span>
+        <span className={cn(SMALL, "text-muted-foreground")}>
+          Folder not found
+        </span>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`Remove ${project.name}`}
+        title="Remove project"
+        className="pointer-events-auto absolute top-1.5 right-1.5 transition-[color,background-color] hover:bg-red-600 hover:text-white dark:hover:bg-red-600"
+        onClick={() => void removeProject(project.id)}
+      >
+        <XIcon />
+      </Button>
+    </div>
+  )
+}
+
+/**
  * Something in the list that can be put away, and brought back: it closes up to nothing
  * as it fades, and whatever is under it in the list comes up to where it was. Neither
  * slowly nor in a hurry. Put away, nothing of it is there to be pressed. Or it only
@@ -638,6 +671,7 @@ function ExampleItem({ example }: { example: Example }) {
  */
 export function Sidebar({ children }: { children: React.ReactNode }) {
   const projects = useStore((state) => state.projects)
+  const missing = useStore((state) => state.missing)
   // While it is a model's blueprint that is looked at, the sheets have the window: the
   // card of the project they are of stays, at the top, and the rest are put away. And
   // so it is while it is the model's assembly guides, whose covers have it likewise, in
@@ -669,7 +703,7 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
   const [adding, setAdding] = React.useState(false)
   const now = useNow()
   // with no projects the middle of the window is where one is started
-  if (projects.length === 0)
+  if (projects.length === 0 && missing.length === 0)
     return (
       <>
         <aside className="pointer-events-none absolute inset-x-0 top-0">
@@ -694,6 +728,12 @@ export function Sidebar({ children }: { children: React.ReactNode }) {
             faded={alone}
           >
             <ProjectCard project={project} now={now} />
+          </Tucked>
+        ))}
+        {/* (after the others: there is nothing to be done in them for now) */}
+        {missing.map((project) => (
+          <Tucked key={project.id} away={oneProject} faded={alone}>
+            <MissingCard project={project} />
           </Tucked>
         ))}
         {/* What is under the cards takes the rest of the list's height, the button at

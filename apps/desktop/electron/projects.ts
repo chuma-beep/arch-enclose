@@ -10,7 +10,7 @@ import { findTools } from "./custom-tools"
 import { findGuides } from "./assembly"
 import { boardsWritten } from "./boards"
 import { ASSEMBLY_FOLDER } from "../shared/assembly-format"
-import { writeWhole } from "./atomic"
+import { missing, setAside, writeWhole } from "./atomic"
 import { markedManaged } from "./backup"
 import { isInside } from "./turn"
 import {
@@ -61,6 +61,11 @@ type Saved = {
   /** from when a project taken off the list was remembered: such a one is now forgotten */
   closed?: boolean
 }
+
+/** Whether what was kept of a project reads as one: it says what it goes by, and where. */
+const readsAsProject = (given: unknown): given is Saved =>
+  typeof (given as Saved | null)?.id === "string" &&
+  typeof (given as Saved).path === "string"
 
 /** The most letters a project's name can have. */
 const NAME_LENGTH = 80
@@ -349,6 +354,17 @@ export class Projects {
   private colourTimers = new Map<string, NodeJS.Timeout>()
   /** how far the making of a model from files opened into a project has got */
   private bringing = new Map<string, BringingIn>()
+  /**
+   * The projects whose folders are not where they were, as they were last looked for: a
+   * drive not plugged in, say, or a folder moved or deleted. They stay on the list, with
+   * all that was kept of them, and are themselves again once the folder is back.
+   */
+  private unavailable = new Set<string>()
+  /**
+   * Where the list of projects was moved to, as the app was opened, where it could not be
+   * read: null where there was nothing wrong with it. The list starts empty in its place.
+   */
+  readonly aside: string | null = null
 
   /** one of a project's circuit boards was written: in its folder, by what it is known by */
   private readonly onBoard: (id: string, root: string, board: string) => void
@@ -361,14 +377,24 @@ export class Projects {
     this.file = file
     this.onChange = onChange
     this.onBoard = onBoard
+    let state: { projects?: unknown; kept?: boolean } | null = null
     try {
-      const state = JSON.parse(fs.readFileSync(file, "utf8")) as {
-        projects?: Saved[]
-        kept?: boolean
-      }
-      this.saved = (state.projects ?? []).filter(
-        (p) => !p.closed && fs.existsSync(p.path)
+      const read: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
+      if (typeof read !== "object" || read === null || Array.isArray(read))
+        throw new Error("not a list of projects")
+      state = read
+    } catch (error) {
+      // First run. A list there that cannot be read is kept, out of the way, rather than
+      // written over by the first project added: what it says can be had back from it.
+      if (!missing(error)) this.aside = setAside(file)
+    }
+    if (state) {
+      // (one taken off the list when such were remembered is forgotten now)
+      this.saved = (Array.isArray(state.projects) ? state.projects : []).filter(
+        (p): p is Saved => readsAsProject(p) && !p.closed
       )
+      for (const project of this.saved)
+        if (!fs.existsSync(project.path)) this.unavailable.add(project.id)
       // From before the app kept which repositories it set up: those it knew then that say
       // so of themselves are taken at their word, once. A folder opened after never is.
       if (!state.kept) {
@@ -376,10 +402,9 @@ export class Projects {
           if (markedManaged(project.path)) project.kept = true
         this.save()
       }
-    } catch {
-      // first run
     }
-    for (const project of this.saved) this.locate(project)
+    for (const project of this.saved)
+      if (!this.unavailable.has(project.id)) this.locate(project)
   }
 
   private save() {
@@ -723,9 +748,34 @@ export class Projects {
     return Boolean(this.colours.get(id)?.file)
   }
 
-  /** The projects, the one added last first: they are kept in the order they came. */
+  /**
+   * The projects, the one added last first: they are kept in the order they came. One
+   * whose folder is not there is on it as `missing`, with nothing of its folder's.
+   */
   list(conversations: (id: string) => ConversationSummary[]): Project[] {
-    return [...this.saved].reverse().map((p) => {
+    return [...this.saved].reverse().map((p): Project => {
+      if (this.unavailable.has(p.id))
+        return {
+          id: p.id,
+          path: p.path,
+          name: p.name ?? path.basename(p.path),
+          missing: true,
+          branch: null,
+          manifest: null,
+          bringingIn: null,
+          lookOver: null,
+          revision: this.revisions.get(p.id) ?? 0,
+          reference: null,
+          tools: null,
+          assembly: null,
+          boards: null,
+          colours: { revision: 0, parts: {} },
+          assembling: false,
+          undo: null,
+          redo: null,
+          conversations: [],
+          settingsToTrust: false,
+        }
       const manifest = this.found.get(p.id)?.manifest ?? null
       return {
         id: p.id,
@@ -816,9 +866,13 @@ export class Projects {
     }
   }
 
+  /**
+   * A project, with what was found in its folder. Null for one that is not on the list,
+   * or whose folder is not there: nothing is to be done in it until it is.
+   */
   get(id: string): (Saved & Found & { reference: string | null }) | null {
     const project = this.saved.find((p) => p.id === id)
-    if (!project) return null
+    if (!project || this.unavailable.has(id)) return null
     return {
       ...project,
       ...(this.found.get(id) ?? { manifest: null, build: null }),
@@ -844,8 +898,15 @@ export class Projects {
     }
   ): string {
     const real = fs.realpathSync(dir)
+    // (one whose folder was not there is the same project, with all that was kept of it)
     const existing = this.saved.find((p) => p.path === real)
-    if (existing) return existing.id
+    if (existing) {
+      if (this.unavailable.delete(existing.id)) {
+        this.locate(existing)
+        this.onChange()
+      }
+      return existing.id
+    }
     // lower-case hex: the id is used as a host name in model URLs
     const project: Saved = {
       id: randomBytes(6).toString("hex"),
@@ -875,6 +936,24 @@ export class Projects {
     if (!project || project.kept) return
     project.kept = true
     this.save()
+  }
+
+  /**
+   * A project on the list, whether or not its folder is there: what it goes by, where it
+   * was, and whether it is missing. Null for one that is not on the list.
+   */
+  listed(
+    id: string
+  ): { id: string; path: string; name: string; missing: boolean } | null {
+    const project = this.saved.find((p) => p.id === id)
+    return project
+      ? {
+          id,
+          path: project.path,
+          name: project.name ?? path.basename(project.path),
+          missing: this.unavailable.has(id),
+        }
+      : null
   }
 
   /**
@@ -927,6 +1006,7 @@ export class Projects {
     this.coloursWatched.delete(id)
     this.boardsWatched.delete(id)
     this.bringing.delete(id)
+    this.unavailable.delete(id)
     this.saved = this.saved.filter((p) => p !== project)
     if (madeHere(project)) removeIfEmpty(project.path)
     this.save()
@@ -1069,11 +1149,25 @@ export class Projects {
   /** Look again for the model: Claude may just have created or moved it. */
   refresh(id: string) {
     const project = this.saved.find((p) => p.id === id)
-    if (project) this.locate(project)
+    if (project && !this.unavailable.has(id)) this.locate(project)
   }
 
-  refreshAll() {
-    for (const project of this.saved) this.locate(project)
+  /**
+   * Look again at every project: for its model, and for its folder, which may have gone
+   * since, or come back. Whether any folder went or came back.
+   */
+  refreshAll(): boolean {
+    let changed = false
+    for (const project of this.saved) {
+      const there = fs.existsSync(project.path)
+      if (there === this.unavailable.has(project.id)) {
+        changed = true
+        if (there) this.unavailable.delete(project.id)
+        else this.unavailable.add(project.id)
+      }
+      if (there) this.locate(project)
+    }
+    return changed
   }
 
   close() {

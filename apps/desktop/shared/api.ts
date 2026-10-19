@@ -130,6 +130,13 @@ export type Project = {
   id: string
   path: string
   name: string
+  /**
+   * Its folder is not where it was: on a drive that is not plugged in, say, or moved or
+   * deleted. It stays on the list, with its conversations and all that was kept of it,
+   * and is itself again once the folder is back; until then nothing can be done in it
+   * but taking it off the list, and nothing else here says anything of its folder.
+   */
+  missing?: boolean
   branch: string | null
   /** the model manifest found in the folder, relative to it; null if there is none yet */
   manifest: string | null

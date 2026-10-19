@@ -250,6 +250,91 @@ describe("Projects", () => {
     projects.close()
   })
 
+  it("keeps a project whose folder is missing on the list, and has it back when the folder is", () => {
+    write("thing/model.json", MANIFEST)
+    write("other/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const first = new Projects(file, () => {})
+    const id = first.add(path.join(root, "thing"), { name: "The Thing" })
+    const other = first.add(path.join(root, "other"))
+    first.close()
+    // the app is opened with the folder gone (a drive that is not plugged in, say)
+    fs.renameSync(path.join(root, "thing"), path.join(root, "thing-away"))
+    const projects = new Projects(file, () => {})
+    expect(projects.list(idle).map((p) => [p.id, p.missing ?? false])).toEqual([
+      [other, false],
+      [id, true],
+    ])
+    expect(projects.list(idle)[1]).toMatchObject({
+      name: "The Thing",
+      manifest: null,
+    })
+    expect(projects.get(id)).toBeNull()
+    expect(projects.listed(id)).toMatchObject({
+      name: "The Thing",
+      missing: true,
+    })
+    // and it is kept as it was, whatever else is written meanwhile
+    projects.rename(other, "Another")
+    expect(new Projects(file, () => {}).listed(id)).toMatchObject({
+      name: "The Thing",
+    })
+    // back where it was, it is the same project, with its model
+    fs.renameSync(path.join(root, "thing-away"), path.join(root, "thing"))
+    expect(projects.refreshAll()).toBe(true)
+    expect(projects.get(id)?.manifest).toBe(path.join(root, "thing/model.json"))
+    expect(projects.list(idle)[1]).toMatchObject({ id, manifest: "model.json" })
+    expect(projects.list(idle)[1].missing).toBeUndefined()
+    expect(projects.refreshAll()).toBe(false)
+    // gone again while the app is open, it is missing again
+    fs.renameSync(path.join(root, "thing"), path.join(root, "thing-away"))
+    expect(projects.refreshAll()).toBe(true)
+    expect(projects.get(id)).toBeNull()
+    projects.close()
+  })
+
+  it("takes a missing project's folder, opened again, for that project", () => {
+    write("thing/model.json", MANIFEST)
+    const file = path.join(root, "state/projects.json")
+    const id = new Projects(file, () => {}).add(path.join(root, "thing"))
+    fs.renameSync(path.join(root, "thing"), path.join(root, "thing-away"))
+    const projects = new Projects(file, () => {})
+    fs.renameSync(path.join(root, "thing-away"), path.join(root, "thing"))
+    expect(projects.knows(path.join(root, "thing"))).toBe(true)
+    expect(projects.add(path.join(root, "thing"))).toBe(id)
+    expect(projects.get(id)?.manifest).toBe(path.join(root, "thing/model.json"))
+    projects.close()
+  })
+
+  it("takes a missing project off the list when asked", () => {
+    const file = path.join(root, "state/projects.json")
+    fs.mkdirSync(path.join(root, "thing"))
+    const id = new Projects(file, () => {}).add(path.join(root, "thing"))
+    fs.rmSync(path.join(root, "thing"), { recursive: true })
+    const projects = new Projects(file, () => {})
+    projects.remove(id)
+    expect(projects.listed(id)).toBeNull()
+    expect(new Projects(file, () => {}).list(idle)).toEqual([])
+  })
+
+  it("moves a list it cannot read aside, and writes nothing over it", () => {
+    const file = path.join(root, "state/projects.json")
+    write("state/projects.json", '{"projects":[{"id":"a1","path":"/x"')
+    const projects = new Projects(file, () => {})
+    expect(projects.list(idle)).toEqual([])
+    expect(projects.aside).toMatch(/projects\.json\.corrupt-\d+$/)
+    fs.mkdirSync(path.join(root, "thing"))
+    projects.add(path.join(root, "thing"))
+    expect(fs.readFileSync(projects.aside!, "utf8")).toBe(
+      '{"projects":[{"id":"a1","path":"/x"'
+    )
+    // and a first run has nothing to move
+    expect(
+      new Projects(path.join(root, "none.json"), () => {}).aside
+    ).toBeNull()
+    projects.close()
+  })
+
   it("keeps the history of the repositories it set up before it kept that itself, once", () => {
     const file = path.join(root, "state/projects.json")
     const marked = "[core]\n\tbare = false\n[enclose]\n\tmanaged = true\n"
