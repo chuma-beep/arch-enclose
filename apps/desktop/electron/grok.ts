@@ -5,13 +5,19 @@
 // signed in to the Grok on this machine.
 import os from "node:os"
 
+import { EFFORTS, type Access, type ModelChoice } from "../shared/api"
 import {
-  EFFORTS,
-  type Access,
-  type ModelChoice,
-  type PermissionAnswer,
-  type ThreadItem,
-} from "../shared/api"
+  ASKING_TIMEOUT_MS,
+  HELLO,
+  LOADING_TIMEOUT_MS,
+  REPLAY_QUIET_MS,
+  STOPPING_TIMEOUT_MS,
+  AcpTurn,
+  field,
+  tooLong,
+  type AcpOption,
+  type AcpToolCall,
+} from "./acp"
 import type { Launch, Looked } from "./providers"
 import { NO_SUCH_METHOD, RpcError, startPeer } from "./rpc"
 import {
@@ -22,31 +28,6 @@ import {
   stopped,
   type Turn,
 } from "./turn"
-
-/**
- * What the app says it is and can do, on taking up the line. It reads no files and runs
- * no terminals for Grok: Grok has its own of both.
- */
-const HELLO = {
-  protocolVersion: 1,
-  clientCapabilities: {
-    fs: { readTextFile: false, writeTextFile: false },
-    terminal: false,
-  },
-  clientInfo: { name: "enclose", version: "0.1.0" },
-}
-
-/** How long Grok is given to say what it has. */
-const ASKING_TIMEOUT_MS = 20_000
-/** How long it is given to take a conversation up again. */
-const LOADING_TIMEOUT_MS = 90_000
-/**
- * A conversation taken up again is played back to the app, and Grok does not always say
- * when that is over: this long with nothing more of it is taken for the end.
- */
-const REPLAY_QUIET_MS = 2000
-/** How long it is given to wind a turn up once it has been told to stop. */
-const STOPPING_MS = 3000
 
 /** The models Grok has, as it says so on taking up the line. */
 export type GrokModels = {
@@ -107,12 +88,6 @@ const authMethod = (launch: Launch, hello: Hello) =>
   launch.env.XAI_API_KEY?.trim()
     ? "xai.api_key"
     : (hello._meta?.defaultAuthMethodId ?? "cached_token")
-
-/** Rejects when Grok has been waited on for too long. */
-const tooLong = (ms: number, why: string) =>
-  new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(why)), ms).unref()
-  )
 
 /**
  * How much Grok may do without asking, in its own terms. It has no mode of its own for
@@ -187,23 +162,9 @@ export async function lookAtGrok(launch: Launch): Promise<Looked> {
 }
 
 /** A tool call as Grok reports one, in as much as the app reads of it. */
-type ToolCall = {
-  toolCallId?: string
-  title?: string | null
-  kind?: string | null
-  status?: string | null
-  rawInput?: unknown
-  locations?: { path?: string }[] | null
-  /** what Grok says of a tool of its own making, beyond what the protocol has room for */
-  _meta?: { "x.ai/tool"?: { name?: string; kind?: string } | null } | null
-}
+type ToolCall = AcpToolCall
 
-type Update = ToolCall & {
-  sessionUpdate?: string
-  content?: { type?: string; text?: string } | null
-}
-
-type Option = { optionId: string; kind: string }
+type Option = AcpOption
 
 /** What kind of thing a tool call is, in a word, by the kind Grok gives it. */
 const KINDS: Record<string, string> = {
@@ -232,31 +193,6 @@ export async function runGrok(turn: Turn): Promise<void> {
   const halt = stopped(turn.signal)
   const run = turn.id("grok")
   const relative = inside(turn.cwd)
-
-  let sessionId = ""
-  /** a conversation is being taken up again: what arrives is what was said before */
-  let replaying = false
-  let replayed = 0
-  /** what Grok is saying now; what it does next ends it, and it begins another */
-  const speech: {
-    now: Extract<ThreadItem, { kind: "assistant" }> | null
-    count: number
-  } = { now: null, count: 0 }
-  const calls = new Map<string, ToolCall>()
-  const tools = new Map<string, Extract<ThreadItem, { kind: "tool" }>>()
-  let over: (stopReason: string | null) => void = () => {}
-  // Grok does not always answer the prompt it was sent: it also says so apart
-  const finished = new Promise<string | null>((resolve) => (over = resolve))
-
-  const field = (input: unknown, ...keys: string[]) => {
-    for (const key of keys) {
-      const value = (input as Record<string, unknown> | null)?.[key]
-      if (typeof value === "string" && value) return value
-      if (Array.isArray(value) && value.every((one) => typeof one === "string"))
-        return value.join(" ")
-    }
-    return ""
-  }
 
   /**
    * Whether a tool call is to one of the app's own tools, and if so which. Grok calls a
@@ -309,86 +245,12 @@ export async function runGrok(turn: Turn): Promise<void> {
     return { name: called.replaceAll("__", " "), detail }
   }
 
-  const hush = () => {
-    if (!speech.now) return
-    turn.put({ ...speech.now, streaming: false })
-    speech.now = null
-    turn.touched()
-  }
-
-  const update = (given: Update) => {
-    switch (given.sessionUpdate) {
-      case "agent_message_chunk": {
-        const text = given.content?.type === "text" ? given.content.text : ""
-        if (!text || (!speech.now && !text.trim())) return
-        speech.now = {
-          kind: "assistant",
-          id: `${run}:said:${speech.now ? speech.count : ++speech.count}`,
-          at: speech.now?.at ?? Date.now(),
-          text: (speech.now?.text ?? "") + text,
-          streaming: true,
-        }
-        turn.put({ ...speech.now })
-        return
-      }
-      case "tool_call":
-      case "tool_call_update": {
-        const key = given.toolCallId?.trim()
-        if (!key) return
-        hush()
-        // each update says only what is new of the call
-        const call = { ...calls.get(key) }
-        for (const [name, value] of Object.entries(given))
-          if (value !== null && value !== undefined)
-            (call as Record<string, unknown>)[name] = value
-        calls.set(key, call)
-        // what it turns over in its own head is no step to show
-        if (call.kind === "think") return
-        const closed = call.status === "completed" || call.status === "failed"
-        const item = {
-          kind: "tool" as const,
-          id: `${run}:${key}`,
-          at: tools.get(key)?.at ?? Date.now(),
-          ...step(call),
-          state:
-            call.status === "failed"
-              ? ("failed" as const)
-              : closed
-                ? ("done" as const)
-                : ("running" as const),
-        }
-        if (closed) tools.delete(key)
-        else tools.set(key, item)
-        turn.put(item)
-        // what it just did may have written the model for the first time, or moved it
-        if (closed) turn.touched()
-        return
-      }
-    }
-  }
-
-  const onNotification = (method: string, params: unknown) => {
-    const told = (params ?? {}) as {
-      sessionId?: string
-      update?: Update
-      stopReason?: string | null
-      _meta?: { isReplay?: boolean } | null
-    }
-    if (method === "session/update") {
-      if (replaying) {
-        replayed = Date.now()
-        return
-      }
-      // a subagent's session reports on the same line, and is no part of this conversation
-      if (told._meta?.isReplay || told.sessionId !== sessionId || !told.update)
-        return
-      update(told.update)
-    } else if (
-      method === "_x.ai/session/prompt_complete" &&
-      told.sessionId === sessionId
-    )
-      over(told.stopReason ?? null)
-  }
+  // Grok does not always answer the prompt it was sent: it also says so apart
+  const state = new AcpTurn(turn, run, step, (method, told, sessionId) =>
+    method === "_x.ai/session/prompt_complete" && told.sessionId === sessionId
+      ? (told.stopReason ?? null)
+      : undefined
+  )
 
   const onRequest = async (method: string, params: unknown) => {
     if (method === "session/request_permission") {
@@ -399,7 +261,7 @@ export async function runGrok(turn: Turn): Promise<void> {
       const options = wanted.options ?? []
       // what it asks leave for it has often said more of already
       const call: ToolCall = {
-        ...calls.get(wanted.toolCall?.toolCallId ?? ""),
+        ...state.call(wanted.toolCall?.toolCallId),
         ...wanted.toolCall,
       }
       const choose = (...kinds: string[]) => {
@@ -423,7 +285,7 @@ export async function runGrok(turn: Turn): Promise<void> {
       )
         return choose("allow_once", "allow_always")
       const shown = step(call)
-      const answer: PermissionAnswer = await turn.ask({
+      const answer = await turn.ask({
         title: QUESTIONS[call.kind ?? ""] ?? `Let Grok use ${shown.name}?`,
         detail: shown.detail,
         canAlways: options.some((one) => one.kind === "allow_always"),
@@ -450,7 +312,7 @@ export async function runGrok(turn: Turn): Promise<void> {
     cwd: turn.cwd,
     env: launch.env,
     versioned: true,
-    onNotification,
+    onNotification: state.notification,
     onRequest,
   })
   // gone before the turn was over: what it last said to stderr is why, if anything is
@@ -503,11 +365,13 @@ export async function runGrok(turn: Turn): Promise<void> {
     }
     /** Take up the session the conversation was last in. Whether it could be. */
     const resume = async (id: string) => {
-      replaying = true
-      replayed = 0
+      state.beginReplay()
       const quiet = new Promise<void>((resolve) => {
         const timer = setInterval(() => {
-          if (replayed > 0 && Date.now() - replayed >= REPLAY_QUIET_MS) {
+          if (
+            state.replayed > 0 &&
+            Date.now() - state.replayed >= REPLAY_QUIET_MS
+          ) {
             clearInterval(timer)
             resolve()
           }
@@ -529,28 +393,28 @@ export async function runGrok(turn: Turn): Promise<void> {
         if (turn.signal.aborted) throw error
         return false
       } finally {
-        replaying = false
+        state.endReplay()
       }
     }
 
     let resumed = false
     if (turn.sessionId) {
       resumed = await Promise.race([resume(turn.sessionId), halt, died])
-      if (resumed) sessionId = turn.sessionId
+      if (resumed) state.sessionId = turn.sessionId
       else
         turn.notice(
           "info",
           "Grok could not find its record of this conversation, so it carries on without what was said before."
         )
     }
-    if (!resumed) sessionId = await Promise.race([begin(), halt, died])
-    turn.session(sessionId)
+    if (!resumed) state.sessionId = await Promise.race([begin(), halt, died])
+    turn.session(state.sessionId)
 
     // which model answers, and how hard it thinks: said only where the user chose
     const set = (configId: string, value: string) =>
       Promise.race([
         peer.request("session/set_config_option", {
-          sessionId,
+          sessionId: state.sessionId,
           configId,
           value,
         }),
@@ -572,7 +436,7 @@ export async function runGrok(turn: Turn): Promise<void> {
     )
     const answered = peer
       .request<{ stopReason?: string | null }>("session/prompt", {
-        sessionId,
+        sessionId: state.sessionId,
         prompt: [
           // a session taken up again keeps the rules it began with
           ...(resumed && turn.guideChanged ? [guideAgain(turn.guide)] : []),
@@ -580,8 +444,13 @@ export async function runGrok(turn: Turn): Promise<void> {
         ].map((words) => ({ type: "text", text: words })),
       })
       .then((result) => result?.stopReason ?? null)
-    const stopReason = await Promise.race([answered, finished, halt, died])
-    hush()
+    const stopReason = await Promise.race([
+      answered,
+      state.finished,
+      halt,
+      died,
+    ])
+    state.hush()
     if (stopReason === "refusal")
       turn.notice("error", "Grok declined to answer this.")
     else if (stopReason === "max_tokens" || stopReason === "max_turn_requests")
@@ -592,19 +461,18 @@ export async function runGrok(turn: Turn): Promise<void> {
   } catch (error) {
     // Stopped part of the way: Grok is told, and given a moment to leave the session as
     // it should be left, so that the conversation can be carried on from here.
-    if (turn.signal.aborted && sessionId) {
-      peer.notify("session/cancel", { sessionId })
+    if (turn.signal.aborted && state.sessionId) {
+      peer.notify("session/cancel", { sessionId: state.sessionId })
       await Promise.race([
-        finished,
+        state.finished,
         peer.gone,
-        new Promise((resolve) => setTimeout(resolve, STOPPING_MS)),
+        new Promise((resolve) => setTimeout(resolve, STOPPING_TIMEOUT_MS)),
       ])
     }
     throw error
   } finally {
     // what was in flight did not finish
-    if (speech.now) turn.put({ ...speech.now, streaming: false })
-    for (const item of tools.values()) turn.put({ ...item, state: "failed" })
+    state.abandon()
     peer.close()
   }
 }

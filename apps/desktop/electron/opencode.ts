@@ -5,12 +5,19 @@
 // without one, on its free models, so reaching it is the whole of asking after it.
 import os from "node:os"
 
+import { type Access, type ModelChoice } from "../shared/api"
 import {
-  type Access,
-  type ModelChoice,
-  type PermissionAnswer,
-  type ThreadItem,
-} from "../shared/api"
+  ASKING_TIMEOUT_MS,
+  HELLO,
+  LOADING_TIMEOUT_MS,
+  REPLAY_QUIET_MS,
+  STOPPING_TIMEOUT_MS,
+  AcpTurn,
+  field,
+  tooLong,
+  type AcpOption,
+  type AcpToolCall,
+} from "./acp"
 import type { Launch, Looked } from "./providers"
 import { NO_SUCH_METHOD, RpcError, startPeer } from "./rpc"
 import {
@@ -21,31 +28,6 @@ import {
   stopped,
   type Turn,
 } from "./turn"
-
-/**
- * What the app says it is and can do, on taking up the line. It reads no files and runs
- * no terminals for opencode: opencode has its own of both.
- */
-const HELLO = {
-  protocolVersion: 1,
-  clientCapabilities: {
-    fs: { readTextFile: false, writeTextFile: false },
-    terminal: false,
-  },
-  clientInfo: { name: "enclose", version: "0.1.0" },
-}
-
-/** How long opencode is given to say what it has. */
-const ASKING_TIMEOUT_MS = 20_000
-/** How long it is given to take a conversation up again. */
-const LOADING_TIMEOUT_MS = 90_000
-/**
- * A conversation taken up again is played back to the app, and opencode does not say
- * when that is over: this long with nothing more of it is taken for the end.
- */
-const REPLAY_QUIET_MS = 2000
-/** How long it is given to wind a turn up once it has been told to stop. */
-const STOPPING_MS = 3000
 
 /** A model opencode offers, as a session says of it. */
 export type OpencodeModelOption = { value: string; name: string }
@@ -76,14 +58,7 @@ export function opencodeModels(
   ]
 }
 
-/** Rejects when opencode has been waited on for too long. */
-const tooLong = (ms: number, why: string) =>
-  new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(why)), ms).unref()
-  )
-
-/**
- * How much opencode may do without asking, in its own terms. opencode's own defaults
+/** How much opencode may do without asking, in its own terms. opencode's own defaults
  * let the agent change files and run commands outright, so what the app chooses has to
  * be said here as well: with nothing said, a supervised turn would edit files and run
  * commands without the app ever being asked, and the questions below would never come
@@ -196,23 +171,9 @@ export async function lookAtOpencode(launch: Launch): Promise<Looked> {
 }
 
 /** A tool call as opencode reports one, in as much as the app reads of it. */
-type ToolCall = {
-  toolCallId?: string
-  /** the tool's own name, as opencode gives it: what `ours` matches on, never the title */
-  name?: string | null
-  title?: string | null
-  kind?: string | null
-  status?: string | null
-  rawInput?: unknown
-  locations?: { path?: string }[] | null
-}
+type ToolCall = AcpToolCall
 
-type Update = ToolCall & {
-  sessionUpdate?: string
-  content?: { type?: string; text?: string } | null
-}
-
-type Option = { optionId: string; kind: string }
+type Option = AcpOption
 
 /** What kind of thing a tool call is, in a word, by the kind opencode gives it. */
 const KINDS: Record<string, string> = {
@@ -241,28 +202,6 @@ export async function runOpencode(turn: Turn): Promise<void> {
   const halt = stopped(turn.signal)
   const run = turn.id("opencode")
   const relative = inside(turn.cwd)
-
-  let sessionId = ""
-  /** a conversation is being taken up again: what arrives is what was said before */
-  let replaying = false
-  let replayed = 0
-  /** what opencode is saying now; what it does next ends it, and it begins another */
-  const speech: {
-    now: Extract<ThreadItem, { kind: "assistant" }> | null
-    count: number
-  } = { now: null, count: 0 }
-  const calls = new Map<string, ToolCall>()
-  const tools = new Map<string, Extract<ThreadItem, { kind: "tool" }>>()
-
-  const field = (input: unknown, ...keys: string[]) => {
-    for (const key of keys) {
-      const value = (input as Record<string, unknown> | null)?.[key]
-      if (typeof value === "string" && value) return value
-      if (Array.isArray(value) && value.every((one) => typeof one === "string"))
-        return value.join(" ")
-    }
-    return ""
-  }
 
   /**
    * Whether a tool call is to one of the app's own tools, and if so which. opencode
@@ -314,78 +253,7 @@ export async function runOpencode(turn: Turn): Promise<void> {
     return { name: called.replaceAll("__", " "), detail }
   }
 
-  const hush = () => {
-    if (!speech.now) return
-    turn.put({ ...speech.now, streaming: false })
-    speech.now = null
-    turn.touched()
-  }
-
-  const update = (given: Update) => {
-    switch (given.sessionUpdate) {
-      case "agent_message_chunk": {
-        const text = given.content?.type === "text" ? given.content.text : ""
-        if (!text || (!speech.now && !text.trim())) return
-        speech.now = {
-          kind: "assistant",
-          id: `${run}:said:${speech.now ? speech.count : ++speech.count}`,
-          at: speech.now?.at ?? Date.now(),
-          text: (speech.now?.text ?? "") + text,
-          streaming: true,
-        }
-        turn.put({ ...speech.now })
-        return
-      }
-      case "tool_call":
-      case "tool_call_update": {
-        const key = given.toolCallId?.trim()
-        if (!key) return
-        hush()
-        // each update says only what is new of the call
-        const call = { ...calls.get(key) }
-        for (const [name, value] of Object.entries(given))
-          if (value !== null && value !== undefined)
-            (call as Record<string, unknown>)[name] = value
-        calls.set(key, call)
-        // what it turns over in its own head is no step to show
-        if (call.kind === "think") return
-        const closed = call.status === "completed" || call.status === "failed"
-        const item = {
-          kind: "tool" as const,
-          id: `${run}:${key}`,
-          at: tools.get(key)?.at ?? Date.now(),
-          ...step(call),
-          state:
-            call.status === "failed"
-              ? ("failed" as const)
-              : closed
-                ? ("done" as const)
-                : ("running" as const),
-        }
-        if (closed) tools.delete(key)
-        else tools.set(key, item)
-        turn.put(item)
-        // what it just did may have written the model for the first time, or moved it
-        if (closed) turn.touched()
-        return
-      }
-    }
-  }
-
-  const onNotification = (method: string, params: unknown) => {
-    const told = (params ?? {}) as {
-      sessionId?: string
-      update?: Update
-    }
-    if (method !== "session/update") return
-    if (replaying) {
-      replayed = Date.now()
-      return
-    }
-    // a subagent's session reports on the same line, and is no part of this conversation
-    if (told.sessionId !== sessionId || !told.update) return
-    update(told.update)
-  }
+  const state = new AcpTurn(turn, run, step)
 
   const onRequest = async (method: string, params: unknown) => {
     if (method === "session/request_permission") {
@@ -396,7 +264,7 @@ export async function runOpencode(turn: Turn): Promise<void> {
       const options = wanted.options ?? []
       // what it asks leave for it has often said more of already
       const call: ToolCall = {
-        ...calls.get(wanted.toolCall?.toolCallId ?? ""),
+        ...state.call(wanted.toolCall?.toolCallId),
         ...wanted.toolCall,
       }
       const choose = (...kinds: string[]) => {
@@ -425,7 +293,7 @@ export async function runOpencode(turn: Turn): Promise<void> {
           ? choose("allow_always", "allow_once")
           : choose("allow_once", "allow_always")
       const shown = step(call)
-      const answer: PermissionAnswer = await turn.ask({
+      const answer = await turn.ask({
         title: QUESTIONS[call.kind ?? ""] ?? `Let opencode use ${shown.name}?`,
         detail: shown.detail,
         canAlways: options.some((one) => one.kind === "allow_always"),
@@ -449,7 +317,7 @@ export async function runOpencode(turn: Turn): Promise<void> {
     // opencode's own permission config; without it, opencode would not ask at all
     env: withAccess(launch.env, access),
     versioned: true,
-    onNotification,
+    onNotification: state.notification,
     onRequest,
   })
   // gone before the turn was over: what it last said to stderr is why, if anything is
@@ -489,11 +357,13 @@ export async function runOpencode(turn: Turn): Promise<void> {
     }
     /** Take up the session the conversation was last in. Whether it could be. */
     const resume = async (id: string) => {
-      replaying = true
-      replayed = 0
+      state.beginReplay()
       const quiet = new Promise<void>((resolve) => {
         const timer = setInterval(() => {
-          if (replayed > 0 && Date.now() - replayed >= REPLAY_QUIET_MS) {
+          if (
+            state.replayed > 0 &&
+            Date.now() - state.replayed >= REPLAY_QUIET_MS
+          ) {
             clearInterval(timer)
             resolve()
           }
@@ -515,29 +385,29 @@ export async function runOpencode(turn: Turn): Promise<void> {
         if (turn.signal.aborted) throw error
         return false
       } finally {
-        replaying = false
+        state.endReplay()
       }
     }
 
     let resumed = false
     if (turn.sessionId) {
       resumed = await Promise.race([resume(turn.sessionId), halt, died])
-      if (resumed) sessionId = turn.sessionId
+      if (resumed) state.sessionId = turn.sessionId
       else
         turn.notice(
           "info",
           "opencode could not find its record of this conversation, so it carries on without what was said before."
         )
     }
-    if (!resumed) sessionId = await Promise.race([begin(), halt, died])
-    turn.session(sessionId)
+    if (!resumed) state.sessionId = await Promise.race([begin(), halt, died])
+    turn.session(state.sessionId)
 
     // which model answers is said only where the user chose: opencode takes no
     // session for how hard it thinks
     if (manner.model)
       await Promise.race([
         peer.request("session/set_config_option", {
-          sessionId,
+          sessionId: state.sessionId,
           configId: "model",
           value: manner.model,
         }),
@@ -576,12 +446,12 @@ export async function runOpencode(turn: Turn): Promise<void> {
     // opencode answers the prompt it was sent: its stop is in the answer
     const answered = peer
       .request<{ stopReason?: string | null }>("session/prompt", {
-        sessionId,
+        sessionId: state.sessionId,
         prompt,
       })
       .then((result) => result?.stopReason ?? null)
     const stopReason = await Promise.race([answered, halt, died])
-    hush()
+    state.hush()
     if (stopReason === "refusal")
       turn.notice("error", "opencode declined to answer this.")
     else if (stopReason === "max_tokens" || stopReason === "max_turn_requests")
@@ -593,18 +463,17 @@ export async function runOpencode(turn: Turn): Promise<void> {
     // Stopped part of the way: opencode is told, and given a moment to leave the
     // session as it should be left, so that the conversation can be carried on
     // from here.
-    if (turn.signal.aborted && sessionId) {
-      peer.notify("session/cancel", { sessionId })
+    if (turn.signal.aborted && state.sessionId) {
+      peer.notify("session/cancel", { sessionId: state.sessionId })
       await Promise.race([
         peer.gone,
-        new Promise((resolve) => setTimeout(resolve, STOPPING_MS)),
+        new Promise((resolve) => setTimeout(resolve, STOPPING_TIMEOUT_MS)),
       ])
     }
     throw error
   } finally {
     // what was in flight did not finish
-    if (speech.now) turn.put({ ...speech.now, streaming: false })
-    for (const item of tools.values()) turn.put({ ...item, state: "failed" })
+    state.abandon()
     peer.close()
   }
 }
