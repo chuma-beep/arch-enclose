@@ -5,6 +5,7 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { fetchUv, Python, type PythonStatus } from "./python"
+import { until } from "./testing"
 
 describe("Python", () => {
   let dir: string
@@ -98,6 +99,56 @@ describe("Python", () => {
     expect(await again.python.ready()).toBe(true)
     expect(again.python.get()).toEqual({ state: "ours" })
     expect(asked()).toHaveLength(2)
+  })
+
+  it("leaves alone one that an earlier run may still be making, and makes it once that is over", async () => {
+    const theirs = path.join(dir, "bin", "python3")
+    pythonAt(theirs, path.join(dir, "nothing"))
+    const { uv } = fakeUv()
+    // what an earlier run wrote down as at it a moment ago: this process, standing in
+    // for one still there
+    const half = path.join(dir, "app", "env", "half.txt")
+    fs.mkdirSync(path.dirname(half), { recursive: true })
+    fs.writeFileSync(half, "")
+    const marker = path.join(dir, "app", "making.json")
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({ at: Date.now(), pids: [process.ppid] })
+    )
+    const { python } = make(theirs, uv)
+    expect(await python.ready()).toBe(false)
+    expect(python.get()).toMatchObject({
+      state: "failed",
+      detail: expect.stringContaining("still being set up"),
+    })
+    expect(fs.existsSync(half)).toBe(true)
+    // gone, or long enough ago: it is made again
+    fs.writeFileSync(
+      marker,
+      JSON.stringify({ at: Date.now() - 31 * 60_000, pids: [process.ppid] })
+    )
+    expect(await python.ready()).toBe(true)
+    expect(python.get()).toEqual({ state: "ours" })
+    expect(fs.existsSync(half)).toBe(false)
+    expect(fs.existsSync(marker)).toBe(false)
+  })
+
+  it("stops what it runs to make one when it is closed", async () => {
+    const theirs = path.join(dir, "bin", "python3")
+    pythonAt(theirs, path.join(dir, "nothing"))
+    // a uv that takes its time
+    const uv = path.join(dir, "slow-uv")
+    fs.writeFileSync(uv, "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 })
+    const { python, seen } = make(theirs, uv)
+    const ready = python.ready()
+    await until(() =>
+      seen.some(
+        (one) => one.state === "making" && one.step === "Getting Python"
+      )
+    )
+    python.close()
+    expect(await ready).toBe(false)
+    expect(python.get().state).toBe("failed")
   })
 
   it("says why it could not make one, and tries again when asked again", async () => {

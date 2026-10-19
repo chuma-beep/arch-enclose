@@ -4,7 +4,13 @@ import path from "node:path"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { NO_SUCH_METHOD, RpcError, startPeer, type Peer } from "./rpc"
+import {
+  NO_SUCH_METHOD,
+  RpcError,
+  startPeer,
+  stopPeers,
+  type Peer,
+} from "./rpc"
 import { fakeAgent, until } from "./testing"
 
 let dir: string
@@ -82,6 +88,43 @@ describe("startPeer", () => {
     peer.notify("ready", { model: "small" })
     await until(() => heard.told.length > 0)
     expect(heard.told).toEqual([["started", { with: { model: "small" } }]])
+  })
+
+  it("goes on listening after something it is told that the app could not take", async () => {
+    const told: string[] = []
+    const peer = startPeer(
+      process.execPath,
+      [
+        fakeAgent(
+          dir,
+          true,
+          `on("ready", () => { tell("broken", {}); tell("fine", {}) }); on("ping", () => ({ pong: true }))`
+        ),
+      ],
+      {
+        cwd: dir,
+        env: process.env,
+        versioned: true,
+        onNotification: (method) => {
+          if (method === "broken") throw new TypeError("not what was expected")
+          told.push(method)
+        },
+        onRequest: async () => ({}),
+      }
+    )
+    peers.push(peer)
+    peer.notify("ready")
+    await until(() => told.length > 0)
+    expect(told).toEqual(["fine"])
+    expect(await peer.request("ping")).toEqual({ pong: true })
+  })
+
+  it("stops every process still running, as the app is quit", async () => {
+    const { peer } = line(`on("ping", () => ({ pong: true }))`)
+    expect(await peer.request("ping")).toEqual({ pong: true })
+    stopPeers()
+    await peer.gone
+    await expect(peer.request("ping")).rejects.toThrow()
   })
 
   it("answers what it is asked, with what the app says", async () => {

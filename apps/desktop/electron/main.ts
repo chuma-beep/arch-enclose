@@ -118,6 +118,7 @@ import {
   putFirstOnPath,
 } from "./providers"
 import { Python } from "./python"
+import { stopPeers } from "./rpc"
 import { SettingsStore, type Vault } from "./settings"
 import {
   Threads,
@@ -2468,4 +2469,7 @@ function letGo() {
   drafts?.close()
   updates?.close()
   analytics?.close()
+  // and nothing that was started is left running once the app has gone
+  python?.close()
+  stopPeers()
 }

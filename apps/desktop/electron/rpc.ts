@@ -2,7 +2,7 @@
 // that speaks JSON-RPC on its standard input and output, a message to a line: the app
 // asks things of it, is told things by it, and is asked things in turn (may it run this
 // command?). This is that line, with nothing in it of what either of them says on it.
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 import readline from "node:readline"
 
 /** What went wrong on the other side, as it said so. */
@@ -57,6 +57,24 @@ const LEAVING_MS = 1500
 /** How long what a process wrote as it left is waited for, once it has gone. */
 const LAST_WORDS_MS = 300
 
+/** The agents' processes still running, each until it has gone. */
+const running = new Set<ChildProcess>()
+
+/**
+ * Stop every agent's process that is still running, as the app is quit: asked to now,
+ * and made to as the app's own process goes, where it has not gone by then. (The time
+ * one is otherwise given to leave by itself, LEAVING_MS, is more than an app that is
+ * quitting has.)
+ */
+export function stopPeers() {
+  for (const child of running) child.kill()
+  process.once("exit", () => {
+    for (const child of running)
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL")
+  })
+}
+
 /** Start an agent's process and take up the line to it. */
 export function startPeer(
   command: string,
@@ -70,6 +88,9 @@ export function startPeer(
     // what npm installs on Windows is a script, which only a shell can run
     shell: process.platform === "win32" && /\.(cmd|bat)$/i.test(command),
   })
+  running.add(child)
+  child.once("exit", () => running.delete(child))
+  child.once("error", () => running.delete(child))
   let said = ""
   child.stderr.on("data", (data: Buffer) => {
     said = (said + data.toString("utf8")).slice(-2000)
@@ -111,21 +132,28 @@ export function startPeer(
     if (typeof method === "string") {
       // told something
       if (id === undefined || id === null) {
-        options.onNotification(method, message.params)
+        // (what it says that cannot be made sense of is no reason to stop listening)
+        try {
+          options.onNotification(method, message.params)
+        } catch (error) {
+          console.error("[rpc]", method, error)
+        }
         return
       }
       // asked something
-      options.onRequest(method, message.params).then(
-        (result) => write({ id, result: result ?? {} }),
-        (error: unknown) =>
-          write({
-            id,
-            error: {
-              code: error instanceof RpcError ? error.code : -32603,
-              message: error instanceof Error ? error.message : String(error),
-            },
-          })
-      )
+      Promise.resolve()
+        .then(() => options.onRequest(method, message.params))
+        .then(
+          (result) => write({ id, result: result ?? {} }),
+          (error: unknown) =>
+            write({
+              id,
+              error: {
+                code: error instanceof RpcError ? error.code : -32603,
+                message: error instanceof Error ? error.message : String(error),
+              },
+            })
+        )
       return
     }
     // an answer to something asked

@@ -5,11 +5,13 @@
 // whatever it starts (see cleanEnv), so that `python3 model.py` finds it - in a build,
 // and in what an agent runs. It is made with uv, which fetches the Python as well, so
 // nothing need be installed for it: a uv of a version the app knows, fetched for it.
-import { execFile } from "node:child_process"
+import { execFile, type ChildProcess } from "node:child_process"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
 import { promisify } from "node:util"
+
+import { writeWhole } from "./atomic"
 
 const run = promisify(execFile)
 
@@ -67,7 +69,7 @@ export type PythonDeps = {
   /** how it stands changed */
   onChange: () => void
   /** the uv to make it with: fetched, unless something stands in */
-  uv?: (dir: string) => Promise<string>
+  uv?: (dir: string, signal?: AbortSignal) => Promise<string>
 }
 
 /** Whether a Python can import build123d. */
@@ -101,8 +103,22 @@ function why(error: unknown): string {
   return last ?? (error instanceof Error ? error.message : String(error))
 }
 
+/** Whether a process is still there to be signalled. */
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    // (there, and somebody else's)
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
 /** Fetch the uv the app knows into a folder, and say where it is. */
-export async function fetchUv(dir: string): Promise<string> {
+export async function fetchUv(
+  dir: string,
+  signal?: AbortSignal
+): Promise<string> {
   const known = UV[`${process.platform}-${process.arch}`]
   if (!known)
     throw new Error(
@@ -111,7 +127,7 @@ export async function fetchUv(dir: string): Promise<string> {
   const uv = path.join(dir, known.name, "uv")
   if (fs.existsSync(uv)) return uv
   const url = `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${known.name}.tar.gz`
-  const response = await fetch(url)
+  const response = await fetch(url, { signal })
   if (!response.ok)
     throw new Error(`Could not download uv (${response.status}).`)
   const bytes = Buffer.from(await response.arrayBuffer())
@@ -133,6 +149,10 @@ export class Python {
   private readonly deps: PythonDeps
   private status: PythonStatus = { state: "checking" }
   private looking: Promise<boolean> | null = null
+  /** stops what is run to make it, or to look at it: the app is being quit */
+  private readonly stopping = new AbortController()
+  /** what is running to make it, by process id, while it is */
+  private making = new Set<number>()
 
   constructor(deps: PythonDeps) {
     this.deps = deps
@@ -141,6 +161,79 @@ export class Python {
   /** The app's own Python, in its folder. */
   private get env() {
     return path.join(this.deps.dir, "env")
+  }
+
+  /**
+   * Where it says what is running to make it, while it is: an app quit in the middle of
+   * it, without stopping that (it went down, say), finds there the next time it is
+   * opened that something may still be writing into it.
+   */
+  private get marker() {
+    return path.join(this.deps.dir, "making.json")
+  }
+
+  /** Something was started to make it: written down, for the next run of the app. */
+  private started(child: ChildProcess | undefined) {
+    if (child?.pid === undefined) return
+    const { pid } = child
+    this.making.add(pid)
+    child.once("exit", () => this.making.delete(pid))
+    try {
+      fs.mkdirSync(this.deps.dir, { recursive: true })
+      writeWhole(
+        this.marker,
+        JSON.stringify({ at: Date.now(), pids: [...this.making] })
+      )
+    } catch {
+      // (it is not known then, the next time, that it may still be at it)
+    }
+  }
+
+  /**
+   * Whether what an earlier run of the app started to make it may still be writing into
+   * it: one of the processes it wrote down is still there, and not long enough ago for
+   * it to have been given up on. Nothing is stopped for it: a process of that number
+   * may be somebody else's by now.
+   */
+  private stillMaking(): boolean {
+    let left: { at?: unknown; pids?: unknown }
+    try {
+      left = JSON.parse(fs.readFileSync(this.marker, "utf8")) as typeof left
+    } catch {
+      return false
+    }
+    return (
+      typeof left.at === "number" &&
+      Date.now() - left.at < MAKING_TIMEOUT_MS &&
+      Array.isArray(left.pids) &&
+      left.pids.some(
+        (pid) =>
+          Number.isInteger(pid) &&
+          pid > 0 &&
+          pid !== process.pid &&
+          !this.making.has(pid as number) &&
+          alive(pid as number)
+      )
+    )
+  }
+
+  /** Run something to make it with, which is stopped if the app is quit. */
+  private async running(
+    command: string,
+    args: string[],
+    options: Parameters<typeof run>[2]
+  ) {
+    const going = run(command, args, {
+      ...options,
+      signal: this.stopping.signal,
+    })
+    this.started(going.child)
+    return going
+  }
+
+  /** Stop whatever is being run to make it, as the app is quit. */
+  close() {
+    this.stopping.abort()
   }
 
   /** What to put first on the PATH: the app's own Python's folder, where that is in use. */
@@ -205,19 +298,31 @@ export class Python {
       timeout: MAKING_TIMEOUT_MS,
       maxBuffer: 16 * 1024 * 1024,
     }
+    // (one half made the last time is made again: but not while something may still be
+    // writing it)
+    if (this.stillMaking()) {
+      this.set({
+        state: "failed",
+        detail:
+          "Python was still being set up when Enclose last closed. Try again in a few minutes.",
+      })
+      return false
+    }
     try {
       this.set({ state: "making", step: "Getting uv" })
-      const uv = await (this.deps.uv ?? fetchUv)(path.join(this.deps.dir, "uv"))
+      const uv = await (this.deps.uv ?? fetchUv)(
+        path.join(this.deps.dir, "uv"),
+        this.stopping.signal
+      )
       this.set({ state: "making", step: "Getting Python" })
-      // one half made, the last time, is made again
       fs.rmSync(this.env, { recursive: true, force: true })
-      await run(
+      await this.running(
         uv,
         ["venv", "--seed", "--no-cache", "--python", VERSION, this.env],
         options
       )
       this.set({ state: "making", step: "Getting build123d" })
-      await run(
+      await this.running(
         uv,
         [
           "pip",
@@ -241,6 +346,9 @@ export class Python {
       console.error("[python]", error)
       this.set({ state: "failed", detail: why(error) })
       return false
+    } finally {
+      // nothing is at it any more
+      if (this.making.size === 0) fs.rmSync(this.marker, { force: true })
     }
   }
 }
